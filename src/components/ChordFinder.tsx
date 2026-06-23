@@ -1,6 +1,7 @@
 import React from 'react';
 
 import { CHORD_FORMULAS } from '../engine/tunings';
+import { formatIntervalsAsDegrees } from '../engine/intervals';
 
 interface ChordFinderProps {
   selectedRootName: string;
@@ -126,6 +127,7 @@ export const ChordFinder: React.FC<ChordFinderProps> = ({
         <div className="h-[145px] overflow-y-auto pr-1 bg-white border-2 border-[#808080] border-r-white border-bottom-white p-1 flex flex-col gap-1 retro-scrollbar">
           {CHORD_FORMULAS.map(formula => {
             const active = selectedSuffix === formula.suffix;
+            const degrees = formatIntervalsAsDegrees(formula.intervals).join(' ');
 
             return (
               <button
@@ -143,8 +145,10 @@ export const ChordFinder: React.FC<ChordFinderProps> = ({
                     ({formula.name})
                   </span>
                 </span>
-                <span className={`text-[9px] font-bold px-1 py-0.2 rounded border ${active ? 'bg-[#002fa7] border-[#3a8bfb]' : 'bg-[#d4d0c8] border-[#808080] text-gray-600'}`}>
-                  {formula.intervals.join(',')}
+                <span
+                  title={degrees}
+                  className={`inline-block max-w-[7rem] truncate text-right text-[10px] font-bold px-2 py-0.5 rounded border ${active ? 'bg-[#002fa7] border-[#3a8bfb]' : 'bg-[#d4d0c8] border-[#808080] text-gray-600'}`}>
+                  {degrees}
                 </span>
               </button>
             );
