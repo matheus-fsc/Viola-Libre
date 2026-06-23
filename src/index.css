@@ -1,0 +1,102 @@
+@import "tailwindcss";
+
+@theme {
+  --color-winxp-blue-light: #3a8bfb;
+  --color-winxp-blue: #0058e6;
+  --color-winxp-blue-dark: #002fa7;
+  --color-winxp-green: #228b22;
+  --color-winxp-green-bright: #5cb85c;
+  --color-winxp-bg: #ece9d8;
+  --color-winxp-panel: #d4d0c8;
+  --color-winxp-dark: #808080;
+  --color-winxp-border-light: #ffffff;
+  --color-winxp-border-dark: #808080;
+  --color-winxp-border-shadow: #404040;
+  --color-winxp-orange: #ff7f27;
+  --color-winxp-red: #cc3300;
+  
+  --font-sans: "Tahoma", "MS Sans Serif", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "Courier New", Courier, monospace;
+}
+
+@layer utilities {
+  /* Classic 3D Bevel Out (Raised element) */
+  .bevel-out {
+    border-style: solid;
+    border-width: 2px;
+    border-top-color: var(--color-winxp-border-light);
+    border-left-color: var(--color-winxp-border-light);
+    border-right-color: var(--color-winxp-border-dark);
+    border-bottom-color: var(--color-winxp-border-dark);
+  }
+
+  /* Double 3D Bevel Out (Win95 style, very pronounced) */
+  .bevel-out-double {
+    border-style: solid;
+    border-width: 2px;
+    border-top-color: #ffffff;
+    border-left-color: #ffffff;
+    border-right-color: #404040;
+    border-bottom-color: #404040;
+    box-shadow: inset 1px 1px 0px #e0e0e0, inset -1px -1px 0px #808080;
+  }
+
+  /* Classic 3D Bevel In (Sunken element, e.g., input, text area) */
+  .bevel-in {
+    border-style: solid;
+    border-width: 2px;
+    border-top-color: var(--color-winxp-border-dark);
+    border-left-color: var(--color-winxp-border-dark);
+    border-right-color: var(--color-winxp-border-light);
+    border-bottom-color: var(--color-winxp-border-light);
+    background-color: #ffffff;
+  }
+
+  /* WinXP Blue Header Gradient */
+  .winxp-gradient-blue {
+    background: linear-gradient(to right, #0058e6 0%, #3a8bfb 50%, #0058e6 100%);
+  }
+
+  /* WinXP Orange Start Gradient */
+  .winxp-gradient-orange {
+    background: linear-gradient(to bottom, #ff9d00 0%, #ff5f00 100%);
+  }
+
+  /* Classic Fórum/Retro Scrollbar */
+  .retro-scrollbar::-webkit-scrollbar {
+    width: 16px;
+    height: 16px;
+  }
+  .retro-scrollbar::-webkit-scrollbar-track {
+    background: #e0e0e0;
+    box-shadow: inset 1px 1px 0 #808080;
+  }
+  .retro-scrollbar::-webkit-scrollbar-thumb {
+    background: #d4d0c8;
+    border: 2px solid;
+    border-top-color: #fff;
+    border-left-color: #fff;
+    border-right-color: #808080;
+    border-bottom-color: #808080;
+  }
+  .retro-scrollbar::-webkit-scrollbar-thumb:active {
+    background: #c0c0c0;
+    border-top-color: #808080;
+    border-left-color: #808080;
+    border-right-color: #fff;
+    border-bottom-color: #fff;
+  }
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: #008080; /* Teal backdrop reminiscent of classic Windows setup */
+  background-image: 
+    linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.12) 50%),
+    linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.03));
+  background-size: 100% 4px, 6px 100%;
+  margin: 0;
+  color: #000000;
+  image-rendering: pixelated;
+}
+
