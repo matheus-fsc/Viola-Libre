@@ -96,6 +96,18 @@ export const PlaybackProvider: React.FC<PlaybackProviderProps> = ({
   // Cache for scroll container clientWidth to avoid Layout Thrashing (Layout reading inside animation frame)
   const containerWidthRef = useRef<number>(850);
 
+  // Flag to ignore scroll events triggered programmatically by the auto-follow logic
+  const programmaticScrollRef = useRef<boolean>(false);
+
+  const setContainerScrollLeft = (value: number) => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    programmaticScrollRef.current = true;
+    container.scrollLeft = value;
+    // Clear flag shortly after to allow genuine user scroll events
+    setTimeout(() => { programmaticScrollRef.current = false; }, 50);
+  };
+
   const updateHighlightToStep = (stepIdx: number) => {
     if (!playheadHighlightRef.current) return;
     if (stepIdx === -1 || !stepPositions[stepIdx]) {
@@ -162,6 +174,7 @@ export const PlaybackProvider: React.FC<PlaybackProviderProps> = ({
     if (!container) return;
 
     const handleScroll = () => {
+      if (programmaticScrollRef.current) return;
       isUserScrollingRef.current = true;
       if (scrollTimeoutRef.current) {
         clearTimeout(scrollTimeoutRef.current);
@@ -309,7 +322,7 @@ export const PlaybackProvider: React.FC<PlaybackProviderProps> = ({
       playheadRef.current.style.transform = 'translateX(56px)';
     }
     if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollLeft = 0;
+      setContainerScrollLeft(0);
     }
     highlightNotesOfStep(-1);
     updateHighlightToStep(-1);
@@ -338,11 +351,8 @@ export const PlaybackProvider: React.FC<PlaybackProviderProps> = ({
     
     // Auto-scroll only if user is not actively scrolling the grid
     if (!isUserScrollingRef.current) {
-      if (targetScroll > 0) {
-        container.scrollLeft = targetScroll;
-      } else {
-        container.scrollLeft = 0;
-      }
+      const scrollVal = targetScroll > 0 ? targetScroll : 0;
+      setContainerScrollLeft(scrollVal);
     }
     
     animationFrameIdRef.current = requestAnimationFrame(updatePlayheadAnimation);
@@ -357,7 +367,7 @@ export const PlaybackProvider: React.FC<PlaybackProviderProps> = ({
         playheadRef.current.style.transform = 'translateX(56px)';
       }
       if (scrollContainerRef.current) {
-        scrollContainerRef.current.scrollLeft = 0;
+        setContainerScrollLeft(0);
       }
       if (animationFrameIdRef.current) {
         cancelAnimationFrame(animationFrameIdRef.current);
@@ -443,7 +453,7 @@ export const PlaybackProvider: React.FC<PlaybackProviderProps> = ({
       playheadRef.current.style.transform = 'translateX(56px)';
     }
     if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollLeft = 0;
+      setContainerScrollLeft(0);
     }
     
     highlightNotesOfStep(-1);
