@@ -433,6 +433,15 @@ export const PlaybackProvider: React.FC<PlaybackProviderProps> = ({
     playbackStartBeatRef.current = startBeat;
     playbackStartRealTimeRef.current = performance.now();
 
+    // Immediately center the playhead so UI focuses the red pointer
+    const initialLeftPx = 56 + playbackStartBeatRef.current * 120;
+    if (playheadRef.current) {
+      playheadRef.current.style.transform = `translateX(${initialLeftPx}px)`;
+    }
+    if (scrollContainerRef.current) {
+      setContainerScrollLeft(initialLeftPx - containerWidthRef.current / 2);
+    }
+
     animationFrameIdRef.current = requestAnimationFrame(updatePlayheadAnimation);
     playNextFromIndex(currentStepIdxRef.current);
   };
@@ -491,9 +500,8 @@ export const PlaybackProvider: React.FC<PlaybackProviderProps> = ({
     }
     
     if (isInteractive && scrollContainerRef.current) {
-      const container = scrollContainerRef.current;
       const targetScroll = leftPx - containerWidthRef.current / 2;
-      container.scrollLeft = targetScroll > 0 ? targetScroll : 0;
+      setContainerScrollLeft(targetScroll > 0 ? targetScroll : 0);
     }
     
     playheadSubscribersRef.current.forEach(cb => cb(targetBeat));
