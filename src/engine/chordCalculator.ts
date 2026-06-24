@@ -270,6 +270,10 @@ export function calculateVoicings(tuning: Tuning, chord: Chord, maxFret = 12): V
       ? chord.formula.requiredIntervals.map(interval => (chord.root + interval) % 12)
       : chord.notes;
 
+    if (chord.customNotes) {
+      requiredPcs = Array.from(new Set([...requiredPcs, ...chord.customNotes]));
+    }
+
     if (chord.bass !== undefined && !requiredPcs.includes(chord.bass)) {
       requiredPcs = [...requiredPcs, chord.bass];
     }

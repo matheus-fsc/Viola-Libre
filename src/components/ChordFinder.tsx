@@ -4,7 +4,8 @@ interface ChordFinderProps {
   selectedRootName: string;
   selectedSuffix: string;
   selectedBassName: string;
-  onChordChange: (rootName: string, suffix: string, bassName: string) => void;
+  selectedCustomNotes: number[];
+  onChordChange: (rootName: string, suffix: string, bassName: string, customNotes: number[]) => void;
   resultsCount: number;
 }
 
@@ -141,6 +142,7 @@ export const ChordFinder: React.FC<ChordFinderProps> = ({
   selectedRootName,
   selectedSuffix,
   selectedBassName,
+  selectedCustomNotes,
   onChordChange,
   resultsCount
 }) => {
@@ -161,7 +163,7 @@ export const ChordFinder: React.FC<ChordFinderProps> = ({
       targetB5 = false;
     }
     const suffix = getSuffixFromBuilder(q, targetSeventh, n9, targetB5);
-    onChordChange(selectedRootName, suffix, selectedBassName);
+    onChordChange(selectedRootName, suffix, selectedBassName, selectedCustomNotes);
   };
 
   // Common roots showing both sharps and flats for clarity
@@ -184,9 +186,9 @@ export const ChordFinder: React.FC<ChordFinderProps> = ({
   const handleRootClick = (root: { name: string, alt: string }, useAlt: boolean) => {
     const targetName = useAlt ? root.alt : root.name;
     if (selectedRootName === targetName) {
-      onChordChange("", selectedSuffix, selectedBassName);
+      onChordChange("", selectedSuffix, selectedBassName, selectedCustomNotes);
     } else {
-      onChordChange(targetName, selectedSuffix, selectedBassName);
+      onChordChange(targetName, selectedSuffix, selectedBassName, selectedCustomNotes);
     }
   };
 
@@ -356,12 +358,46 @@ export const ChordFinder: React.FC<ChordFinderProps> = ({
         </div>
       </div>
 
+      {/* Notas Customizadas / Dissonâncias */}
+      <div className="flex flex-col gap-1">
+        <span className="text-xs font-bold font-mono text-gray-700 flex justify-between">
+          <span>Adicionar Nota Customizada (Dissonância):</span>
+          {selectedCustomNotes.length > 0 && <span className="text-[#cc3300] font-bold">+{selectedCustomNotes.length}</span>}
+        </span>
+        <div className="grid grid-cols-6 gap-1 p-1 bg-[#d4d0c8] border border-[#808080]">
+          {["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"].map((noteName, idx) => {
+            const active = selectedCustomNotes.includes(idx);
+            return (
+              <button
+                key={noteName}
+                onClick={() => {
+                  let updated: number[];
+                  if (active) {
+                    updated = selectedCustomNotes.filter(n => n !== idx);
+                  } else {
+                    updated = [...selectedCustomNotes, idx];
+                  }
+                  onChordChange(selectedRootName, selectedSuffix, selectedBassName, updated);
+                }}
+                className={`text-xs font-mono py-1 border select-none cursor-pointer ${
+                  active
+                    ? 'bg-gradient-to-b from-[#ff9d00] to-[#ff5f00] text-white border-white font-bold'
+                    : 'bg-[#ece9d8] hover:bg-white border-white border-r-[#808080] border-bottom-[#808080] active:border-t-[#808080] active:border-l-[#808080]'
+                }`}
+              >
+                {noteName}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Bass Selector (Opcional) */}
       <div className="flex flex-col gap-1">
         <span className="text-xs font-bold font-mono text-gray-700">Baixo na Nota (Opcional):</span>
         <select
           value={selectedBassName}
-          onChange={(e) => onChordChange(selectedRootName, selectedSuffix, e.target.value)}
+          onChange={(e) => onChordChange(selectedRootName, selectedSuffix, e.target.value, selectedCustomNotes)}
           className="w-full text-xs font-mono bg-white border-2 border-r-white border-bottom-white border-[#808080] p-1.5 shadow-inner focus:outline-none cursor-pointer"
         >
           <option value="">Nenhum (Baixo no tom fundamental)</option>
@@ -392,8 +428,8 @@ export const ChordFinder: React.FC<ChordFinderProps> = ({
           <span className="font-bold text-[#cc3300] bg-white border border-[#808080] px-1.5">{resultsCount}</span>
         </div>
         <button
-          onClick={() => onChordChange("", "", "")}
-          disabled={!selectedRootName && !selectedBassName}
+          onClick={() => onChordChange("", "", "", [])}
+          disabled={!selectedRootName && !selectedBassName && selectedCustomNotes.length === 0}
           className="px-2 py-0.5 bg-[#ece9d8] border border-white border-r-[#808080] border-bottom-[#808080] active:border-t-[#808080] active:border-l-[#808080] hover:bg-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed font-bold"
           title="Limpar seleção de acordes"
         >

@@ -33,6 +33,7 @@ export interface Chord {
   notes: PitchClass[];   // Absolute pitch classes of the chord (e.g., [10, 2, 4, 8] for Bb7b5)
   bass?: PitchClass;     // e.g., 4 (E) in C/E
   bassName?: string;     // e.g., "E" in C/E
+  customNotes?: PitchClass[]; // Extra custom pitch classes to require in the voicing
 }
 
 export interface Voicing {

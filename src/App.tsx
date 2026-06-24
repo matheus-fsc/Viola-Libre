@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import type { Instrument, Tuning, Voicing } from './engine/types';
-import { PRESET_INSTRUMENTS } from './engine/tunings';
-import { buildChord, calculateVoicings, shouldUseFlats } from './engine/chordCalculator';
+import { PRESET_INSTRUMENTS, NOTE_NAMES_SHARP, NOTE_NAMES_FLAT } from './engine/tunings';
+import { buildChord, calculateVoicings, shouldUseFlats, noteNameToPitchClass } from './engine/chordCalculator';
 import { InstrumentSelector } from './components/InstrumentSelector';
 import { ChordFinder } from './components/ChordFinder';
 import { FretboardDiagram } from './components/FretboardDiagram';
@@ -29,6 +29,7 @@ function App() {
   const [rootName, setRootName] = useState<string>("D");
   const [suffix, setSuffix] = useState<string>(""); // default Major
   const [bassName, setBassName] = useState<string>(""); // default none
+  const [customNotes, setCustomNotes] = useState<number[]>([]); // custom notes selected
 
   // Chord search advanced filters
   const [minFretFilter, setMinFretFilter] = useState<number>(0);
@@ -41,12 +42,16 @@ function App() {
     }
     try {
       const chord = buildChord(rootName, suffix, bassName || undefined);
+      if (customNotes.length > 0) {
+        chord.customNotes = customNotes;
+        chord.notes = Array.from(new Set([...chord.notes, ...customNotes]));
+      }
       return calculateVoicings(selectedTuning, chord);
     } catch (err) {
       console.error("Erro ao calcular posições de acordes:", err);
       return [];
     }
-  }, [selectedTuning, rootName, suffix, bassName]);
+  }, [selectedTuning, rootName, suffix, bassName, customNotes]);
 
   // Apply search filters dynamically to the generated voicings
   const filteredVoicings = useMemo(() => {
@@ -169,15 +174,17 @@ function App() {
     setSelectedTuning(customTuning);
   };
 
-  const handleChordChange = (newRoot: string, newSuffix: string, newBass: string = "") => {
+  const handleChordChange = (newRoot: string, newSuffix: string, newBass: string = "", newCustomNotes: number[] = []) => {
     setRootName(newRoot);
     setSuffix(newSuffix);
     setBassName(newBass);
+    setCustomNotes(newCustomNotes);
   };
 
   // Toggle voicing in favorites
   const toggleFavorite = (voicing: Voicing) => {
-    const chordDisplayName = `${rootName}${suffix}${bassName ? `/${bassName}` : ''}`;
+    const customNotesNames = customNotes.map(n => useFlats ? NOTE_NAMES_FLAT[n] : NOTE_NAMES_SHARP[n]).join(',');
+    const chordDisplayName = `${rootName}${suffix}${bassName ? `/${bassName}` : ''}${customNotes.length > 0 ? ` + [${customNotesNames}]` : ''}`;
     const id = `${selectedInst.id}-${selectedTuning.id}-${chordDisplayName}-${voicing.frets.join(',')}`;
     const exists = favorites.some(fav => fav.id === id);
 
@@ -203,7 +210,8 @@ function App() {
   };
 
   const isVoicingFavorited = (voicing: Voicing) => {
-    const chordDisplayName = `${rootName}${suffix}${bassName ? `/${bassName}` : ''}`;
+    const customNotesNames = customNotes.map(n => useFlats ? NOTE_NAMES_FLAT[n] : NOTE_NAMES_SHARP[n]).join(',');
+    const chordDisplayName = `${rootName}${suffix}${bassName ? `/${bassName}` : ''}${customNotes.length > 0 ? ` + [${customNotesNames}]` : ''}`;
     const id = `${selectedInst.id}-${selectedTuning.id}-${chordDisplayName}-${voicing.frets.join(',')}`;
     return favorites.some(fav => fav.id === id);
   };
@@ -219,9 +227,6 @@ function App() {
     // 2. Restore tuning
     // If it's a custom tuning, create one, otherwise find standard preset
     if (fav.tuningName.startsWith('Personalizada')) {
-      // Find open notes from string configs? We might not have them. Let's just create an approximation or look it up.
-      // Since it's stored, we'll try to find matching preset or recreate custom.
-      // Actually, for custom tuning, we need to store string notes too. To keep it simple, we store presets.
       const tuning = inst?.tunings.find(t => t.name === fav.tuningName);
       if (tuning) setSelectedTuning(tuning);
     } else {
@@ -234,14 +239,30 @@ function App() {
     // 3. Load frets to interactive board
     setInteractiveLoadedFrets([...fav.frets]);
 
-    // 4. Try parsing chordName to set root, suffix and bass
+    // 4. Try parsing chordName to set root, suffix, bass and customNotes
     let parsedRoot: string;
     let parsedSuffix: string;
     let parsedBass = "";
+    let parsedCustomNotes: number[] = [];
     
     let baseChordName = fav.chordName;
-    if (fav.chordName.includes("/")) {
-      const parts = fav.chordName.split("/");
+    if (baseChordName.includes(" + [")) {
+      const parts = baseChordName.split(" + [");
+      baseChordName = parts[0];
+      const customStr = parts[1].replace("]", "");
+      if (customStr) {
+        parsedCustomNotes = customStr.split(",").map(name => {
+          try {
+            return noteNameToPitchClass(name);
+          } catch {
+            return -1;
+          }
+        }).filter(n => n !== -1);
+      }
+    }
+
+    if (baseChordName.includes("/")) {
+      const parts = baseChordName.split("/");
       baseChordName = parts[0];
       parsedBass = parts[1];
     }
@@ -258,6 +279,7 @@ function App() {
     setRootName(parsedRoot);
     setSuffix(parsedSuffix);
     setBassName(parsedBass);
+    setCustomNotes(parsedCustomNotes);
   };
 
   const clearFavorites = () => {
@@ -266,6 +288,9 @@ function App() {
   };
 
   const useFlats = shouldUseFlats(rootName);
+
+  const customNotesNames = customNotes.map(n => useFlats ? NOTE_NAMES_FLAT[n] : NOTE_NAMES_SHARP[n]).join(',');
+  const chordDisplayName = `${rootName}${suffix}${bassName ? `/${bassName}` : ''}${customNotes.length > 0 ? ` + [${customNotesNames}]` : ''}`;
 
   // Calcula o paddingBottom dinâmico da página com base no estado atual do sequenciador fixo.
   // Isso garante que o scroll da página sempre alcance o conteúdo abaixo do painel.
@@ -389,6 +414,7 @@ function App() {
                     selectedRootName={rootName}
                     selectedSuffix={suffix}
                     selectedBassName={bassName}
+                    selectedCustomNotes={customNotes}
                     onChordChange={handleChordChange}
                     resultsCount={filteredVoicings.length}
                   />
@@ -452,7 +478,7 @@ function App() {
                         Instrumento: <span className="text-black">{selectedInst.name}</span> | Afinação: <span className="text-[#cc3300] font-bold">{selectedTuning.name}</span>
                       </span>
                       <span className="text-sm font-bold text-[#002fa7]">
-                        Cordelete de Acorde: {rootName ? `${rootName}${suffix}${bassName ? `/${bassName}` : ''}` : "Nenhum"}
+                        Cordelete de Acorde: {rootName ? chordDisplayName : "Nenhum"}
                       </span>
                     </div>
 
@@ -468,7 +494,7 @@ function App() {
                       <div className="flex-1 flex flex-col items-center justify-center text-center p-8 bg-[#ece9d8]/50 border border-dotted border-[#cc3300]">
                         <h3 className="text-base font-bold text-[#cc3300] font-mono">Forma Incompatível</h3>
                         <p className="text-xs text-gray-600 font-mono mt-1 max-w-sm">
-                          Nenhuma posição anatômica válida foi encontrada para o acorde <strong className="text-black">{rootName}{suffix}{bassName ? `/${bassName}` : ''}</strong> com a afinação atual.
+                          Nenhuma posição anatômica válida foi encontrada para o acorde <strong className="text-black">{chordDisplayName}</strong> com a afinação atual.
                           <br /><br />
                           Tente alterar a afinação ou escolha outro tipo de acorde.
                         </p>
@@ -477,7 +503,7 @@ function App() {
                       <div className="flex-1 flex flex-col items-center justify-center text-center p-8 bg-[#ece9d8]/50 border border-dotted border-[#cc3300]">
                         <h3 className="text-base font-bold text-[#cc3300] font-mono">Sem Resultados (Filtro Ativo)</h3>
                         <p className="text-xs text-gray-600 font-mono mt-1 max-w-sm">
-                          Nenhuma posição para o acorde <strong className="text-black">{rootName}{suffix}{bassName ? `/${bassName}` : ''}</strong> corresponde aos filtros de busca selecionados.
+                          Nenhuma posição para o acorde <strong className="text-black">{chordDisplayName}</strong> corresponde aos filtros de busca selecionados.
                           <br /><br />
                           Tente diminuir a "Casa Mínima" ou alterar o filtro de "Abafamento Interno".
                         </p>
@@ -491,7 +517,7 @@ function App() {
                               <FretboardDiagram
                                 voicing={voicing}
                                 tuning={selectedTuning}
-                                chordName={`${rootName}${suffix}${bassName ? `/${bassName}` : ''} (Var. ${index + 1})`}
+                                chordName={`${chordDisplayName} (Var. ${index + 1})`}
                                 isFavorite={isFav}
                                 onToggleFavorite={() => toggleFavorite(voicing)}
                                 useFlats={useFlats}
