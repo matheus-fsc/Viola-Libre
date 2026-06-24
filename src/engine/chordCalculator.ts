@@ -378,9 +378,16 @@ export function calculateVoicings(tuning: Tuning, chord: Chord, maxFret = 12): V
   // search(stringIdx, activeFrettedCount, minFret, maxFretVal)
   search(0, 0, -1, -1);
 
-  // Sort voicings by score descending (highest score first)
-  // If scores are equal, sort by lowest fret (closer to nut first)
+  // Sort voicings:
+  // 1. Voicings without interior mutes first
+  // 2. Score descending (highest score first)
+  // 3. Lowest fret (closer to nut first)
   return voicings.sort((a, b) => {
+    const muteA = a.hasInteriorMute ? 1 : 0;
+    const muteB = b.hasInteriorMute ? 1 : 0;
+    if (muteA !== muteB) {
+      return muteA - muteB; // 0 (sem abafamento) antes de 1 (com abafamento)
+    }
     if (b.score !== a.score) {
       return b.score - a.score;
     }
