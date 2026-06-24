@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import type { Tuning, Instrument } from '../engine/types';
 import { NOTE_NAMES_SHARP, NOTE_NAMES_FLAT, CHORD_FORMULAS } from '../engine/tunings';
 import { noteNameToPitchClass, midiToNoteName, shouldUseFlats } from '../engine/chordCalculator';
@@ -522,7 +522,7 @@ let audioCtx: AudioContext | null = null;
 const playNoteSound = (frequency: number, durationSec: number = 0.4) => {
   try {
     if (!audioCtx) {
-      audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      audioCtx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
       console.debug('[playNoteSound] created audioCtx', { state: audioCtx.state });
     }
 
@@ -645,7 +645,7 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
     try {
       console.debug('[ensureAudioContextActive] called', { existing: !!audioCtx, state: audioCtx?.state });
       if (!audioCtx) {
-        audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        audioCtx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
         console.debug('[ensureAudioContextActive] created audioCtx', { state: audioCtx.state });
       }
       if (audioCtx.state === 'suspended') {
@@ -690,13 +690,15 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
     setIsMinimized(false);
   };
 
-  // Clear state when tuning changes
-  useEffect(() => {
+  // Sync state when tuning changes
+  const [prevTuning, setPrevTuning] = useState(selectedTuning);
+  if (selectedTuning !== prevTuning) {
+    setPrevTuning(selectedTuning);
     setMelody(createDefaultMelody());
     setSelectedChords([]);
     setIsPlayingMelody(false);
     setSelectedNoteIdx(null);
-  }, [selectedTuning]);
+  }
 
 
 
@@ -841,8 +843,8 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
 
     // 2. Add chord notes pitch classes
     selectedChords.forEach(chordStr => {
-      let r = "";
-      let s = "";
+      let r: string;
+      let s: string;
       if (chordStr.startsWith("C#") || chordStr.startsWith("D#") || chordStr.startsWith("F#") || chordStr.startsWith("G#") || chordStr.startsWith("A#") ||
           chordStr.startsWith("Db") || chordStr.startsWith("Eb") || chordStr.startsWith("Gb") || chordStr.startsWith("Ab") || chordStr.startsWith("Bb")) {
         r = chordStr.slice(0, 2);
@@ -882,8 +884,8 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
     const percent = activePcs.size > 0 ? Math.round((matchCount / activePcs.size) * 100) : 0;
     
     const compatibleChords = selectedChords.filter(chordStr => {
-      let r = "";
-      let s = "";
+      let r: string;
+      let s: string;
       if (chordStr.startsWith("C#") || chordStr.startsWith("D#") || chordStr.startsWith("F#") || chordStr.startsWith("G#") || chordStr.startsWith("A#") ||
           chordStr.startsWith("Db") || chordStr.startsWith("Eb") || chordStr.startsWith("Gb") || chordStr.startsWith("Ab") || chordStr.startsWith("Bb")) {
         r = chordStr.slice(0, 2);

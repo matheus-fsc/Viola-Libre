@@ -218,7 +218,7 @@ export const generateChordsForMelody = (
   const getNotePc = (noteName: string): number => {
     if (!noteName || noteName === "Pausa") return -1;
     let r = "";
-    for (let c of noteName) {
+    for (const c of noteName) {
       if (c === "#" || c === "b" || (c >= "A" && c <= "G")) r += c;
     }
     if (!r) return -1;

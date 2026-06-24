@@ -165,7 +165,7 @@ export class AudioEngine {
   /** Ensure the AudioContext is created and resumed (call on user gesture) */
   async ensureContext(): Promise<AudioContext> {
     if (!this.ctx) {
-      this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      this.ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
     }
     if (this.ctx.state === 'suspended') {
       await this.ctx.resume();
@@ -207,7 +207,7 @@ export class AudioEngine {
   playNote(frequency: number, durationSec: number = 0.4): void {
     try {
       if (!this.ctx) {
-        this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        this.ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
       }
       if (this.ctx.state === 'suspended') {
         this.ctx.resume();

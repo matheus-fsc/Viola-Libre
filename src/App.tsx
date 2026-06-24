@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import type { Instrument, Tuning, Voicing } from './engine/types';
 import { PRESET_INSTRUMENTS } from './engine/tunings';
 import { buildChord, calculateVoicings, shouldUseFlats } from './engine/chordCalculator';
@@ -29,13 +29,35 @@ function App() {
   const [rootName, setRootName] = useState<string>("D");
   const [suffix, setSuffix] = useState<string>(""); // default Major
   const [bassName, setBassName] = useState<string>(""); // default none
-  const [activeVoicings, setActiveVoicings] = useState<Voicing[]>([]);
+  // Derive Voicings reactively when tuning, instrument, root, suffix or bass changes (pure useMemo, no state/useEffect needed)
+  const activeVoicings = useMemo(() => {
+    if (!rootName) {
+      return [];
+    }
+    try {
+      const chord = buildChord(rootName, suffix, bassName || undefined);
+      return calculateVoicings(selectedTuning, chord);
+    } catch (err) {
+      console.error("Erro ao calcular posições de acordes:", err);
+      return [];
+    }
+  }, [selectedTuning, rootName, suffix, bassName]);
   
   // Interactive Neck load state
   const [interactiveLoadedFrets, setInteractiveLoadedFrets] = useState<number[]>([]);
   
   // Favorites State (persisted in localStorage)
-  const [favorites, setFavorites] = useState<FavoriteVoicing[]>([]);
+  const [favorites, setFavorites] = useState<FavoriteVoicing[]>(() => {
+    const stored = localStorage.getItem('viola_libre_favs');
+    if (stored) {
+      try {
+        return JSON.parse(stored);
+      } catch (e) {
+        console.error("Erro ao carregar favoritos:", e);
+      }
+    }
+    return [];
+  });
   const [showFavoritesWindow, setShowFavoritesWindow] = useState<boolean>(false);
   const [showAboutModal, setShowAboutModal] = useState<boolean>(false);
 
@@ -100,33 +122,7 @@ function App() {
     return () => clearInterval(interval);
   }, []);
 
-  // Load Favorites from LocalStorage on mount
-  useEffect(() => {
-    const stored = localStorage.getItem('viola_libre_favs');
-    if (stored) {
-      try {
-        setFavorites(JSON.parse(stored));
-      } catch (e) {
-        console.error("Erro ao carregar favoritos:", e);
-      }
-    }
-  }, []);
 
-  // Calculate Voicings reactively when tuning, instrument, root, suffix or bass changes
-  useEffect(() => {
-    if (!rootName) {
-      setActiveVoicings([]);
-      return;
-    }
-    try {
-      const chord = buildChord(rootName, suffix, bassName || undefined);
-      const voicings = calculateVoicings(selectedTuning, chord);
-      setActiveVoicings(voicings);
-    } catch (err) {
-      console.error("Erro ao calcular posições de acordes:", err);
-      setActiveVoicings([]);
-    }
-  }, [selectedTuning, rootName, suffix, bassName]);
 
   const handleInstrumentChange = (inst: Instrument) => {
     setSelectedInst(inst);
@@ -215,8 +211,8 @@ function App() {
     setInteractiveLoadedFrets([...fav.frets]);
 
     // 4. Try parsing chordName to set root, suffix and bass
-    let parsedRoot = "";
-    let parsedSuffix = "";
+    let parsedRoot: string;
+    let parsedSuffix: string;
     let parsedBass = "";
     
     let baseChordName = fav.chordName;
@@ -410,7 +406,7 @@ function App() {
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 justify-items-center">
-                        {activeVoicings.map((voicing, index) => {
+                        {activeVoicings.map((voicing: Voicing, index: number) => {
                           const isFav = isVoicingFavorited(voicing);
                           return (
                             <div key={index} className="relative hover:translate-y-[-2px] transition-transform">

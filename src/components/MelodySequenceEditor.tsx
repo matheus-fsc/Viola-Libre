@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import type { Tuning, Instrument } from '../engine/types';
 import { noteNameToPitchClass, shouldUseFlats } from '../engine/chordCalculator';
 
@@ -15,6 +15,16 @@ import { TransportControls } from './MelodySequenceEditor/TransportControls';
 import { TimeRuler } from './MelodySequenceEditor/TimeRuler';
 import { PianoRollGrid } from './MelodySequenceEditor/PianoRollGrid';
 // NotePropertiesPanel removed to use compact toolbar
+
+export interface KeyMatch {
+  name: string;
+  root: string;
+  type: 'major' | 'minor';
+  pitchClasses: number[];
+  percent: number;
+  matchCount: number;
+  compatibleChordsCount: number;
+}
 
 // Re-export type for compatibility with EarTranscription.tsx
 export type { MelodyNote };
@@ -48,7 +58,7 @@ interface MelodySequenceEditorProps {
   setWindowPos: React.Dispatch<React.SetStateAction<{ x: number; y: number }>>;
   selectedChords: string[];
   setSelectedChords: React.Dispatch<React.SetStateAction<string[]>>;
-  sortedMatches?: any[];
+  sortedMatches?: KeyMatch[];
   isTaskbarCollapsed: boolean;
   /** Altura atual do painel (controlada pelo pai para sincronizar paddingBottom da página) */
   editorHeight: number;
@@ -123,8 +133,20 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
   const resizeStartHeightRef = useRef(380);
 
   // Undo/Redo History States
-  const [history, setHistory] = useState<MelodyNote[][]>([]);
-  const [historyIndex, setHistoryIndex] = useState<number>(-1);
+  const [history, setHistory] = useState<MelodyNote[][]>(() => [melody]);
+  const [historyIndex, setHistoryIndex] = useState<number>(0);
+  const [prevMelodyForHistory, setPrevMelodyForHistory] = useState<MelodyNote[]>(melody);
+
+  if (melody !== prevMelodyForHistory) {
+    setPrevMelodyForHistory(melody);
+    const currentSnapshot = history[historyIndex];
+    const isSame = JSON.stringify(melody) === JSON.stringify(currentSnapshot);
+    if (!isSame) {
+      const newHistory = history.slice(0, historyIndex + 1);
+      setHistory([...newHistory, melody]);
+      setHistoryIndex(newHistory.length);
+    }
+  }
 
   // Memoized grid range and note lookup maps (O(1) search)
   const midiRange = useMemo(() => {
@@ -163,36 +185,20 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
     return lookup;
   }, [melody, selectedTuning]);
 
-  // Sync harmonization parameters based on top chord match
-  useEffect(() => {
-    if (sortedMatches && sortedMatches.length > 0 && melody.length > 0) {
-      const topMatch = sortedMatches[0];
-      if (topMatch && topMatch.root) {
-        setHarmRoot(topMatch.root);
+  // Sync harmonization parameters based on top chord match (during render to avoid cascading useEffect renders)
+  const topMatch = sortedMatches && sortedMatches.length > 0 && melody.length > 0 ? sortedMatches[0] : null;
+  const [prevTopMatch, setPrevTopMatch] = useState<KeyMatch | null>(null);
+  if (topMatch !== prevTopMatch) {
+    setPrevTopMatch(topMatch);
+    if (topMatch && topMatch.root) {
+      setHarmRoot(topMatch.root);
+      if (topMatch.type === 'major' || topMatch.type === 'minor') {
         setHarmType(topMatch.type);
       }
     }
-  }, [sortedMatches, melody.length]);
+  }
 
-  // Sync melody state changes with the history stack
-  useEffect(() => {
-    if (history.length === 0) {
-      setHistory([melody]);
-      setHistoryIndex(0);
-      return;
-    }
-    
-    const currentSnapshot = history[historyIndex];
-    const isSame = JSON.stringify(melody) === JSON.stringify(currentSnapshot);
-    
-    if (!isSame) {
-      const newHistory = history.slice(0, historyIndex + 1);
-      setHistory([...newHistory, melody]);
-      setHistoryIndex(newHistory.length);
-    }
-  }, [melody]);
-
-  const handleUndo = () => {
+  const handleUndo = useCallback(() => {
     if (historyIndex > 0) {
       const prevIndex = historyIndex - 1;
       const prevMelody = history[prevIndex];
@@ -208,9 +214,9 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
         return prevSelected;
       });
     }
-  };
+  }, [historyIndex, history, setMelody, setSelectedNoteIdx]);
 
-  const handleRedo = () => {
+  const handleRedo = useCallback(() => {
     if (historyIndex < history.length - 1) {
       const nextIndex = historyIndex + 1;
       const nextMelody = history[nextIndex];
@@ -226,7 +232,7 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
         return prevSelected;
       });
     }
-  };
+  }, [historyIndex, history, setMelody, setSelectedNoteIdx]);
 
   // Keyboard shortcut listener for Ctrl+Z and Ctrl+Y (when editor is active)
   useEffect(() => {
@@ -252,7 +258,7 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
 
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [isEditorOpen, isMinimized, historyIndex, history]);
+  }, [isEditorOpen, isMinimized, handleUndo, handleRedo]);
 
   // Click handler to close dropdown menus globally
   useEffect(() => {
@@ -293,8 +299,8 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
         return;
       }
       
-      let root = "";
-      let suffix = "";
+      let root: string;
+      let suffix: string;
       if (chordName.startsWith("C#") || chordName.startsWith("D#") || chordName.startsWith("F#") || chordName.startsWith("G#") || chordName.startsWith("A#") ||
           chordName.startsWith("Db") || chordName.startsWith("Eb") || chordName.startsWith("Gb") || chordName.startsWith("Ab") || chordName.startsWith("Bb")) {
         root = chordName.slice(0, 2);
@@ -962,7 +968,7 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
   };
 
   // Debounced scroll follow bypass to resolve manual scroll conflicts
-  const scrollTimeoutRef = useRef<any>(null);
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleScrollOrWheel = () => {
     isUserScrollingRef.current = true;
     if (scrollTimeoutRef.current) {

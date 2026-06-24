@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import type { Tuning, Instrument, ReverseChordMatch } from '../engine/types';
+import React, { useState } from 'react';
+import type { Tuning, Instrument } from '../engine/types';
 import { detectChord, midiToNoteName, shouldUseFlats } from '../engine/chordCalculator';
 
 interface InteractiveFretboardProps {
@@ -18,26 +18,34 @@ export const InteractiveFretboard: React.FC<InteractiveFretboardProps> = ({
   const numStrings = selectedTuning.strings.length;
   const maxFrets = 12;
 
-  // State for active frets on each string (0: open, -1: muted, 1-12: fretted)
-  const [activeFrets, setActiveFrets] = useState<number[]>([]);
-  const [detectedChords, setDetectedChords] = useState<ReverseChordMatch[]>([]);
+  const [prevTuning, setPrevTuning] = useState<Tuning>(selectedTuning);
+  const [prevLoadedFrets, setPrevLoadedFrets] = useState<number[] | undefined>(loadedFrets);
 
-  // Initialize or update active frets when tuning/instrument changes
-  useEffect(() => {
+  // State for active frets on each string (0: open, -1: muted, 1-12: fretted)
+  const [activeFrets, setActiveFrets] = useState<number[]>(() => {
+    if (loadedFrets && loadedFrets.length === numStrings) {
+      return [...loadedFrets];
+    }
+    return new Array(numStrings).fill(0);
+  });
+
+  // Sync activeFrets state when selectedTuning or loadedFrets changes
+  if (selectedTuning !== prevTuning || loadedFrets !== prevLoadedFrets) {
+    setPrevTuning(selectedTuning);
+    setPrevLoadedFrets(loadedFrets);
     if (loadedFrets && loadedFrets.length === numStrings) {
       setActiveFrets([...loadedFrets]);
     } else {
-      // Default to all open (which forms a chord in open tunings!)
       setActiveFrets(new Array(numStrings).fill(0));
     }
-  }, [selectedTuning, loadedFrets, numStrings]);
+  }
 
-  // Run reverse chord lookup whenever active frets change
-  useEffect(() => {
+  // Derive detected chords whenever active frets or tuning changes
+  const detectedChords = React.useMemo(() => {
     if (activeFrets.length === numStrings) {
-      const matches = detectChord(activeFrets, selectedTuning);
-      setDetectedChords(matches);
+      return detectChord(activeFrets, selectedTuning);
     }
+    return [];
   }, [activeFrets, selectedTuning, numStrings]);
 
   const handleCellClick = (stringIdx: number, fret: number) => {
