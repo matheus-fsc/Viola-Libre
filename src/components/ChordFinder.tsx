@@ -290,7 +290,9 @@ export const ChordFinder: React.FC<ChordFinderProps> = ({
               { id: '7', label: 'Dominante (7)' },
               { id: 'Maj7', label: 'Maior (Maj7)' }
             ].map(s => {
-              const disabled = (quality === 'sus2' || quality === 'dim' || quality === 'aug') && s.id === 'Maj7';
+              const disabled =
+                (s.id === '7' && quality === 'sus2') ||
+                (s.id === 'Maj7' && quality !== 'M' && quality !== 'm');
               return (
                 <button
                   key={s.id}
@@ -313,14 +315,15 @@ export const ChordFinder: React.FC<ChordFinderProps> = ({
         <div className="grid grid-cols-2 gap-1 mt-1">
           {/* Ninth */}
           <button
+            disabled={quality !== 'M' && quality !== 'm'}
             onClick={() => updateChord(quality, seventh, !has9, hasb5)}
-            className={`text-xs font-mono py-1 border select-none cursor-pointer flex justify-center items-center gap-1.5 ${
+            className={`text-xs font-mono py-1 border select-none cursor-pointer flex justify-center items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed ${
               has9
                 ? 'bg-gradient-to-b from-[#0058e6] to-[#3a8bfb] text-white border-[#002fa7] font-bold'
                 : 'bg-[#ece9d8] hover:bg-white border-white border-r-[#808080] border-bottom-[#808080]'
             }`}
           >
-            <input type="checkbox" checked={has9} readOnly className="pointer-events-none" />
+            <input type="checkbox" checked={has9} disabled={quality !== 'M' && quality !== 'm'} readOnly className="pointer-events-none" />
             <span>Nona (9)</span>
           </button>
 
