@@ -139,7 +139,6 @@ export const PlaybackProvider: React.FC<PlaybackProviderProps> = ({
   // Track last step index whose notes were triggered — used by the RAF-driven scheduler
   const lastPlayedStepIdxRef = useRef<number | null>(null);
   // Throttle debug logging from RAF to avoid console spam
-  const lastRafLogMsRef = useRef<number>(0);
   
   // Pub/Sub references for step playing state and playhead tick state
   const currentPlayingStepIdRef = useRef<string | null>(null);
@@ -347,19 +346,6 @@ export const PlaybackProvider: React.FC<PlaybackProviderProps> = ({
       return;
     }
     
-    // Throttled debug of RAF
-    const nowMs = performance.now();
-    if (nowMs - lastRafLogMsRef.current > 500) {
-      console.debug('[PlaybackContext] RAF tick', {
-        nowMs,
-        audioCtxState: audioCtxRef.current ? audioCtxRef.current.state : null,
-        playbackStartAudioTime: playbackStartAudioTimeRef.current,
-        playbackStartRealTime: playbackStartRealTimeRef.current,
-        isPlayingMelody: isPlayingMelodyRef.current
-      });
-      lastRafLogMsRef.current = nowMs;
-    }
-
     // Use audio clock if available for tighter alignment with audio playback,
     // otherwise fallback to performance.now.
     let elapsedSeconds: number;
@@ -397,7 +383,6 @@ export const PlaybackProvider: React.FC<PlaybackProviderProps> = ({
 
           step.notes.forEach((note) => {
             if (note.freq > 0 && note.fret >= 0) {
-              console.log('[PlaybackContext] schedule on audioCtx', { stepIdx, freq: note.freq, startTime, durationInSeconds });
               try {
                 const osc = ctx.createOscillator();
                 const gainNode = ctx.createGain();
@@ -423,7 +408,6 @@ export const PlaybackProvider: React.FC<PlaybackProviderProps> = ({
           // Fallback to playNoteSound prop if no audio context available
           step.notes.forEach((note) => {
             if (note.freq > 0 && note.fret >= 0) {
-              console.log('[PlaybackContext] fallback trigger note', { stepIdx, freq: note.freq, durationInSeconds });
               playNoteSound(note.freq, durationInSeconds * 0.9);
             }
           });
@@ -465,29 +449,19 @@ export const PlaybackProvider: React.FC<PlaybackProviderProps> = ({
       return;
     }
 
+    // Note playback is handled exclusively by the RAF (updatePlayheadAnimation)
+    // to avoid double-triggering notes. playNextFromIndex only tracks step index.
+    currentStepIdxRef.current = stepIdx + 1;
     const step = steps[stepIdx];
-
-    // Update direct DOM highlights for active step notes
-    highlightNotesOfStep(stepIdx);
-
     const beatDurationSec = 60 / bpm;
     const stepDur = step.duration || 1.0;
     const durationInSeconds = stepDur * beatDurationSec;
-
-    step.notes.forEach((note) => {
-      if (note.freq > 0 && note.fret >= 0) {
-        playNoteSound(note.freq, durationInSeconds * 0.9);
-      }
-    });
-
-    currentStepIdxRef.current = stepIdx + 1;
     playbackTimeoutRef.current = setTimeout(() => {
       playNextFromIndex(stepIdx + 1);
     }, durationInSeconds * 1000);
   };
 
   const handlePlayMelody = async () => {
-    console.debug('[PlaybackContext] handlePlayMelody called', { stepsLength: steps.length, isPlayingMelody });
     if (steps.length === 0) return;
 
     if (isPlayingMelody) {
@@ -507,14 +481,15 @@ export const PlaybackProvider: React.FC<PlaybackProviderProps> = ({
     let audioCtx: AudioContext | null = null;
     if (ensureAudioContextActive) {
       const maybe = await ensureAudioContextActive();
-      if (maybe && typeof (maybe as any).currentTime === 'number') {
+      if (maybe && typeof (maybe as AudioContext).currentTime === 'number') {
         audioCtx = maybe as AudioContext;
         audioCtxRef.current = audioCtx;
+        // Captura currentTime APÓS o resume para evitar agendar notas no passado
         playbackStartAudioTimeRef.current = audioCtx.currentTime;
       } else {
+        audioCtxRef.current = null;
         playbackStartAudioTimeRef.current = null;
       }
-      console.debug('[PlaybackContext] after ensureAudioContextActive', { audioCtxState: audioCtxRef.current?.state, playbackStartAudioTime: playbackStartAudioTimeRef.current });
     }
 
     setIsPlayingMelody(true);
