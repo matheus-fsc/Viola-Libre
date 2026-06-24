@@ -1,14 +1,127 @@
 import React from 'react';
 
-import { CHORD_FORMULAS } from '../engine/tunings';
-import { formatIntervalsAsDegrees } from '../engine/intervals';
-
 interface ChordFinderProps {
   selectedRootName: string;
   selectedSuffix: string;
   selectedBassName: string;
   onChordChange: (rootName: string, suffix: string, bassName: string) => void;
   resultsCount: number;
+}
+
+function parseSuffix(suffix: string) {
+  let quality: 'M' | 'm' | 'sus4' | 'sus2' | 'dim' | 'aug' = 'M';
+  let seventh: 'none' | '7' | 'Maj7' = 'none';
+  let has9 = false;
+  let hasb5 = false;
+
+  if (suffix.includes('m7(b5)')) {
+    quality = 'm';
+    seventh = '7';
+    hasb5 = true;
+  } else if (suffix.startsWith('m')) {
+    quality = 'm';
+    if (suffix === 'm7') {
+      seventh = '7';
+    } else if (suffix === 'm(Maj7)') {
+      seventh = 'Maj7';
+    } else if (suffix === 'm(add9)') {
+      has9 = true;
+    } else if (suffix === 'm9') {
+      seventh = '7';
+      has9 = true;
+    } else if (suffix === 'm(Maj9)') {
+      seventh = 'Maj7';
+      has9 = true;
+    }
+  } else if (suffix.startsWith('sus4')) {
+    quality = 'sus4';
+    if (suffix.includes('7')) seventh = '7';
+  } else if (suffix.startsWith('7sus4')) {
+    quality = 'sus4';
+    seventh = '7';
+  } else if (suffix.startsWith('sus2')) {
+    quality = 'sus2';
+  } else if (suffix.startsWith('dim')) {
+    quality = 'dim';
+    if (suffix === 'dim7') seventh = '7';
+  } else if (suffix.startsWith('aug') || suffix === '7(#5)') {
+    quality = 'aug';
+    if (suffix.includes('7')) seventh = '7';
+  } else {
+    // Major quality
+    quality = 'M';
+    if (suffix === '7') {
+      seventh = '7';
+    } else if (suffix === 'Maj7') {
+      seventh = 'Maj7';
+    } else if (suffix === '9') {
+      seventh = '7';
+      has9 = true;
+    } else if (suffix === 'Maj9') {
+      seventh = 'Maj7';
+      has9 = true;
+    } else if (suffix === 'add9') {
+      has9 = true;
+    } else if (suffix === '7(b5)') {
+      seventh = '7';
+      hasb5 = true;
+    }
+  }
+
+  return { quality, seventh, has9, hasb5 };
+}
+
+function getSuffixFromBuilder(
+  quality: 'M' | 'm' | 'sus4' | 'sus2' | 'dim' | 'aug',
+  seventh: 'none' | '7' | 'Maj7',
+  has9: boolean,
+  hasb5: boolean
+): string {
+  if (quality === 'm') {
+    if (hasb5) {
+      if (seventh === '7') return 'm7(b5)';
+      return 'dim';
+    }
+    if (seventh === '7') {
+      return has9 ? 'm9' : 'm7';
+    }
+    if (seventh === 'Maj7') {
+      return has9 ? 'm(Maj9)' : 'm(Maj7)';
+    }
+    return has9 ? 'm(add9)' : 'm';
+  }
+  
+  if (quality === 'dim') {
+    if (seventh === '7') return 'dim7';
+    return 'dim';
+  }
+  
+  if (quality === 'aug') {
+    if (seventh === '7') return '7(#5)';
+    return 'aug';
+  }
+  
+  if (quality === 'sus4') {
+    if (seventh === '7') return '7sus4';
+    return 'sus4';
+  }
+  
+  if (quality === 'sus2') {
+    return 'sus2';
+  }
+  
+  // Quality: 'M' (Maior)
+  if (hasb5) {
+    if (seventh === '7') return '7(b5)';
+    return '';
+  }
+  if (seventh === '7') {
+    return has9 ? '9' : '7';
+  }
+  if (seventh === 'Maj7') {
+    return has9 ? 'Maj9' : 'Maj7';
+  }
+  return has9 ? 'add9' : '';
 }
 
 export const ChordFinder: React.FC<ChordFinderProps> = ({
@@ -18,6 +131,26 @@ export const ChordFinder: React.FC<ChordFinderProps> = ({
   onChordChange,
   resultsCount
 }) => {
+  const { quality, seventh, has9, hasb5 } = parseSuffix(selectedSuffix);
+
+  const updateChord = (
+    q: 'M' | 'm' | 'sus4' | 'sus2' | 'dim' | 'aug',
+    s: 'none' | '7' | 'Maj7',
+    n9: boolean,
+    b5: boolean
+  ) => {
+    let targetSeventh = s;
+    if ((q === 'sus2' || q === 'dim' || q === 'aug') && s === 'Maj7') {
+      targetSeventh = 'none';
+    }
+    let targetB5 = b5;
+    if (q !== 'M' && q !== 'm') {
+      targetB5 = false;
+    }
+    const suffix = getSuffixFromBuilder(q, targetSeventh, n9, targetB5);
+    onChordChange(selectedRootName, suffix, selectedBassName);
+  };
+
   // Common roots showing both sharps and flats for clarity
   const roots = [
     { name: "C", alt: "" },
@@ -42,10 +175,6 @@ export const ChordFinder: React.FC<ChordFinderProps> = ({
     } else {
       onChordChange(targetName, selectedSuffix, selectedBassName);
     }
-  };
-
-  const handleSuffixClick = (suffix: string) => {
-    onChordChange(selectedRootName, suffix, selectedBassName);
   };
 
   // Helper to check if a root button is active
@@ -121,38 +250,93 @@ export const ChordFinder: React.FC<ChordFinderProps> = ({
         </div>
       </div>
 
-      {/* Suffix / Quality Grid */}
-      <div className="flex flex-col gap-1">
-        <span className="text-xs font-bold font-mono text-gray-700">Tipo de Acorde:</span>
-        <div className="h-[145px] overflow-y-auto pr-1 bg-white border-2 border-[#808080] border-r-white border-bottom-white p-1 flex flex-col gap-1 retro-scrollbar">
-          {CHORD_FORMULAS.map(formula => {
-            const active = selectedSuffix === formula.suffix;
-            const degrees = formatIntervalsAsDegrees(formula.intervals).join(' ');
-
-            return (
+      {/* Suffix / Quality Grid (Modular Chord Builder) */}
+      <div className="flex flex-col gap-2 p-2 bg-[#d4d0c8] border border-[#808080]">
+        <span className="text-xs font-bold font-mono text-gray-700">Qualidade e Extensões:</span>
+        
+        {/* 1. Quality */}
+        <div className="flex flex-col gap-1">
+          <span className="text-[10px] font-mono text-gray-600 font-bold">Qualidade Tríade:</span>
+          <div className="grid grid-cols-3 gap-1">
+            {[
+              { id: 'M', label: 'Maior' },
+              { id: 'm', label: 'Menor' },
+              { id: 'sus4', label: 'Sus4' },
+              { id: 'sus2', label: 'Sus2' },
+              { id: 'dim', label: 'Diminuto' },
+              { id: 'aug', label: 'Aumentado' }
+            ].map(q => (
               <button
-                key={formula.suffix}
-                onClick={() => handleSuffixClick(formula.suffix)}
-                className={`text-left text-xs font-mono px-2 py-1.5 flex justify-between items-center cursor-pointer border select-none ${
-                  active
-                    ? 'bg-[#0058e6] text-white border-[#002fa7]'
-                    : 'bg-[#ece9d8] text-black border-[#d4d0c8] hover:bg-white hover:border-[#808080]'
+                key={q.id}
+                onClick={() => updateChord(q.id as any, seventh, has9, hasb5)}
+                className={`text-xs font-mono py-1 border select-none cursor-pointer ${
+                  quality === q.id
+                    ? 'bg-gradient-to-b from-[#0058e6] to-[#3a8bfb] text-white border-[#002fa7] font-bold'
+                    : 'bg-[#ece9d8] hover:bg-white border-white border-r-[#808080] border-bottom-[#808080]'
                 }`}
               >
-                <span>
-                  <strong>{formula.suffix || 'Maior'}</strong> 
-                  <span className={`text-[10px] ml-2 ${active ? 'text-gray-200' : 'text-gray-500'}`}>
-                    ({formula.name})
-                  </span>
-                </span>
-                <span
-                  title={degrees}
-                  className={`inline-block max-w-[7rem] truncate text-right text-[10px] font-bold px-2 py-0.5 rounded border ${active ? 'bg-[#002fa7] border-[#3a8bfb]' : 'bg-[#d4d0c8] border-[#808080] text-gray-600'}`}>
-                  {degrees}
-                </span>
+                {q.label}
               </button>
-            );
-          })}
+            ))}
+          </div>
+        </div>
+
+        {/* 2. Seventh */}
+        <div className="flex flex-col gap-1 mt-1">
+          <span className="text-[10px] font-mono text-gray-600 font-bold">Adicionar Sétima (7ª):</span>
+          <div className="grid grid-cols-3 gap-1">
+            {[
+              { id: 'none', label: 'Sem 7ª' },
+              { id: '7', label: 'Dominante (7)' },
+              { id: 'Maj7', label: 'Maior (Maj7)' }
+            ].map(s => {
+              const disabled = (quality === 'sus2' || quality === 'dim' || quality === 'aug') && s.id === 'Maj7';
+              return (
+                <button
+                  key={s.id}
+                  disabled={disabled}
+                  onClick={() => updateChord(quality, s.id as any, has9, hasb5)}
+                  className={`text-xs font-mono py-1 border select-none cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                    seventh === s.id
+                      ? 'bg-gradient-to-b from-[#0058e6] to-[#3a8bfb] text-white border-[#002fa7] font-bold'
+                      : 'bg-[#ece9d8] hover:bg-white border-white border-r-[#808080] border-bottom-[#808080]'
+                  }`}
+                >
+                  {s.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* 3. Extensions (9th & b5) */}
+        <div className="grid grid-cols-2 gap-1 mt-1">
+          {/* Ninth */}
+          <button
+            onClick={() => updateChord(quality, seventh, !has9, hasb5)}
+            className={`text-xs font-mono py-1 border select-none cursor-pointer flex justify-center items-center gap-1.5 ${
+              has9
+                ? 'bg-gradient-to-b from-[#0058e6] to-[#3a8bfb] text-white border-[#002fa7] font-bold'
+                : 'bg-[#ece9d8] hover:bg-white border-white border-r-[#808080] border-bottom-[#808080]'
+            }`}
+          >
+            <input type="checkbox" checked={has9} readOnly className="pointer-events-none" />
+            <span>Nona (9)</span>
+          </button>
+
+          {/* Flat 5 */}
+          <button
+            disabled={quality !== 'M' && quality !== 'm'}
+            onClick={() => updateChord(quality, seventh, has9, !hasb5)}
+            className={`text-xs font-mono py-1 border select-none cursor-pointer flex justify-center items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed ${
+              hasb5
+                ? 'bg-gradient-to-b from-[#0058e6] to-[#3a8bfb] text-white border-[#002fa7] font-bold'
+                : 'bg-[#ece9d8] hover:bg-white border-white border-r-[#808080] border-bottom-[#808080]'
+            }`}
+          >
+            <input type="checkbox" checked={hasb5} disabled={quality !== 'M' && quality !== 'm'} readOnly className="pointer-events-none" />
+            <span>Quinta Bemol (b5)</span>
+          </button>
         </div>
       </div>
 
