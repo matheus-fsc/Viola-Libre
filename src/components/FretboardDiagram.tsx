@@ -2,6 +2,57 @@ import React from 'react';
 import type { Voicing, Tuning } from '../engine/types';
 import { midiToNoteName } from '../engine/chordCalculator';
 
+export const IconNotepad: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => (
+  <svg className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+    <path d="M2.5 1.5h8l3 3v10h-11v-13z" fill="#ffffff" stroke="#333333" strokeWidth="1"/>
+    <path d="M10.5 1.5v3h3" fill="#ece9d8" stroke="#333333" strokeWidth="1"/>
+    <line x1="4.5" y1="6.5" x2="11.5" y2="6.5" stroke="#3a8bfb" strokeWidth="1"/>
+    <line x1="4.5" y1="9.5" x2="11.5" y2="9.5" stroke="#3a8bfb" strokeWidth="1"/>
+    <line x1="4.5" y1="12.5" x2="8.5" y2="12.5" stroke="#3a8bfb" strokeWidth="1"/>
+    <circle cx="10.5" cy="11.5" r="1.5" fill="#cc3300"/>
+    <path d="M11.5 8.5v3" stroke="#cc3300" strokeWidth="1"/>
+  </svg>
+);
+
+export const IconAddDoc: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => (
+  <svg className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+    <path d="M1.5 1.5h7l3 3v4.5h-10v-7.5z" fill="#ffffff" stroke="#555555" strokeWidth="1"/>
+    <path d="M8.5 1.5v3h3" fill="#ece9d8" stroke="#555555" strokeWidth="1"/>
+    <line x1="3.5" y1="6.5" x2="8.5" y2="6.5" stroke="#3a8bfb" strokeWidth="1"/>
+    <circle cx="11.5" cy="11.5" r="4" fill="#228b22" stroke="#1a6b1a" strokeWidth="1"/>
+    <line x1="11.5" y1="9.5" x2="11.5" y2="13.5" stroke="#ffffff" strokeWidth="1.5"/>
+    <line x1="9.5" y1="11.5" x2="13.5" y2="11.5" stroke="#ffffff" strokeWidth="1.5"/>
+  </svg>
+);
+
+export const IconRemoveDoc: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => (
+  <svg className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+    <path d="M1.5 1.5h7l3 3v4.5h-10v-7.5z" fill="#ffffff" stroke="#555555" strokeWidth="1"/>
+    <path d="M8.5 1.5v3h3" fill="#ece9d8" stroke="#555555" strokeWidth="1"/>
+    <line x1="3.5" y1="6.5" x2="8.5" y2="6.5" stroke="#3a8bfb" strokeWidth="1"/>
+    <circle cx="11.5" cy="11.5" r="4" fill="#cc3300" stroke="#992200" strokeWidth="1"/>
+    <line x1="9.5" y1="11.5" x2="13.5" y2="11.5" stroke="#ffffff" strokeWidth="1.5"/>
+  </svg>
+);
+
+export const IconCopy: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => (
+  <svg className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+    <rect x="5.5" y="1.5" width="8" height="10" fill="#ffffff" stroke="#808080" strokeWidth="1"/>
+    <rect x="2.5" y="4.5" width="8" height="10" fill="#ffffff" stroke="#333333" strokeWidth="1"/>
+    <line x1="4.5" y1="7.5" x2="8.5" y2="7.5" stroke="#c2d7f2" strokeWidth="1"/>
+    <line x1="4.5" y1="10.5" x2="8.5" y2="10.5" stroke="#c2d7f2" strokeWidth="1"/>
+  </svg>
+);
+
+export const IconTrash: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => (
+  <svg className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+    <path d="M3 3.5h10M6 3.5v-1.5h4v1.5" stroke="#333333" strokeWidth="1.2" strokeLinecap="round"/>
+    <path d="M4.5 4.5h7l-1 9h-5l-1-9z" fill="#ece9d8" stroke="#333333" strokeWidth="1.2"/>
+    <line x1="6.5" y1="6.5" x2="6.5" y2="11.5" stroke="#808080" strokeWidth="1"/>
+    <line x1="8.5" y1="6.5" x2="8.5" y2="11.5" stroke="#808080" strokeWidth="1"/>
+  </svg>
+);
+
 interface FretboardDiagramProps {
   voicing: Voicing;
   tuning: Tuning;
@@ -80,10 +131,10 @@ export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
           {onToggleCifra && (
             <button
               onClick={onToggleCifra}
-              className="cursor-pointer text-xs focus:outline-none hover:scale-110 transition-transform"
+              className="cursor-pointer focus:outline-none hover:scale-110 transition-transform flex items-center justify-center"
               title={isInCifra ? "Remover da Cifra" : "Adicionar à Cifra"}
             >
-              {isInCifra ? "📝" : "➕📝"}
+              {isInCifra ? <IconRemoveDoc className="w-4 h-4" /> : <IconAddDoc className="w-4 h-4" />}
             </button>
           )}
           <button

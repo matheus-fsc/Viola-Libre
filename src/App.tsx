@@ -4,7 +4,7 @@ import { PRESET_INSTRUMENTS, NOTE_NAMES_SHARP, NOTE_NAMES_FLAT } from './engine/
 import { buildChord, calculateVoicings, shouldUseFlats, noteNameToPitchClass, evaluatePlayability } from './engine/chordCalculator';
 import { InstrumentSelector } from './components/InstrumentSelector';
 import { ChordFinder } from './components/ChordFinder';
-import { FretboardDiagram } from './components/FretboardDiagram';
+import { FretboardDiagram, IconNotepad, IconCopy, IconTrash } from './components/FretboardDiagram';
 import { InteractiveFretboard } from './components/InteractiveFretboard';
 import { ScaleTrainer } from './components/ScaleTrainer';
 import { TheoryGuide } from './components/TheoryGuide';
@@ -835,7 +835,10 @@ function App() {
       {showCifraWindow && (
         <div className="fixed top-12 left-4 md:left-[15%] w-[90%] md:w-[70%] bg-[#ece9d8] border-[3px] border-[#0058e6] rounded-t-lg shadow-2xl z-50">
           <div className="winxp-gradient-blue text-white px-3 py-1 flex justify-between items-center rounded-t-md select-none font-bold text-sm">
-            <span>📝 Minha Cifra (Roteiro de Acordes da Música)</span>
+            <span className="flex items-center gap-1.5">
+              <IconNotepad className="w-4.5 h-4.5" />
+              <span>Minha Cifra (Roteiro de Acordes da Música)</span>
+            </span>
             <button 
               onClick={() => setShowCifraWindow(false)}
               className="w-5 h-5 rounded bg-[#cc3300] border border-white flex items-center justify-center font-bold text-xs hover:bg-red-500 cursor-pointer"
@@ -913,10 +916,11 @@ function App() {
                     alert("Cifragem copiada para a área de transferência:\n\n" + text);
                   }}
                   disabled={cifraVoicings.length === 0}
-                  className="px-3 py-1 bg-[#ece9d8] border border-white border-r-[#808080] border-bottom-[#808080] active:border-t-[#808080] active:border-l-[#808080] font-bold text-xs hover:bg-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-3 py-1 bg-[#ece9d8] border border-white border-r-[#808080] border-bottom-[#808080] active:border-t-[#808080] active:border-l-[#808080] font-bold text-xs hover:bg-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
                   title="Copiar acordes como texto"
                 >
-                  📋 Copiar Cifragem (Texto)
+                  <IconCopy className="w-3.5 h-3.5" />
+                  <span>Copiar Cifragem (Texto)</span>
                 </button>
                 <button
                   onClick={() => {
@@ -924,9 +928,10 @@ function App() {
                     localStorage.removeItem('viola_libre_cifra');
                   }}
                   disabled={cifraVoicings.length === 0}
-                  className="px-3 py-1 bg-[#ece9d8] border border-white border-r-[#808080] border-bottom-[#808080] active:border-t-[#808080] active:border-l-[#808080] font-bold text-xs hover:bg-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-3 py-1 bg-[#ece9d8] border border-white border-r-[#808080] border-bottom-[#808080] active:border-t-[#808080] active:border-l-[#808080] font-bold text-xs hover:bg-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
                 >
-                  🗑️ Limpar Cifra
+                  <IconTrash className="w-3.5 h-3.5" />
+                  <span>Limpar Cifra</span>
                 </button>
                 <button
                   onClick={() => setShowCifraWindow(false)}
@@ -1060,7 +1065,8 @@ function App() {
                   : 'bg-[#ece9d8] text-black border-white border-r-[#808080] border-bottom-[#808080] hover:bg-white'
               }`}
             >
-              <span>📝 Minha Cifra ({cifraVoicings.length})</span>
+              <IconNotepad className="w-3.5 h-3.5" />
+              <span>Minha Cifra ({cifraVoicings.length})</span>
             </button>
           </div>
 
