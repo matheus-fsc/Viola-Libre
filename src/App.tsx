@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import type { Instrument, Tuning, Voicing } from './engine/types';
 import { PRESET_INSTRUMENTS, NOTE_NAMES_SHARP, NOTE_NAMES_FLAT } from './engine/tunings';
-import { buildChord, calculateVoicings, shouldUseFlats, noteNameToPitchClass } from './engine/chordCalculator';
+import { buildChord, calculateVoicings, shouldUseFlats, noteNameToPitchClass, evaluatePlayability } from './engine/chordCalculator';
 import { InstrumentSelector } from './components/InstrumentSelector';
 import { ChordFinder } from './components/ChordFinder';
 import { FretboardDiagram } from './components/FretboardDiagram';
@@ -89,6 +89,20 @@ function App() {
   });
   const [showFavoritesWindow, setShowFavoritesWindow] = useState<boolean>(false);
   const [showAboutModal, setShowAboutModal] = useState<boolean>(false);
+  
+  // Custom Song Chord Sheet (Cifra) State
+  const [cifraVoicings, setCifraVoicings] = useState<FavoriteVoicing[]>(() => {
+    const stored = localStorage.getItem('viola_libre_cifra');
+    if (stored) {
+      try {
+        return JSON.parse(stored);
+      } catch (e) {
+        console.error("Erro ao carregar cifra:", e);
+      }
+    }
+    return [];
+  });
+  const [showCifraWindow, setShowCifraWindow] = useState<boolean>(false);
 
   // Tab switcher state
   const [activeTab, setActiveTab] = useState<'chords' | 'train' | 'ear' | 'favorites'>('chords');
@@ -214,6 +228,40 @@ function App() {
     const chordDisplayName = `${rootName}${suffix}${bassName ? `/${bassName}` : ''}${customNotes.length > 0 ? ` + [${customNotesNames}]` : ''}`;
     const id = `${selectedInst.id}-${selectedTuning.id}-${chordDisplayName}-${voicing.frets.join(',')}`;
     return favorites.some(fav => fav.id === id);
+  };
+
+  const toggleCifraVoicing = (voicing: Voicing) => {
+    const customNotesNames = customNotes.map(n => useFlats ? NOTE_NAMES_FLAT[n] : NOTE_NAMES_SHARP[n]).join(',');
+    const chordDisplayName = `${rootName}${suffix}${bassName ? `/${bassName}` : ''}${customNotes.length > 0 ? ` + [${customNotesNames}]` : ''}`;
+    const id = `${selectedInst.id}-${selectedTuning.id}-${chordDisplayName}-${voicing.frets.join(',')}`;
+    const exists = cifraVoicings.some(c => c.id === id);
+
+    let updated: FavoriteVoicing[];
+    if (exists) {
+      updated = cifraVoicings.filter(c => c.id !== id);
+    } else {
+      updated = [
+        ...cifraVoicings,
+        {
+          id,
+          chordName: chordDisplayName,
+          instrumentName: selectedInst.name,
+          tuningName: selectedTuning.name,
+          frets: voicing.frets,
+          notes: voicing.notes,
+          score: voicing.score
+        }
+      ];
+    }
+    setCifraVoicings(updated);
+    localStorage.setItem('viola_libre_cifra', JSON.stringify(updated));
+  };
+
+  const isVoicingInCifra = (voicing: Voicing) => {
+    const customNotesNames = customNotes.map(n => useFlats ? NOTE_NAMES_FLAT[n] : NOTE_NAMES_SHARP[n]).join(',');
+    const chordDisplayName = `${rootName}${suffix}${bassName ? `/${bassName}` : ''}${customNotes.length > 0 ? ` + [${customNotesNames}]` : ''}`;
+    const id = `${selectedInst.id}-${selectedTuning.id}-${chordDisplayName}-${voicing.frets.join(',')}`;
+    return cifraVoicings.some(c => c.id === id);
   };
 
   // Load a favorited voicing configuration back to the active finder and interactive neck
@@ -512,6 +560,7 @@ function App() {
                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 justify-items-center">
                         {filteredVoicings.map((voicing: Voicing, index: number) => {
                           const isFav = isVoicingFavorited(voicing);
+                          const isInCifra = isVoicingInCifra(voicing);
                           return (
                             <div key={index} className="relative hover:translate-y-[-2px] transition-transform">
                               <FretboardDiagram
@@ -520,6 +569,8 @@ function App() {
                                 chordName={`${chordDisplayName} (Var. ${index + 1})`}
                                 isFavorite={isFav}
                                 onToggleFavorite={() => toggleFavorite(voicing)}
+                                isInCifra={isInCifra}
+                                onToggleCifra={() => toggleCifraVoicing(voicing)}
                                 useFlats={useFlats}
                               />
                               <div className="absolute top-2 right-12 text-[10px] font-bold px-1 bg-[#228b22] text-white border border-[#1a6b1a] rounded font-mono shadow-sm">
@@ -780,6 +831,115 @@ function App() {
         </div>
       )}
 
+      {/* --- MINHA CIFRA FLOATING WINDOW --- */}
+      {showCifraWindow && (
+        <div className="fixed top-12 left-4 md:left-[15%] w-[90%] md:w-[70%] bg-[#ece9d8] border-[3px] border-[#0058e6] rounded-t-lg shadow-2xl z-50">
+          <div className="winxp-gradient-blue text-white px-3 py-1 flex justify-between items-center rounded-t-md select-none font-bold text-sm">
+            <span>📝 Minha Cifra (Roteiro de Acordes da Música)</span>
+            <button 
+              onClick={() => setShowCifraWindow(false)}
+              className="w-5 h-5 rounded bg-[#cc3300] border border-white flex items-center justify-center font-bold text-xs hover:bg-red-500 cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="p-4 flex flex-col gap-4">
+            <p className="text-xs font-mono text-gray-700 leading-normal">
+              Abaixo estão os acordes selecionados para a cifra desta música. Você pode ver os diagramas, carregar no braço ou exportar a digitação.
+            </p>
+            
+            <div className="max-h-[350px] overflow-y-auto bg-white border-2 border-[#808080] border-r-white border-bottom-white p-4 font-mono retro-scrollbar flex flex-wrap gap-4 justify-center">
+              {cifraVoicings.length === 0 ? (
+                <div className="text-center text-gray-400 py-16 italic text-sm w-full">
+                  Nenhum acorde adicionado à cifra. Vá na aba de acordes e clique no ícone 📝 para salvar as posições da música aqui!
+                </div>
+              ) : (
+                cifraVoicings.map((fav) => {
+                  const voicing: Voicing = {
+                    frets: fav.frets,
+                    notes: fav.notes,
+                    score: fav.score,
+                    playabilityIssues: []
+                  };
+                  const playability = evaluatePlayability(fav.frets);
+                  if (playability.barre) {
+                    voicing.barre = playability.barre;
+                  }
+                  
+                  const tuningObj: Tuning = {
+                    id: 'temp',
+                    name: fav.tuningName,
+                    strings: selectedTuning.strings
+                  };
+                  
+                  return (
+                    <div key={fav.id} className="relative border border-[#808080] p-1 bg-[#ece9d8]">
+                      <FretboardDiagram
+                        voicing={voicing}
+                        tuning={tuningObj}
+                        chordName={fav.chordName}
+                        isFavorite={favorites.some(f => f.id === fav.id)}
+                        onToggleFavorite={() => toggleFavorite(voicing)}
+                        isInCifra={true}
+                        onToggleCifra={() => {
+                          const updated = cifraVoicings.filter(c => c.id !== fav.id);
+                          setCifraVoicings(updated);
+                          localStorage.setItem('viola_libre_cifra', JSON.stringify(updated));
+                        }}
+                        useFlats={useFlats}
+                      />
+                      <button
+                        onClick={() => {
+                          loadFavorite(fav);
+                          setShowCifraWindow(false);
+                        }}
+                        className="mt-2 w-full py-1 bg-[#0058e6] text-white border border-white font-mono text-xs cursor-pointer text-center font-bold hover:bg-blue-600 active:bg-blue-800"
+                      >
+                        Carregar no Braço
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+            
+            <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 font-mono">
+              <span className="text-xs text-gray-600 font-bold">Acordes na Cifra: {cifraVoicings.length}</span>
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => {
+                    const text = cifraVoicings.map(c => `${c.chordName}: ${c.frets.map(f => f === -1 ? 'X' : f).join('-')} (${c.instrumentName})`).join('\n');
+                    navigator.clipboard.writeText(text);
+                    alert("Cifragem copiada para a área de transferência:\n\n" + text);
+                  }}
+                  disabled={cifraVoicings.length === 0}
+                  className="px-3 py-1 bg-[#ece9d8] border border-white border-r-[#808080] border-bottom-[#808080] active:border-t-[#808080] active:border-l-[#808080] font-bold text-xs hover:bg-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Copiar acordes como texto"
+                >
+                  📋 Copiar Cifragem (Texto)
+                </button>
+                <button
+                  onClick={() => {
+                    setCifraVoicings([]);
+                    localStorage.removeItem('viola_libre_cifra');
+                  }}
+                  disabled={cifraVoicings.length === 0}
+                  className="px-3 py-1 bg-[#ece9d8] border border-white border-r-[#808080] border-bottom-[#808080] active:border-t-[#808080] active:border-l-[#808080] font-bold text-xs hover:bg-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  🗑️ Limpar Cifra
+                </button>
+                <button
+                  onClick={() => setShowCifraWindow(false)}
+                  className="px-3 py-1 bg-[#0058e6] text-white border border-[#002fa7] font-bold text-xs hover:bg-blue-600 cursor-pointer"
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* --- ABOUT MODAL WINDOW --- */}
       {showAboutModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -890,6 +1050,17 @@ function App() {
               }`}
             >
               <span>Favoritos ({favorites.length})</span>
+            </button>
+
+            <button 
+              onClick={() => setShowCifraWindow(true)}
+              className={`h-[28px] px-3 border text-xs font-mono font-bold rounded flex items-center gap-1.5 select-none cursor-pointer ${
+                showCifraWindow
+                  ? 'bg-[#3a8bfb] text-white border-[#002fa7] border-t-white border-l-white shadow-[inset_1px_1px_0_#ffffff50]'
+                  : 'bg-[#ece9d8] text-black border-white border-r-[#808080] border-bottom-[#808080] hover:bg-white'
+              }`}
+            >
+              <span>📝 Minha Cifra ({cifraVoicings.length})</span>
             </button>
           </div>
 

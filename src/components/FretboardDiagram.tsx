@@ -8,6 +8,8 @@ interface FretboardDiagramProps {
   chordName: string;
   isFavorite?: boolean;
   onToggleFavorite?: () => void;
+  isInCifra?: boolean;
+  onToggleCifra?: () => void;
   useFlats?: boolean;
 }
 
@@ -17,6 +19,8 @@ export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
   chordName,
   isFavorite = false,
   onToggleFavorite,
+  isInCifra = false,
+  onToggleCifra,
   useFlats = false
 }) => {
   const { frets, notes, barre } = voicing;
@@ -72,13 +76,24 @@ export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
       {/* Title bar of the chord card */}
       <div className="w-full flex justify-between items-center mb-2 px-1 border-b border-[#d4d0c8] pb-1">
         <span className="font-bold text-lg font-mono text-[#002fa7]">{chordName}</span>
-        <button
-          onClick={onToggleFavorite}
-          className="cursor-pointer text-sm focus:outline-none hover:scale-110 transition-transform"
-          title={isFavorite ? "Remover dos favoritos" : "Favoritar posição"}
-        >
-          {isFavorite ? "★" : "☆"}
-        </button>
+        <div className="flex gap-2 items-center">
+          {onToggleCifra && (
+            <button
+              onClick={onToggleCifra}
+              className="cursor-pointer text-xs focus:outline-none hover:scale-110 transition-transform"
+              title={isInCifra ? "Remover da Cifra" : "Adicionar à Cifra"}
+            >
+              {isInCifra ? "📝" : "➕📝"}
+            </button>
+          )}
+          <button
+            onClick={onToggleFavorite}
+            className="cursor-pointer text-sm focus:outline-none hover:scale-110 transition-transform"
+            title={isFavorite ? "Remover dos favoritos" : "Favoritar posição"}
+          >
+            {isFavorite ? "★" : "☆"}
+          </button>
+        </div>
       </div>
 
       {/* SVG Diagram */}
