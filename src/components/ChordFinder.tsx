@@ -11,7 +11,7 @@ interface ChordFinderProps {
 
 function parseSuffix(suffix: string) {
   let quality: 'M' | 'm' | 'sus4' | 'sus2' | 'dim' | 'aug';
-  let seventh: 'none' | '7' | 'Maj7' = 'none';
+  let seventh: 'none' | '7' | 'Maj7' | '6' = 'none';
   let has9 = false;
   let hasb5 = false;
 
@@ -37,6 +37,11 @@ function parseSuffix(suffix: string) {
       has9 = true;
     } else if (suffix === 'm(Maj7)(9)') {
       seventh = 'Maj7';
+      has9 = true;
+    } else if (suffix === 'm6') {
+      seventh = '6';
+    } else if (suffix === 'm6(9)') {
+      seventh = '6';
       has9 = true;
     }
   } else if (suffix.startsWith('sus4')) {
@@ -75,6 +80,11 @@ function parseSuffix(suffix: string) {
     } else if (suffix === '7(b5)') {
       seventh = '7';
       hasb5 = true;
+    } else if (suffix === '6') {
+      seventh = '6';
+    } else if (suffix === '6(9)') {
+      seventh = '6';
+      has9 = true;
     }
   }
 
@@ -83,7 +93,7 @@ function parseSuffix(suffix: string) {
 
 function getSuffixFromBuilder(
   quality: 'M' | 'm' | 'sus4' | 'sus2' | 'dim' | 'aug',
-  seventh: 'none' | '7' | 'Maj7',
+  seventh: 'none' | '7' | 'Maj7' | '6',
   has9: boolean,
   hasb5: boolean
 ): string {
@@ -99,6 +109,9 @@ function getSuffixFromBuilder(
     }
     if (seventh === 'Maj7') {
       return has9 ? 'm(Maj7)(9)' : 'm(Maj7)';
+    }
+    if (seventh === '6') {
+      return has9 ? 'm6(9)' : 'm6';
     }
     return has9 ? 'm(add9)' : 'm';
   }
@@ -135,6 +148,9 @@ function getSuffixFromBuilder(
   if (seventh === 'Maj7') {
     return has9 ? 'Maj7(9)' : 'Maj7';
   }
+  if (seventh === '6') {
+    return has9 ? '6(9)' : '6';
+  }
   return has9 ? 'add9' : '';
 }
 
@@ -150,12 +166,12 @@ export const ChordFinder: React.FC<ChordFinderProps> = ({
 
   const updateChord = (
     q: 'M' | 'm' | 'sus4' | 'sus2' | 'dim' | 'aug',
-    s: 'none' | '7' | 'Maj7',
+    s: 'none' | '7' | 'Maj7' | '6',
     n9: boolean,
     b5: boolean
   ) => {
     let targetSeventh = s;
-    if ((q === 'sus2' || q === 'dim' || q === 'aug') && s === 'Maj7') {
+    if ((q === 'sus2' || q === 'dim' || q === 'aug') && (s === 'Maj7' || s === '6')) {
       targetSeventh = 'none';
     }
     let targetB5 = b5;
@@ -300,18 +316,19 @@ export const ChordFinder: React.FC<ChordFinderProps> = ({
 
         {/* 2. Seventh */}
         <div className="flex flex-col gap-1 mt-1">
-          <span className="text-[10px] font-mono text-gray-600 font-bold">Adicionar Sétima (7ª):</span>
-          <div className="grid grid-cols-3 gap-1">
+          <span className="text-[10px] font-mono text-gray-600 font-bold">Adicionar Sétima (7ª) ou Sexta (6):</span>
+          <div className="grid grid-cols-4 gap-1">
             {(
               [
                 { id: 'none', label: 'Sem 7ª' },
-                { id: '7', label: 'Dominante (7)' },
-                { id: 'Maj7', label: 'Maior (Maj7)' }
-              ] as { id: 'none' | '7' | 'Maj7'; label: string }[]
+                { id: '7', label: 'Dom (7)' },
+                { id: 'Maj7', label: 'Maj7' },
+                { id: '6', label: 'Sexta (6)' }
+              ] as { id: 'none' | '7' | 'Maj7' | '6'; label: string }[]
             ).map(s => {
               const disabled =
                 (s.id === '7' && quality === 'sus2') ||
-                (s.id === 'Maj7' && quality !== 'M' && quality !== 'm');
+                ((s.id === 'Maj7' || s.id === '6') && quality !== 'M' && quality !== 'm');
               return (
                 <button
                   key={s.id}

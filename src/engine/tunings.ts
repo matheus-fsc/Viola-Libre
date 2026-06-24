@@ -412,6 +412,18 @@ export const CHORD_FORMULAS: ChordFormula[] = [
     suffix: "7(b5)(9)",
     intervals: [0, 4, 6, 10, 14],
     requiredIntervals: [0, 4, 6, 10, 14]
+  },
+  {
+    name: "Sexta com Nona",
+    suffix: "6(9)",
+    intervals: [0, 4, 7, 9, 14],
+    requiredIntervals: [0, 4, 9, 14]
+  },
+  {
+    name: "Menor com Sexta e Nona",
+    suffix: "m6(9)",
+    intervals: [0, 3, 7, 9, 14],
+    requiredIntervals: [0, 3, 9, 14]
   }
 ];
 
