@@ -45,6 +45,7 @@ export interface Voicing {
   };
   score: number;         // Calculated playability score
   playabilityIssues: string[];
+  hasInteriorMute?: boolean;
 }
 
 export interface ReverseChordMatch {

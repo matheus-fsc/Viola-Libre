@@ -259,11 +259,16 @@ export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
 
       {/* Info text at the bottom */}
       <div className="w-full text-center mt-2 border-t border-[#d4d0c8] pt-1">
-        <div className="text-[10px] font-mono text-gray-600 flex justify-between">
+        <div className="text-[10px] font-mono text-gray-600 flex justify-between items-center">
           <span>Dificuldade:</span>
           <span className="font-bold text-black">{120 - voicing.score > 80 ? "Difícil" : 120 - voicing.score > 40 ? "Média" : "Fácil"}</span>
         </div>
-        <div className="text-[9px] font-mono text-gray-500 text-left mt-0.5 truncate" title={voicing.notes.join(' ')}>
+        {voicing.hasInteriorMute && (
+          <div className="text-[9px] font-bold text-[#cc3300] font-mono mt-1 bg-[#ffcccc]/70 border border-[#cc3300] rounded px-1 py-0.5 text-center shadow-sm select-none">
+            ⚠️ Abafamento Interno
+          </div>
+        )}
+        <div className="text-[9px] font-mono text-gray-500 text-left mt-1.5 truncate" title={voicing.notes.join(' ')}>
           Notas: {voicing.notes.filter(n => n !== 'X').join(', ')}
         </div>
       </div>

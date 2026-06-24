@@ -29,6 +29,11 @@ function App() {
   const [rootName, setRootName] = useState<string>("D");
   const [suffix, setSuffix] = useState<string>(""); // default Major
   const [bassName, setBassName] = useState<string>(""); // default none
+
+  // Chord search advanced filters
+  const [minFretFilter, setMinFretFilter] = useState<number>(0);
+  const [interiorMuteFilter, setInteriorMuteFilter] = useState<'all' | 'hide'>('all');
+
   // Derive Voicings reactively when tuning, instrument, root, suffix or bass changes (pure useMemo, no state/useEffect needed)
   const activeVoicings = useMemo(() => {
     if (!rootName) {
@@ -42,6 +47,25 @@ function App() {
       return [];
     }
   }, [selectedTuning, rootName, suffix, bassName]);
+
+  // Apply search filters dynamically to the generated voicings
+  const filteredVoicings = useMemo(() => {
+    return activeVoicings.filter((voicing) => {
+      // 1. Starting position (min fret) filter
+      const frettedOnly = voicing.frets.filter(f => f > 0);
+      const minFret = frettedOnly.length > 0 ? Math.min(...frettedOnly) : 0;
+      if (minFret < minFretFilter) {
+        return false;
+      }
+      
+      // 2. Interior mutes filter
+      if (interiorMuteFilter === 'hide' && voicing.hasInteriorMute) {
+        return false;
+      }
+      
+      return true;
+    });
+  }, [activeVoicings, minFretFilter, interiorMuteFilter]);
   
   // Interactive Neck load state
   const [interactiveLoadedFrets, setInteractiveLoadedFrets] = useState<number[]>([]);
@@ -366,8 +390,53 @@ function App() {
                     selectedSuffix={suffix}
                     selectedBassName={bassName}
                     onChordChange={handleChordChange}
-                    resultsCount={activeVoicings.length}
+                    resultsCount={filteredVoicings.length}
                   />
+
+                  {/* Advanced Filters Panel */}
+                  <div className="bg-[#ece9d8] text-black border-2 border-white border-r-[#808080] border-bottom-[#808080] p-4 flex flex-col gap-3 shadow-md">
+                    <div className="bg-gradient-to-r from-[#0058e6] to-[#3a8bfb] text-white px-2 py-1 flex justify-between items-center font-bold text-sm select-none">
+                      <span>Filtros de Busca</span>
+                      <span className="font-mono text-xs">XP</span>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs font-bold font-mono text-gray-700 flex justify-between">
+                        <span>Casa inicial mínima:</span>
+                        {minFretFilter > 0 && <span className="text-[#cc3300] font-bold">≥ {minFretFilter}ª casa</span>}
+                      </label>
+                      <select
+                        value={minFretFilter}
+                        onChange={(e) => setMinFretFilter(Number(e.target.value))}
+                        className="w-full text-xs font-mono bg-white border-2 border-r-white border-bottom-white border-[#808080] p-1.5 shadow-inner focus:outline-none cursor-pointer"
+                      >
+                        <option value={0}>Todas as casas (Canto/Nut)</option>
+                        <option value={1}>1ª Casa ou acima</option>
+                        <option value={2}>2ª Casa ou acima</option>
+                        <option value={3}>3ª Casa ou acima</option>
+                        <option value={4}>4ª Casa ou acima</option>
+                        <option value={5}>5ª Casa ou acima (Posições médias)</option>
+                        <option value={7}>7ª Casa ou acima (Agudos)</option>
+                        <option value={9}>9ª Casa ou acima</option>
+                      </select>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs font-bold font-mono text-gray-700">Dificuldade e Abafamento:</label>
+                      <select
+                        value={interiorMuteFilter}
+                        onChange={(e) => setInteriorMuteFilter(e.target.value as 'all' | 'hide')}
+                        className="w-full text-xs font-mono bg-white border-2 border-r-white border-bottom-white border-[#808080] p-1.5 shadow-inner focus:outline-none cursor-pointer"
+                      >
+                        <option value="all">Mostrar todas as posições (com penalidade)</option>
+                        <option value="hide">Ocultar posições difíceis (abafamento interno)</option>
+                      </select>
+                    </div>
+
+                    <div className="text-[10px] font-mono text-gray-600 bg-[#d4d0c8] p-1.5 border border-[#808080] select-none">
+                      💡 <em>Acordes com cordas abafadas no meio são penalizados e classificados como mais difíceis.</em>
+                    </div>
+                  </div>
 
                 </div>
 
@@ -404,9 +473,18 @@ function App() {
                           Tente alterar a afinação ou escolha outro tipo de acorde.
                         </p>
                       </div>
+                    ) : filteredVoicings.length === 0 ? (
+                      <div className="flex-1 flex flex-col items-center justify-center text-center p-8 bg-[#ece9d8]/50 border border-dotted border-[#cc3300]">
+                        <h3 className="text-base font-bold text-[#cc3300] font-mono">Sem Resultados (Filtro Ativo)</h3>
+                        <p className="text-xs text-gray-600 font-mono mt-1 max-w-sm">
+                          Nenhuma posição para o acorde <strong className="text-black">{rootName}{suffix}{bassName ? `/${bassName}` : ''}</strong> corresponde aos filtros de busca selecionados.
+                          <br /><br />
+                          Tente diminuir a "Casa Mínima" ou alterar o filtro de "Abafamento Interno".
+                        </p>
+                      </div>
                     ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 justify-items-center">
-                        {activeVoicings.map((voicing: Voicing, index: number) => {
+                        {filteredVoicings.map((voicing: Voicing, index: number) => {
                           const isFav = isVoicingFavorited(voicing);
                           return (
                             <div key={index} className="relative hover:translate-y-[-2px] transition-transform">

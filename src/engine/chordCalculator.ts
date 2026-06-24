@@ -71,6 +71,7 @@ interface PlayabilityResult {
   };
   stretch: number;
   playabilityIssues: string[];
+  hasInteriorMute?: boolean;
 }
 
 export function evaluatePlayability(frets: number[]): PlayabilityResult {
@@ -146,9 +147,31 @@ export function evaluatePlayability(frets: number[]): PlayabilityResult {
     fingersUsed = fretted.length;
   }
 
+  // Check for interior mutes (muted string between two played strings)
+  let firstPlayed = -1;
+  let lastPlayed = -1;
+  for (let i = 0; i < frets.length; i++) {
+    if (frets[i] >= 0) {
+      if (firstPlayed === -1) firstPlayed = i;
+      lastPlayed = i;
+    }
+  }
+  let hasInteriorMute = false;
+  if (firstPlayed !== -1 && lastPlayed !== -1) {
+    for (let i = firstPlayed + 1; i < lastPlayed; i++) {
+      if (frets[i] === -1) {
+        hasInteriorMute = true;
+        break;
+      }
+    }
+  }
+  if (hasInteriorMute) {
+    issues.push("Abafamento de corda interna");
+  }
+
   // Check finger count (max 4 fingers)
   if (fingersUsed > 4) {
-    return { isValid: false, fingersUsed, stretch, playabilityIssues: ["Exige mais de 4 dedos"] };
+    return { isValid: false, fingersUsed, stretch, playabilityIssues: ["Exige mais de 4 dedos"], hasInteriorMute };
   }
 
   return {
@@ -156,7 +179,8 @@ export function evaluatePlayability(frets: number[]): PlayabilityResult {
     fingersUsed,
     barre,
     stretch,
-    playabilityIssues: issues
+    playabilityIssues: issues,
+    hasInteriorMute
   };
 }
 
@@ -328,6 +352,11 @@ export function calculateVoicings(tuning: Tuning, chord: Chord, maxFret = 12): V
     const mutedCount = frets.filter(f => f === -1).length;
     score -= mutedCount * 15;
 
+    // G2. Interior muted string penalty (muting inside played strings is hard!)
+    if (playability.hasInteriorMute) {
+      score -= 35;
+    }
+
     // H. Completeness bonus (if it has optional tones too)
     const totalUniqueChordTones = chord.notes.length;
     const playedUniqueChordTones = Array.from(playedPitchClasses).filter(pc => chord.notes.includes(pc)).length;
@@ -340,7 +369,8 @@ export function calculateVoicings(tuning: Tuning, chord: Chord, maxFret = 12): V
       notes: notesPlayed,
       barre: playability.barre,
       score: Math.max(1, Math.round(score)),
-      playabilityIssues: playability.playabilityIssues
+      playabilityIssues: playability.playabilityIssues,
+      hasInteriorMute: playability.hasInteriorMute
     });
   }
 
