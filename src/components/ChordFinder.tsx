@@ -10,7 +10,7 @@ interface ChordFinderProps {
 }
 
 function parseSuffix(suffix: string) {
-  let quality: 'M' | 'm' | 'sus4' | 'sus2' | 'dim' | 'aug' = 'M';
+  let quality: 'M' | 'm' | 'sus4' | 'sus2' | 'dim' | 'aug';
   let seventh: 'none' | '7' | 'Maj7' = 'none';
   let has9 = false;
   let hasb5 = false;
@@ -273,17 +273,19 @@ export const ChordFinder: React.FC<ChordFinderProps> = ({
         <div className="flex flex-col gap-1">
           <span className="text-[10px] font-mono text-gray-600 font-bold">Qualidade Tríade:</span>
           <div className="grid grid-cols-3 gap-1">
-            {[
-              { id: 'M', label: 'Maior' },
-              { id: 'm', label: 'Menor' },
-              { id: 'sus4', label: 'Sus4' },
-              { id: 'sus2', label: 'Sus2' },
-              { id: 'dim', label: 'Diminuto' },
-              { id: 'aug', label: 'Aumentado' }
-            ].map(q => (
+            {(
+              [
+                { id: 'M', label: 'Maior' },
+                { id: 'm', label: 'Menor' },
+                { id: 'sus4', label: 'Sus4' },
+                { id: 'sus2', label: 'Sus2' },
+                { id: 'dim', label: 'Diminuto' },
+                { id: 'aug', label: 'Aumentado' }
+              ] as { id: 'M' | 'm' | 'sus4' | 'sus2' | 'dim' | 'aug'; label: string }[]
+            ).map(q => (
               <button
                 key={q.id}
-                onClick={() => updateChord(q.id as any, seventh, has9, hasb5)}
+                onClick={() => updateChord(q.id, seventh, has9, hasb5)}
                 className={`text-xs font-mono py-1 border select-none cursor-pointer ${
                   quality === q.id
                     ? 'bg-gradient-to-b from-[#0058e6] to-[#3a8bfb] text-white border-[#002fa7] font-bold'
@@ -300,11 +302,13 @@ export const ChordFinder: React.FC<ChordFinderProps> = ({
         <div className="flex flex-col gap-1 mt-1">
           <span className="text-[10px] font-mono text-gray-600 font-bold">Adicionar Sétima (7ª):</span>
           <div className="grid grid-cols-3 gap-1">
-            {[
-              { id: 'none', label: 'Sem 7ª' },
-              { id: '7', label: 'Dominante (7)' },
-              { id: 'Maj7', label: 'Maior (Maj7)' }
-            ].map(s => {
+            {(
+              [
+                { id: 'none', label: 'Sem 7ª' },
+                { id: '7', label: 'Dominante (7)' },
+                { id: 'Maj7', label: 'Maior (Maj7)' }
+              ] as { id: 'none' | '7' | 'Maj7'; label: string }[]
+            ).map(s => {
               const disabled =
                 (s.id === '7' && quality === 'sus2') ||
                 (s.id === 'Maj7' && quality !== 'M' && quality !== 'm');
@@ -312,7 +316,7 @@ export const ChordFinder: React.FC<ChordFinderProps> = ({
                 <button
                   key={s.id}
                   disabled={disabled}
-                  onClick={() => updateChord(quality, s.id as any, has9, hasb5)}
+                  onClick={() => updateChord(quality, s.id, has9, hasb5)}
                   className={`text-xs font-mono py-1 border select-none cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
                     seventh === s.id
                       ? 'bg-gradient-to-b from-[#0058e6] to-[#3a8bfb] text-white border-[#002fa7] font-bold'
