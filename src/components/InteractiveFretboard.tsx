@@ -145,16 +145,18 @@ export const InteractiveFretboard: React.FC<InteractiveFretboardProps> = ({
                   </div>
 
                   {/* Nut (fret 0) open string column */}
-                  <div className="w-[30px] flex justify-center items-center relative h-full">
+                  <div 
+                    onClick={() => handleCellClick(sIdx, 0)}
+                    className="w-[30px] flex justify-center items-center relative h-full cursor-pointer hover:bg-black/5"
+                  >
                     {/* Metal bar nut */}
                     <div className="absolute right-0 top-0 bottom-0 w-1 bg-[#C5A37F] border-r border-black/80"></div>
                     
                     <button
-                      onClick={() => handleCellClick(sIdx, 0)}
-                      className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold font-mono border cursor-pointer select-none z-10 ${
+                      className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold font-mono border pointer-events-none select-none z-10 ${
                         activeFretVal === 0
                           ? 'bg-[#228b22] text-white border-white'
-                          : 'bg-[#d4d0c8]/30 hover:bg-[#d4d0c8] text-gray-300 border-gray-400'
+                          : 'bg-[#d4d0c8]/30 text-gray-300 border-gray-400'
                       }`}
                     >
                       {activeFretVal === 0 ? "0" : ""}
@@ -170,7 +172,8 @@ export const InteractiveFretboard: React.FC<InteractiveFretboardProps> = ({
                     return (
                       <div 
                         key={`cell-${sIdx}-${fret}`} 
-                        className="flex-1 h-full border-r border-[#ece9d8]/40 flex justify-center items-center relative"
+                        onClick={() => handleCellClick(sIdx, fret)}
+                        className="flex-1 h-full border-r border-[#ece9d8]/40 flex justify-center items-center relative cursor-pointer hover:bg-black/5 group"
                       >
                         {/* Metal fret wire */}
                         <div className="absolute right-0 top-0 bottom-0 w-[1.5px] bg-[#d3d3d3] shadow-[1px_0_1px_rgba(0,0,0,0.5)]"></div>
@@ -196,11 +199,10 @@ export const InteractiveFretboard: React.FC<InteractiveFretboardProps> = ({
 
                         {/* Clickable fret finger box */}
                         <button
-                          onClick={() => handleCellClick(sIdx, fret)}
-                          className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold font-mono border cursor-pointer select-none z-10 transition-all ${
+                          className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold font-mono border pointer-events-none select-none z-10 transition-all ${
                             isActive
                               ? 'bg-[#0058e6] text-white border-white scale-110 shadow-md'
-                              : 'bg-transparent hover:bg-black/10 border-transparent text-transparent hover:text-white/60'
+                              : 'bg-transparent border-transparent text-transparent group-hover:text-white/60'
                           }`}
                         >
                           {isActive ? noteName.replace('#', '♯').replace('b', '♭') : noteName}

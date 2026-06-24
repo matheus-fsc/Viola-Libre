@@ -28,11 +28,11 @@ const CHROMATIC_WHITE_NOTES: Note[] = [
 ];
 
 const CHROMATIC_BLACK_NOTES: { note: Note; leftOffset: number }[] = [
-  { note: { name: 'Dó#', symbol: 'C#', freq: 277.18, isSharp: true }, leftOffset: 28 },
-  { note: { name: 'Ré#', symbol: 'D#', freq: 311.13, isSharp: true }, leftOffset: 68 },
-  { note: { name: 'Fá#', symbol: 'F#', freq: 369.99, isSharp: true }, leftOffset: 148 },
-  { note: { name: 'Sol#', symbol: 'G#', freq: 415.30, isSharp: true }, leftOffset: 188 },
-  { note: { name: 'Lá#', symbol: 'A#', freq: 466.16, isSharp: true }, leftOffset: 228 },
+  { note: { name: 'Dó#', symbol: 'C#', freq: 277.18, isSharp: true }, leftOffset: 23 },
+  { note: { name: 'Ré#', symbol: 'D#', freq: 311.13, isSharp: true }, leftOffset: 55 },
+  { note: { name: 'Fá#', symbol: 'F#', freq: 369.99, isSharp: true }, leftOffset: 119 },
+  { note: { name: 'Sol#', symbol: 'G#', freq: 415.30, isSharp: true }, leftOffset: 151 },
+  { note: { name: 'Lá#', symbol: 'A#', freq: 466.16, isSharp: true }, leftOffset: 183 },
 ];
 
 let audioCtx: AudioContext | null = null;
@@ -80,7 +80,7 @@ export const NaturalPiano: React.FC = () => {
   };
 
   return (
-    <div className="bg-[#d4d0c8] p-3 border border-[#808080] rounded shadow-inner flex flex-col gap-1.5 select-none font-mono">
+    <div className="bg-[#d4d0c8] p-1 border border-[#808080] rounded shadow-inner flex flex-col gap-1.5 select-none font-mono">
       <div className="text-[10px] font-bold text-gray-700 flex justify-between items-center">
         <span>Teclado: Notas Naturais (Dó Ré Mi Fá Sol Lá Si)</span>
         <span className="bg-[#002fa7] text-white px-1.5 py-0.5 text-[9px] rounded font-bold">C D E F G A B</span>
@@ -93,7 +93,7 @@ export const NaturalPiano: React.FC = () => {
             <button
               key={`natural-${note.symbol}`}
               onClick={() => handlePlay(note.freq)}
-              className={`flex-1 h-24 flex flex-col justify-end items-center pb-2 rounded-b border border-gray-400 shadow cursor-pointer transition-colors ${
+              className={`flex-1 h-20 flex flex-col justify-end items-center pb-1.5 rounded-b border border-gray-400 shadow cursor-pointer transition-colors ${
                 isActive
                   ? 'bg-gradient-to-b from-[#3a8bfb] to-[#0058e6] text-white border-blue-800'
                   : 'bg-white text-black hover:bg-gray-100'
@@ -121,14 +121,14 @@ export const ChromaticPiano: React.FC = () => {
   };
 
   return (
-    <div className="bg-[#d4d0c8] p-3 border border-[#808080] rounded shadow-inner flex flex-col gap-1.5 select-none font-mono">
+    <div className="bg-[#d4d0c8] p-1 border border-[#808080] rounded shadow-inner flex flex-col gap-1.5 select-none font-mono">
       <div className="text-[10px] font-bold text-gray-700 flex justify-between items-center">
         <span>Teclado: Escala Cromática Completa (12 notas)</span>
         <span className="bg-[#cc3300] text-white px-1.5 py-0.5 text-[9px] rounded font-bold">12 Notas</span>
       </div>
       
-      <div className="bg-[#808080] p-2 border border-white rounded shadow-inner flex justify-center">
-        <div className="relative w-[280px] h-[110px] bg-[#808080]">
+      <div className="bg-[#808080] p-1 border border-white rounded shadow-inner flex justify-center">
+        <div className="relative w-[222px] h-[90px] bg-[#808080]">
           
           {/* White Keys */}
           <div className="absolute top-0 left-0 right-0 bottom-0 flex gap-0.5">
@@ -138,8 +138,8 @@ export const ChromaticPiano: React.FC = () => {
                 <button
                   key={`chromatic-w-${index}`}
                   onClick={() => handlePlay(note.freq)}
-                  style={{ width: '38px' }}
-                  className={`h-full flex flex-col justify-end items-center pb-2 rounded-b border border-gray-400 shadow cursor-pointer transition-colors ${
+                  style={{ width: '30px' }}
+                  className={`shrink-0 h-full flex flex-col justify-end items-center pb-1.5 rounded-b border border-gray-400 shadow cursor-pointer transition-colors ${
                     isActive
                       ? 'bg-gradient-to-b from-[#3a8bfb] to-[#0058e6] text-white border-blue-800 z-10'
                       : 'bg-white text-black hover:bg-gray-100 z-10'
@@ -161,8 +161,8 @@ export const ChromaticPiano: React.FC = () => {
                 onClick={() => handlePlay(note.freq)}
                 style={{
                   left: `${leftOffset}px`,
-                  width: '22px',
-                  height: '65px',
+                  width: '16px',
+                  height: '50px',
                 }}
                 className={`absolute top-0 flex flex-col justify-end items-center pb-1 rounded-b shadow cursor-pointer transition-colors z-20 ${
                   isActive

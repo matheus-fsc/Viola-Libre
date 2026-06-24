@@ -24,13 +24,15 @@ export const TheoryGuide: React.FC = () => {
           <p>
             Na música ocidental, existem apenas <strong>12 notas possíveis</strong>. Sete delas são as notas naturais que você provavelmente já conhece:
           </p>
-          <div className="bg-[#ece9d8] p-2 border border-[#808080] font-bold text-center flex justify-around text-gray-800">
+          <div className="bg-[#ece9d8] p-2 border border-[#808080] font-bold text-center flex flex-wrap justify-around gap-2 text-gray-800">
             <span>Dó (C)</span> <span>Ré (D)</span> <span>Mi (E)</span> <span>Fá (F)</span> 
             <span>Sol (G)</span> <span>Lá (A)</span> <span>Si (B)</span>
           </div>
           
-          <div className="my-1">
-            <NaturalPiano />
+          <div className="my-1 overflow-x-auto no-scrollbar w-full flex justify-center">
+            <div className="w-max shrink-0">
+              <NaturalPiano />
+            </div>
           </div>
 
           <p>
@@ -47,8 +49,10 @@ export const TheoryGuide: React.FC = () => {
             C - C#/Db - D - D#/Eb - E - F - F#/Gb - G - G#/Ab - A - A#/Bb - B - C (oitava)
           </div>
 
-          <div className="my-1">
-            <ChromaticPiano />
+          <div className="my-1 overflow-x-auto no-scrollbar w-full flex justify-center">
+            <div className="w-max shrink-0">
+              <ChromaticPiano />
+            </div>
           </div>
 
           <div className="bg-[#ff9d00]/10 border border-[#ff9d00] p-2 text-red-600 rounded-sm">
@@ -277,7 +281,7 @@ export const TheoryGuide: React.FC = () => {
   const activeLesson = lessons.find(l => l.id === activeLessonId) || lessons[0];
 
   return (
-    <div className="bg-[#ece9d8] text-black border-2 border-white border-r-[#808080] border-bottom-[#808080] p-4 flex flex-col md:flex-row gap-4 w-full shadow-md">
+    <div className="bg-[#ece9d8] text-black border-2 border-white border-r-[#808080] border-bottom-[#808080] p-2 sm:p-4 flex flex-col md:flex-row gap-4 w-full shadow-md">
       
       {/* Lessons Sidebar index */}
       <div className="w-full md:w-[220px] bg-white border-2 border-[#808080] border-r-white border-bottom-white p-2 flex flex-col gap-1.5 shrink-0 select-none">
@@ -304,7 +308,7 @@ export const TheoryGuide: React.FC = () => {
       </div>
 
       {/* Active Lesson Display Area */}
-      <div className="flex-1 bg-white border-2 border-[#808080] border-r-white border-bottom-white p-4 min-h-[250px] flex flex-col justify-between">
+      <div className="flex-1 bg-white border-2 border-[#808080] border-r-white border-bottom-white p-2 sm:p-4 min-h-[250px] flex flex-col justify-between">
         <div>
           {/* Lesson Header path */}
           <div className="text-[9px] font-mono text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-1 select-none">

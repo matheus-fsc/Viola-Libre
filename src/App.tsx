@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { Instrument, Tuning, Voicing } from './engine/types';
 import { PRESET_INSTRUMENTS } from './engine/tunings';
 import { buildChord, calculateVoicings, shouldUseFlats } from './engine/chordCalculator';
@@ -41,6 +41,50 @@ function App() {
 
   // Tab switcher state
   const [activeTab, setActiveTab] = useState<'chords' | 'train' | 'ear' | 'favorites'>('chords');
+
+  // Taskbar collapse state
+  const [isTaskbarCollapsed, setIsTaskbarCollapsed] = useState(false);
+
+  // Layout states for hybrid window / docked visualizer
+  const [isEditorOpen, setIsEditorOpen] = useState(true);
+  const [isDocked, setIsDocked] = useState(true); // Docked by default
+  const [isMinimized, setIsMinimized] = useState(false); // Default to docked/expanded (colada) as requested!
+  const [editorHeight, setEditorHeight] = useState(380); // Altura do painel do sequenciador (sincronizado com o painel)
+
+  // Sync: when editor is docked+open+expanded, hide taskbar to free space
+  // Sync: when editor is docked+open+minimized, restore taskbar
+  const prevDockedExpandedRef = React.useRef(false);
+  useEffect(() => {
+    if (!isDocked || !isEditorOpen || activeTab !== 'ear') {
+      // Not in ear tab or not docked — restore taskbar if we had hidden it
+      if (prevDockedExpandedRef.current) {
+        setIsTaskbarCollapsed(false);
+        prevDockedExpandedRef.current = false;
+      }
+      return;
+    }
+    const isExpanded = !isMinimized;
+    if (isExpanded && !prevDockedExpandedRef.current) {
+      // Editor just expanded — hide taskbar
+      setIsTaskbarCollapsed(true);
+      prevDockedExpandedRef.current = true;
+    } else if (!isExpanded && prevDockedExpandedRef.current) {
+      // Editor just minimized — show taskbar
+      setIsTaskbarCollapsed(false);
+      prevDockedExpandedRef.current = false;
+    }
+  }, [isMinimized, isDocked, isEditorOpen, activeTab]);
+
+  // Reverse sync: if taskbar is manually shown while editor is docked+expanded, minimize editor
+  const prevTaskbarCollapsedRef = React.useRef(false);
+  useEffect(() => {
+    const wasCollapsed = prevTaskbarCollapsedRef.current;
+    prevTaskbarCollapsedRef.current = isTaskbarCollapsed;
+    // Only react when taskbar goes from collapsed → expanded (user opened it)
+    if (wasCollapsed && !isTaskbarCollapsed && isDocked && isEditorOpen && !isMinimized && activeTab === 'ear') {
+      setIsMinimized(true);
+    }
+  }, [isTaskbarCollapsed, isDocked, isEditorOpen, isMinimized, activeTab]);
 
   // Taskbar Clock State
   const [time, setTime] = useState<string>("");
@@ -203,8 +247,18 @@ function App() {
 
   const useFlats = shouldUseFlats(rootName);
 
+  // Calcula o paddingBottom dinâmico da página com base no estado atual do sequenciador fixo.
+  // Isso garante que o scroll da página sempre alcance o conteúdo abaixo do painel.
+  const taskbarH = isTaskbarCollapsed ? 0 : 40;
+  const sequencerPad = isEditorOpen && isDocked
+    ? (isMinimized ? 35 + taskbarH + 8 : editorHeight + taskbarH + 8)
+    : 48; // padding padrão quando flutuante ou fechado
+
   return (
-    <div className="min-h-screen flex flex-col justify-between overflow-x-hidden font-sans select-none relative pb-12">
+    <div
+      className="min-h-screen flex flex-col justify-between overflow-x-hidden font-sans select-none relative"
+      style={{ paddingBottom: sequencerPad }}
+    >
 
       {/* --- DESKTOP WINDOW CONTAINER --- */}
       <div className="flex-1 p-4 md:p-6 flex flex-col items-center justify-start z-10 max-w-7xl w-full mx-auto gap-6">
@@ -214,8 +268,10 @@ function App() {
           
           {/* Main Title Bar */}
           <div className="winxp-gradient-blue text-white px-3 py-1.5 flex justify-between items-center rounded-t-md border-b-2 border-[#002fa7] select-none">
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-sm tracking-wide font-mono">Viola Libre v1.0 - O Cifrário Aberto e Matemático</span>
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="font-bold text-xs sm:text-sm tracking-wide font-mono truncate">
+                Viola Libre v1.0 <span className="hidden sm:inline">- O Cifrário Aberto e Matemático</span>
+              </span>
             </div>
             
             {/* Windows Window Buttons */}
@@ -243,46 +299,50 @@ function App() {
 
 
           {/* XP Dialog Tabs (under menu bar) */}
-          <div className="flex pl-2 gap-1 bg-[#ece9d8] border-b border-[#d4d0c8] select-none pt-2 z-10">
+          <div className="flex pl-2 gap-1 bg-[#ece9d8] border-b border-[#d4d0c8] select-none pt-2 z-10 overflow-x-auto no-scrollbar whitespace-nowrap">
             <button 
               onClick={() => setActiveTab('chords')}
-              className={`px-4 py-1.5 font-mono text-xs font-bold rounded-t border-2 border-b-0 cursor-pointer ${
+              className={`shrink-0 px-2 sm:px-4 py-1.5 font-mono text-[10px] sm:text-xs font-bold rounded-t border-2 border-b-0 cursor-pointer ${
                 activeTab === 'chords' 
                   ? 'bg-[#ece9d8] border-white border-t-[#0058e6] border-x-[#808080] translate-y-[2px] z-10 text-black' 
                   : 'bg-[#d4d0c8] border-[#ece9d8] border-r-[#808080] border-bottom-[#808080] text-gray-700 hover:bg-white/50'
               }`}
             >
-              Cifras e Acordes
+              <span className="hidden sm:inline">Cifras e Acordes</span>
+              <span className="inline sm:hidden">Cifras</span>
             </button>
             <button 
               onClick={() => setActiveTab('train')}
-              className={`px-4 py-1.5 font-mono text-xs font-bold rounded-t border-2 border-b-0 cursor-pointer ${
+              className={`shrink-0 px-2 sm:px-4 py-1.5 font-mono text-[10px] sm:text-xs font-bold rounded-t border-2 border-b-0 cursor-pointer ${
                 activeTab === 'train' 
                   ? 'bg-[#ece9d8] border-white border-t-[#0058e6] border-x-[#808080] translate-y-[2px] z-10 text-black' 
                   : 'bg-[#d4d0c8] border-[#ece9d8] border-r-[#808080] border-bottom-[#808080] text-gray-700 hover:bg-white/50'
               }`}
             >
-              Treinos e Teoria
+              <span className="hidden sm:inline">Treinos e Teoria</span>
+              <span className="inline sm:hidden">Treinos</span>
             </button>
             <button 
               onClick={() => setActiveTab('ear')}
-              className={`px-4 py-1.5 font-mono text-xs font-bold rounded-t border-2 border-b-0 cursor-pointer ${
+              className={`shrink-0 px-2 sm:px-4 py-1.5 font-mono text-[10px] sm:text-xs font-bold rounded-t border-2 border-b-0 cursor-pointer ${
                 activeTab === 'ear' 
                   ? 'bg-[#ece9d8] border-white border-t-[#0058e6] border-x-[#808080] translate-y-[2px] z-10 text-black' 
                   : 'bg-[#d4d0c8] border-[#ece9d8] border-r-[#808080] border-bottom-[#808080] text-gray-700 hover:bg-white/50'
               }`}
             >
-              Tirando de Ouvido
+              <span className="hidden sm:inline">Tirando de Ouvido</span>
+              <span className="inline sm:hidden">Ouvido</span>
             </button>
             <button 
               onClick={() => setActiveTab('favorites')}
-              className={`px-4 py-1.5 font-mono text-xs font-bold rounded-t border-2 border-b-0 cursor-pointer ${
+              className={`shrink-0 px-2 sm:px-4 py-1.5 font-mono text-[10px] sm:text-xs font-bold rounded-t border-2 border-b-0 cursor-pointer ${
                 activeTab === 'favorites' 
                   ? 'bg-[#ece9d8] border-white border-t-[#0058e6] border-x-[#808080] translate-y-[2px] z-10 text-black' 
                   : 'bg-[#d4d0c8] border-[#ece9d8] border-r-[#808080] border-bottom-[#808080] text-gray-700 hover:bg-white/50'
               }`}
             >
-              ★ Meus Favoritos ({favorites.length})
+              <span className="hidden sm:inline">★ Meus Favoritos ({favorites.length})</span>
+              <span className="inline sm:hidden">★ Favoritos ({favorites.length})</span>
             </button>
           </div>
 
@@ -439,6 +499,15 @@ function App() {
                 <EarTranscription
                   selectedInstrument={selectedInst}
                   selectedTuning={selectedTuning}
+                  isEditorOpen={isEditorOpen}
+                  setIsEditorOpen={setIsEditorOpen}
+                  isDocked={isDocked}
+                  setIsDocked={setIsDocked}
+                  isMinimized={isMinimized}
+                  setIsMinimized={setIsMinimized}
+                  isTaskbarCollapsed={isTaskbarCollapsed}
+                  editorHeight={editorHeight}
+                  onEditorHeightChange={setEditorHeight}
                 />
               </div>
             </div>
@@ -466,52 +535,54 @@ function App() {
                       Nenhuma posição favoritada. Vá na aba "Cifras e Acordes" e clique em ☆ para salvar posições favoritas!
                     </div>
                   ) : (
-                    <table className="w-full text-xs text-left border-collapse select-none">
-                      <thead>
-                        <tr className="bg-[#d4d0c8] border-b border-[#808080] font-bold text-gray-700">
-                          <th className="p-2.5 border-r border-[#808080]">Acorde</th>
-                          <th className="p-2.5 border-r border-[#808080]">Instrumento</th>
-                          <th className="p-2.5 border-r border-[#808080]">Afinação</th>
-                          <th className="p-2.5 border-r border-[#808080]">Digitação (Cordas)</th>
-                          <th className="p-2.5 text-center">Ações</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {favorites.map((fav) => (
-                          <tr key={fav.id} className="border-b border-[#d4d0c8] hover:bg-[#c2d7f2]">
-                            <td className="p-2.5 border-r border-[#d4d0c8] font-bold text-[#002fa7]">{fav.chordName}</td>
-                            <td className="p-2.5 border-r border-[#d4d0c8]">{fav.instrumentName}</td>
-                            <td className="p-2.5 border-r border-[#d4d0c8] text-gray-600 font-mono text-[10px]">{fav.tuningName}</td>
-                            <td className="p-2.5 border-r border-[#d4d0c8] font-mono text-[11px] font-bold text-[#228b22]">
-                              {fav.frets.map(f => f === -1 ? 'X' : f).join('-')}
-                            </td>
-                            <td className="p-2.5 text-center">
-                              <button
-                                onClick={() => {
-                                  loadFavorite(fav);
-                                  setActiveTab('chords');
-                                }}
-                                className="px-3 py-1 bg-[#ece9d8] border border-white border-r-[#808080] border-bottom-[#808080] active:border-t-[#808080] active:border-l-[#808080] font-bold text-xs mr-2 hover:bg-white cursor-pointer"
-                                title="Carregar no Localizador de Acordes"
-                              >
-                                Carregar no Localizador
-                              </button>
-                              <button
-                                onClick={() => {
-                                  const updated = favorites.filter(f => f.id !== fav.id);
-                                  setFavorites(updated);
-                                  localStorage.setItem('viola_libre_favs', JSON.stringify(updated));
-                                }}
-                                className="px-3 py-1 bg-[#ff7f27] border border-white border-r-[#808080] border-bottom-[#808080] active:border-t-[#808080] active:border-l-[#808080] text-white font-bold text-xs hover:bg-orange-600 cursor-pointer"
-                                title="Excluir"
-                              >
-                                Remover
-                              </button>
-                            </td>
+                    <div className="overflow-x-auto no-scrollbar w-full min-w-0">
+                      <table className="w-full text-xs text-left border-collapse select-none min-w-[600px]">
+                        <thead>
+                          <tr className="bg-[#d4d0c8] border-b border-[#808080] font-bold text-gray-700">
+                            <th className="p-2.5 border-r border-[#808080]">Acorde</th>
+                            <th className="p-2.5 border-r border-[#808080]">Instrumento</th>
+                            <th className="p-2.5 border-r border-[#808080]">Afinação</th>
+                            <th className="p-2.5 border-r border-[#808080]">Digitação (Cordas)</th>
+                            <th className="p-2.5 text-center">Ações</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {favorites.map((fav) => (
+                            <tr key={fav.id} className="border-b border-[#d4d0c8] hover:bg-[#c2d7f2]">
+                              <td className="p-2.5 border-r border-[#d4d0c8] font-bold text-[#002fa7]">{fav.chordName}</td>
+                              <td className="p-2.5 border-r border-[#d4d0c8]">{fav.instrumentName}</td>
+                              <td className="p-2.5 border-r border-[#d4d0c8] text-gray-600 font-mono text-[10px]">{fav.tuningName}</td>
+                              <td className="p-2.5 border-r border-[#d4d0c8] font-mono text-[11px] font-bold text-[#228b22]">
+                                {fav.frets.map(f => f === -1 ? 'X' : f).join('-')}
+                              </td>
+                              <td className="p-2.5 text-center">
+                                <button
+                                  onClick={() => {
+                                    loadFavorite(fav);
+                                    setActiveTab('chords');
+                                  }}
+                                  className="px-3 py-1 bg-[#ece9d8] border border-white border-r-[#808080] border-bottom-[#808080] active:border-t-[#808080] active:border-l-[#808080] font-bold text-xs mr-2 hover:bg-white cursor-pointer"
+                                  title="Carregar no Localizador de Acordes"
+                                >
+                                  Carregar no Localizador
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    const updated = favorites.filter(f => f.id !== fav.id);
+                                    setFavorites(updated);
+                                    localStorage.setItem('viola_libre_favs', JSON.stringify(updated));
+                                  }}
+                                  className="px-3 py-1 bg-[#ff7f27] border border-white border-r-[#808080] border-bottom-[#808080] active:border-t-[#808080] active:border-l-[#808080] text-white font-bold text-xs hover:bg-orange-600 cursor-pointer"
+                                  title="Excluir"
+                                >
+                                  Remover
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   )}
                 </div>
               </div>
@@ -660,42 +731,76 @@ function App() {
         </div>
       )}
 
-      {/* --- WINDOWS XP CLASSIC TASKBAR --- */}
-      <footer className="fixed bottom-0 left-0 right-0 h-10 bg-gradient-to-b from-[#245dd7] via-[#0058e6] to-[#245dd7] border-t-2 border-[#3370f8] flex justify-between items-center px-1 z-40 select-none">
-        
-        {/* Start Button & Tabs */}
-        <div className="flex gap-1.5 items-center h-full">
-          <button 
-            onClick={() => setActiveTab('chords')}
-            className={`h-[28px] px-3 border text-xs font-mono font-bold rounded flex items-center gap-1.5 select-none cursor-pointer ${
-              activeTab === 'chords'
-                ? 'bg-[#3a8bfb] text-white border-[#002fa7] border-t-white border-l-white shadow-[inset_1px_1px_0_#ffffff50]'
-                : 'bg-[#ece9d8] text-black border-white border-r-[#808080] border-bottom-[#808080] hover:bg-white'
-            }`}
-          >
-            <span>Viola Libre</span>
-          </button>
-          
-          <button 
-            onClick={() => setActiveTab('favorites')}
-            className={`h-[28px] px-3 border text-xs font-mono font-bold rounded flex items-center gap-1.5 select-none cursor-pointer ${
-              activeTab === 'favorites'
-                ? 'bg-[#3a8bfb] text-white border-[#002fa7] border-t-white border-l-white shadow-[inset_1px_1px_0_#ffffff50]'
-                : 'bg-[#ece9d8] text-black border-white border-r-[#808080] border-bottom-[#808080] hover:bg-white'
-            }`}
-          >
-            <span>Favoritos ({favorites.length})</span>
-          </button>
-        </div>
+      {/* --- WINDOWS XP CLASSIC TASKBAR (Collapsible) --- */}
+      <footer
+        className="fixed bottom-0 left-0 right-0 h-10 z-40 select-none"
+        style={{ pointerEvents: 'none' }}
+      >
+        {/* Collapsed Toggle Tab (small blue pill on the left) */}
+        <button
+          onClick={() => setIsTaskbarCollapsed(false)}
+          className="absolute bottom-0 left-0 h-7 flex items-center justify-center bg-gradient-to-b from-[#245dd7] via-[#0058e6] to-[#245dd7] border-t border-r border-[#3370f8] rounded-tr-sm cursor-pointer hover:brightness-110 active:scale-95 select-none transition-all duration-300 ease-in-out"
+          style={{
+            width: isTaskbarCollapsed ? '22px' : '0px',
+            opacity: isTaskbarCollapsed ? 1 : 0,
+            pointerEvents: isTaskbarCollapsed ? 'auto' : 'none',
+            overflow: 'hidden'
+          }}
+          title="Expandir barra de tarefas"
+        >
+          <span className="text-white text-[9px] font-bold">▶</span>
+        </button>
 
-        {/* System Tray (Clock and icons) */}
-        <div className="h-[30px] bg-[#0997f7] border-l-2 border-[#1a6b1a] flex items-center px-3 gap-2 text-white font-mono text-xs shadow-[inset_1px_1px_1px_#ffffff30] rounded-l-sm">
-          <span className="cursor-pointer" title="Rede Ativa (Livre)">NET</span>
-          <span className="cursor-pointer" title="Áudio Ativo (Afinado)">VOL</span>
-          <div className="w-[1.5px] h-4 bg-white/30 mx-1"></div>
-          <span className="font-bold text-[11px]" title="Hora local do sistema">{time}</span>
-        </div>
+        {/* Full Taskbar */}
+        <div
+          className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-b from-[#245dd7] via-[#0058e6] to-[#245dd7] border-t-2 border-[#3370f8] flex justify-between items-center px-1 transition-transform duration-300 ease-in-out"
+          style={{
+            transform: isTaskbarCollapsed ? 'translateX(-100%)' : 'translateX(0)',
+            pointerEvents: isTaskbarCollapsed ? 'none' : 'auto'
+          }}
+        >
+          {/* Start Button & Tabs */}
+          <div className="flex gap-1.5 items-center h-full">
+            {/* Collapse button */}
+            <button
+              onClick={() => setIsTaskbarCollapsed(true)}
+              className="h-[28px] w-[24px] flex items-center justify-center bg-[#ece9d8] text-black border border-white border-r-[#808080] border-b-[#808080] hover:bg-white active:border-t-[#808080] active:border-l-[#808080] rounded cursor-pointer select-none text-[10px] font-bold"
+              title="Recolher barra de tarefas"
+            >
+              ◀
+            </button>
 
+            <button 
+              onClick={() => setActiveTab('chords')}
+              className={`h-[28px] px-3 border text-xs font-mono font-bold rounded flex items-center gap-1.5 select-none cursor-pointer ${
+                activeTab === 'chords'
+                  ? 'bg-[#3a8bfb] text-white border-[#002fa7] border-t-white border-l-white shadow-[inset_1px_1px_0_#ffffff50]'
+                  : 'bg-[#ece9d8] text-black border-white border-r-[#808080] border-bottom-[#808080] hover:bg-white'
+              }`}
+            >
+              <span>Viola Libre</span>
+            </button>
+            
+            <button 
+              onClick={() => setActiveTab('favorites')}
+              className={`h-[28px] px-3 border text-xs font-mono font-bold rounded flex items-center gap-1.5 select-none cursor-pointer ${
+                activeTab === 'favorites'
+                  ? 'bg-[#3a8bfb] text-white border-[#002fa7] border-t-white border-l-white shadow-[inset_1px_1px_0_#ffffff50]'
+                  : 'bg-[#ece9d8] text-black border-white border-r-[#808080] border-bottom-[#808080] hover:bg-white'
+              }`}
+            >
+              <span>Favoritos ({favorites.length})</span>
+            </button>
+          </div>
+
+          {/* System Tray (Clock and icons) */}
+          <div className="h-[30px] bg-[#0997f7] border-l-2 border-[#1a6b1a] flex items-center px-3 gap-2 text-white font-mono text-xs shadow-[inset_1px_1px_1px_#ffffff30] rounded-l-sm">
+            <span className="cursor-pointer" title="Rede Ativa (Livre)">NET</span>
+            <span className="cursor-pointer" title="Áudio Ativo (Afinado)">VOL</span>
+            <div className="w-[1.5px] h-4 bg-white/30 mx-1"></div>
+            <span className="font-bold text-[11px]" title="Hora local do sistema">{time}</span>
+          </div>
+        </div>
       </footer>
     </div>
   );

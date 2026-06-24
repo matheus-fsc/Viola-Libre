@@ -29,7 +29,7 @@ interface MelodySequenceEditorProps {
   bpm: number;
   setBpm: (bpm: number) => void;
   playNoteSound: (frequency: number, durationSec?: number) => void;
-  ensureAudioContextActive?: () => Promise<void>;
+  ensureAudioContextActive?: () => Promise<AudioContext | null>;
   selectedTuning: Tuning;
   selectedInstrument: Instrument;
   useFlats: boolean;
@@ -49,6 +49,10 @@ interface MelodySequenceEditorProps {
   selectedChords: string[];
   setSelectedChords: React.Dispatch<React.SetStateAction<string[]>>;
   sortedMatches?: any[];
+  isTaskbarCollapsed: boolean;
+  /** Altura atual do painel (controlada pelo pai para sincronizar paddingBottom da página) */
+  editorHeight: number;
+  onEditorHeightChange: (height: number) => void;
 }
 
 
@@ -74,6 +78,9 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
   selectedChords,
   setSelectedChords,
   sortedMatches,
+  isTaskbarCollapsed,
+  editorHeight,
+  onEditorHeightChange,
 }) => {
   const {
     melody,
@@ -102,8 +109,8 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
   const [extraHighRows, setExtraHighRows] = useState(0);
   const [extraLowRows, setExtraLowRows] = useState(0);
 
-  // Resizable editor height
-  const [editorHeight, setEditorHeight] = useState(380);
+  // Resizable editor height — controlled by parent via props
+  // editorHeight and onEditorHeightChange are received from props (see below)
 
   const editorContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -122,32 +129,19 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
   // Memoized grid range and note lookup maps (O(1) search)
   const midiRange = useMemo(() => {
     const tuningStrings = selectedTuning.strings;
-    const lowestInstrumentMidi = tuningStrings[0] || 40;
-    const highestInstrumentMidi = (tuningStrings[tuningStrings.length - 1] || 70) + maxFrets;
+    if (!tuningStrings || tuningStrings.length === 0) return [];
+    const lowestInstrumentMidi = tuningStrings[0];
+    const highestInstrumentMidi = tuningStrings[tuningStrings.length - 1] + maxFrets;
 
-    if (melody.length === 0) {
-      const endMidi = Math.min(highestInstrumentMidi, lowestInstrumentMidi + 18) + extraHighRows;
-      const startMidi = Math.max(0, lowestInstrumentMidi - extraLowRows);
-      const range = [];
-      for (let m = endMidi; m >= startMidi; m--) {
-        range.push(m);
-      }
-      return range;
-    }
-    const melodyMidis = melody.map(n => {
-      const openMidi = tuningStrings[n.stringIdx] !== undefined ? tuningStrings[n.stringIdx] : lowestInstrumentMidi;
-      return openMidi + n.fret;
-    });
-    const minMelodyMidi = Math.min(...melodyMidis);
-    const maxMelodyMidi = Math.max(...melodyMidis);
-    const startMidi = Math.max(0, Math.max(lowestInstrumentMidi, minMelodyMidi - 3) - extraLowRows);
-    const endMidi = Math.min(127, Math.min(highestInstrumentMidi, maxMelodyMidi + 3) + extraHighRows);
+    const startMidi = Math.max(0, lowestInstrumentMidi - extraLowRows);
+    const endMidi = Math.min(127, highestInstrumentMidi + extraHighRows);
+
     const range = [];
     for (let m = endMidi; m >= startMidi; m--) {
       range.push(m);
     }
     return range;
-  }, [melody, selectedTuning, maxFrets, extraHighRows, extraLowRows]);
+  }, [selectedTuning, maxFrets, extraHighRows, extraLowRows]);
 
   const noteLookup = useMemo(() => {
     const lookup = new Map<string, { note: MelodyNote, flatIdx: number }[]>();
@@ -1025,7 +1019,7 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
       }
       // Clamp between 150px and 800px
       newHeight = Math.max(150, Math.min(800, newHeight));
-      setEditorHeight(newHeight);
+      onEditorHeightChange(newHeight);
     };
 
     const handleResizeEnd = () => {
@@ -1053,11 +1047,11 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
     <div 
       ref={editorContainerRef}
       style={isDocked
-        ? { height: `${editorHeight}px` }
-        : { left: `${windowPos.x}px`, top: `${windowPos.y}px`, width: '850px', maxWidth: '95vw', position: 'fixed' as const, height: `${editorHeight}px` }
+        ? { height: isMinimized ? '35px' : `${editorHeight}px`, bottom: isTaskbarCollapsed ? '0px' : '40px' }
+        : { left: `${windowPos.x}px`, top: `${windowPos.y}px`, width: '850px', maxWidth: '95vw', position: 'fixed' as const, height: isMinimized ? '35px' : `${editorHeight}px` }
       }
       className={isDocked 
-        ? "fixed bottom-0 left-0 right-0 w-full z-50 bg-[#ece9d8] border-t-2 border-[#808080] shadow-[0_-4px_15px_rgba(0,0,0,0.25)] flex flex-col overflow-hidden"
+        ? "fixed left-0 right-0 w-full z-50 bg-[#ece9d8] border-t-2 border-[#808080] shadow-[0_-4px_15px_rgba(0,0,0,0.25)] flex flex-col overflow-hidden"
         : "fixed z-50 bg-[#ece9d8] border-2 border-white border-r-[#808080] border-bottom-[#808080] shadow-2xl flex flex-col rounded-t-sm overflow-hidden"
       }
     >
@@ -1100,7 +1094,17 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
             className="w-5 h-4 bg-[#ece9d8] hover:bg-white active:bg-gray-200 border border-white border-r-[#808080] border-bottom-[#808080] text-black text-[9px] font-bold flex items-center justify-center cursor-pointer select-none"
             title={isDocked ? "Desacoplar (Janela Flutuante)" : "Acoplar no Rodapé"}
           >
-            {isDocked ? "❐" : "⧉"}
+            {isDocked ? (
+              <svg className="w-[10px] h-[10px]" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <rect x="4" y="1" width="7" height="7" />
+                <rect x="1" y="4" width="7" height="7" fill="#ece9d8" />
+              </svg>
+            ) : (
+              <svg className="w-[10px] h-[10px]" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <rect x="1" y="1" width="10" height="6" />
+                <rect x="1" y="9" width="10" height="2.5" fill="currentColor" />
+              </svg>
+            )}
           </button>
           <button 
             onClick={() => setIsEditorOpen(false)}
@@ -1114,7 +1118,7 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
 
       {/* Window Content */}
       {!isMinimized && (
-        <div className="p-3 font-mono text-xs flex flex-col gap-2 bg-[#ece9d8] flex-1 min-h-0 overflow-y-auto">
+        <div className="p-3 font-mono text-xs flex flex-col gap-2 bg-[#ece9d8] flex-1 min-h-0 overflow-y-hidden">
           <TransportControls
             historyIndex={historyIndex}
             historyLength={history.length}

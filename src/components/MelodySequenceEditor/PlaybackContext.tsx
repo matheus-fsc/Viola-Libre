@@ -18,7 +18,7 @@ interface PlaybackContextType {
   
   // Actions
   playNoteSound: (frequency: number, durationSec?: number) => void;
-  ensureAudioContextActive?: () => Promise<void>;
+  ensureAudioContextActive?: () => Promise<AudioContext | null>;
   handlePlayMelody: () => Promise<void>;
   handleRestartMelody: () => void;
   seekToBeat: (beat: number, isInteractive?: boolean) => void;
@@ -71,7 +71,7 @@ interface PlaybackProviderProps {
   bpm: number;
   setBpm: (bpm: number) => void;
   playNoteSound: (frequency: number, durationSec?: number) => void;
-  ensureAudioContextActive?: () => Promise<void>;
+  ensureAudioContextActive?: () => Promise<AudioContext | null>;
   children: React.ReactNode;
 }
 
@@ -133,11 +133,21 @@ export const PlaybackProvider: React.FC<PlaybackProviderProps> = ({
   const animationFrameIdRef = useRef<number | null>(null);
   const playbackStartRealTimeRef = useRef<number>(0);
   const playbackStartBeatRef = useRef<number>(0);
+  // Audio timing base (optional). When available, audioCtxRef provides high-resolution audio clock.
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const playbackStartAudioTimeRef = useRef<number | null>(null);
+  // Track last step index whose notes were triggered — used by the RAF-driven scheduler
+  const lastPlayedStepIdxRef = useRef<number | null>(null);
+  // Throttle debug logging from RAF to avoid console spam
+  const lastRafLogMsRef = useRef<number>(0);
   
   // Pub/Sub references for step playing state and playhead tick state
   const currentPlayingStepIdRef = useRef<string | null>(null);
   const stepSubscribersRef = useRef<Map<string, Set<(isPlaying: boolean) => void>>>(new Map());
   const playheadSubscribersRef = useRef<Set<(beat: number) => void>>(new Set());
+  // Mirror isPlayingMelody in a ref so RAF callbacks see latest value (avoid stale closures)
+  const isPlayingMelodyRef = useRef<boolean>(isPlayingMelody);
+  React.useEffect(() => { isPlayingMelodyRef.current = isPlayingMelody; }, [isPlayingMelody]);
 
   // Derive steps and stepPositions
   const steps = React.useMemo(() => getMelodySteps(melody), [melody]);
@@ -318,6 +328,7 @@ export const PlaybackProvider: React.FC<PlaybackProviderProps> = ({
   // Reset playhead index if melody is cleared or changes size
   useEffect(() => {
     currentStepIdxRef.current = 0;
+    lastPlayedStepIdxRef.current = null;
     if (playheadRef.current) {
       playheadRef.current.style.transform = 'translateX(56px)';
     }
@@ -330,23 +341,99 @@ export const PlaybackProvider: React.FC<PlaybackProviderProps> = ({
 
   // Animate playhead movement using direct DOM manipulation for maximum efficiency (60fps)
   const updatePlayheadAnimation = () => {
-    if (!playheadRef.current || !scrollContainerRef.current) return;
+    // If refs aren't ready yet, schedule another frame to retry (refs may be set shortly after mount)
+    if (!playheadRef.current || !scrollContainerRef.current) {
+      animationFrameIdRef.current = requestAnimationFrame(updatePlayheadAnimation);
+      return;
+    }
     
-    const elapsedSeconds = (performance.now() - playbackStartRealTimeRef.current) / 1000;
+    // Throttled debug of RAF
+    const nowMs = performance.now();
+    if (nowMs - lastRafLogMsRef.current > 500) {
+      console.debug('[PlaybackContext] RAF tick', {
+        nowMs,
+        audioCtxState: audioCtxRef.current ? audioCtxRef.current.state : null,
+        playbackStartAudioTime: playbackStartAudioTimeRef.current,
+        playbackStartRealTime: playbackStartRealTimeRef.current,
+        isPlayingMelody: isPlayingMelodyRef.current
+      });
+      lastRafLogMsRef.current = nowMs;
+    }
+
+    // Use audio clock if available for tighter alignment with audio playback,
+    // otherwise fallback to performance.now.
+    let elapsedSeconds: number;
+    if (audioCtxRef.current && playbackStartAudioTimeRef.current != null) {
+      elapsedSeconds = audioCtxRef.current.currentTime - playbackStartAudioTimeRef.current;
+    } else {
+      elapsedSeconds = (performance.now() - playbackStartRealTimeRef.current) / 1000;
+    }
     const currentBeat = playbackStartBeatRef.current + elapsedSeconds * (bpm / 60);
     const leftPx = 56 + currentBeat * 120;
     
     // Direct DOM write (avoids re-rendering the React tree)
     playheadRef.current.style.transform = `translateX(${leftPx}px)`;
     
-    // Update step highlight
+    // Update step highlight and play notes on step boundary transitions
     const stepIdx = findStepIndexForBeat(currentBeat, stepPositions);
     updateHighlightToStep(stepIdx);
+    
+    // If playing and we moved to a new step, trigger audio highlights and note playback
+    if (isPlayingMelodyRef.current && stepIdx !== lastPlayedStepIdxRef.current) {
+      lastPlayedStepIdxRef.current = stepIdx;
+      highlightNotesOfStep(stepIdx);
+      const step = stepPositions[stepIdx];
+      if (step) {
+        const beatDurationSec = 60 / bpm;
+        const stepDur = step.duration || 1.0;
+        const durationInSeconds = stepDur * beatDurationSec;
+
+        // If we have an AudioContext from ensureAudioContextActive, schedule notes on audio clock
+        if (audioCtxRef.current && playbackStartAudioTimeRef.current != null) {
+          const ctx = audioCtxRef.current;
+          const stepStartAudioTime = playbackStartAudioTimeRef.current + (step.startBeat - playbackStartBeatRef.current) * beatDurationSec;
+          const now = ctx.currentTime;
+          const startTime = Math.max(stepStartAudioTime, now + 0.001);
+
+          step.notes.forEach((note) => {
+            if (note.freq > 0 && note.fret >= 0) {
+              console.log('[PlaybackContext] schedule on audioCtx', { stepIdx, freq: note.freq, startTime, durationInSeconds });
+              try {
+                const osc = ctx.createOscillator();
+                const gainNode = ctx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(note.freq, ctx.currentTime);
+
+                gainNode.gain.setValueAtTime(0, startTime);
+                gainNode.gain.linearRampToValueAtTime(0.3, startTime + 0.015);
+                gainNode.gain.setValueAtTime(0.3, startTime + durationInSeconds - 0.05);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, startTime + durationInSeconds);
+
+                osc.connect(gainNode);
+                gainNode.connect(ctx.destination);
+
+                osc.start(startTime);
+                osc.stop(startTime + durationInSeconds);
+              } catch (err) {
+                console.error('[PlaybackContext] error scheduling on audioCtx', err);
+              }
+            }
+          });
+        } else {
+          // Fallback to playNoteSound prop if no audio context available
+          step.notes.forEach((note) => {
+            if (note.freq > 0 && note.fret >= 0) {
+              console.log('[PlaybackContext] fallback trigger note', { stepIdx, freq: note.freq, durationInSeconds });
+              playNoteSound(note.freq, durationInSeconds * 0.9);
+            }
+          });
+        }
+      }
+    }
     
     // Notify subscribers
     playheadSubscribersRef.current.forEach(cb => cb(currentBeat));
     
-    const container = scrollContainerRef.current;
     const targetScroll = leftPx - containerWidthRef.current / 2;
     
     // Auto-scroll only if user is not actively scrolling the grid
@@ -379,7 +466,6 @@ export const PlaybackProvider: React.FC<PlaybackProviderProps> = ({
     }
 
     const step = steps[stepIdx];
-    const currentStepPos = stepPositions[stepIdx];
 
     // Update direct DOM highlights for active step notes
     highlightNotesOfStep(stepIdx);
@@ -401,6 +487,7 @@ export const PlaybackProvider: React.FC<PlaybackProviderProps> = ({
   };
 
   const handlePlayMelody = async () => {
+    console.debug('[PlaybackContext] handlePlayMelody called', { stepsLength: steps.length, isPlayingMelody });
     if (steps.length === 0) return;
 
     if (isPlayingMelody) {
@@ -417,8 +504,17 @@ export const PlaybackProvider: React.FC<PlaybackProviderProps> = ({
       return;
     }
 
+    let audioCtx: AudioContext | null = null;
     if (ensureAudioContextActive) {
-      await ensureAudioContextActive();
+      const maybe = await ensureAudioContextActive();
+      if (maybe && typeof (maybe as any).currentTime === 'number') {
+        audioCtx = maybe as AudioContext;
+        audioCtxRef.current = audioCtx;
+        playbackStartAudioTimeRef.current = audioCtx.currentTime;
+      } else {
+        playbackStartAudioTimeRef.current = null;
+      }
+      console.debug('[PlaybackContext] after ensureAudioContextActive', { audioCtxState: audioCtxRef.current?.state, playbackStartAudioTime: playbackStartAudioTimeRef.current });
     }
 
     setIsPlayingMelody(true);
@@ -432,6 +528,8 @@ export const PlaybackProvider: React.FC<PlaybackProviderProps> = ({
     
     playbackStartBeatRef.current = startBeat;
     playbackStartRealTimeRef.current = performance.now();
+    // Reset last played index so the RAF-driven scheduler triggers the current step immediately
+    lastPlayedStepIdxRef.current = currentStepIdxRef.current - 1;
 
     // Immediately center the playhead so UI focuses the red pointer
     const initialLeftPx = 56 + playbackStartBeatRef.current * 120;
@@ -443,12 +541,12 @@ export const PlaybackProvider: React.FC<PlaybackProviderProps> = ({
     }
 
     animationFrameIdRef.current = requestAnimationFrame(updatePlayheadAnimation);
-    playNextFromIndex(currentStepIdxRef.current);
   };
 
   const handleRestartMelody = () => {
     currentStepIdxRef.current = 0;
     setIsPlayingMelody(false);
+    lastPlayedStepIdxRef.current = null;
     
     if (playbackTimeoutRef.current) {
       clearTimeout(playbackTimeoutRef.current);

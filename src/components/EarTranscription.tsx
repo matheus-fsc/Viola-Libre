@@ -1,11 +1,463 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { Tuning, Instrument } from '../engine/types';
 import { NOTE_NAMES_SHARP, NOTE_NAMES_FLAT, CHORD_FORMULAS } from '../engine/tunings';
 import { noteNameToPitchClass, midiToNoteName, shouldUseFlats } from '../engine/chordCalculator';
+import { MelodySequenceEditor } from './MelodySequenceEditor';
+import type { MelodyNote } from './MelodySequenceEditor';
+
+// ────────────────────────────────────────────────────────────
+// ANUNCIAÇÃO – Alceu Valença  │ Tom: G Maior │ 109 BPM
+// Cifra melódica: cifras.com.br / ciframelodica / partituras
+// ────────────────────────────────────────────────────────────
+interface PresetNote {
+  midi: number;
+  duration: number;
+  chord: string;
+  section: string;
+  theory: string;
+}
+
+const solfegeToMidi: { [key: string]: number } = {
+  "sol": 55,
+  "la": 57,
+  "si": 59,
+  "DO": 60,
+  "RE": 62,
+  "MI": 64,
+  "mi": 52,
+};
+
+const phrases = [
+  // Verso 1
+  {
+    notes: "sol la si DO si la sol mi sol la sol la la",
+    chord: "G",
+    section: "📜 Verso 1",
+    lyrics: "Na bruma leve das paixões Que vêm de dentro",
+    theory: [
+      "Sol (Tônica) — Ponto de partida estável na tônica de G Maior.",
+      "Lá (2º grau) — Nota de passagem ascendente.",
+      "Si (3ª maior) — Traz o brilho característico do modo maior.",
+      "Dó (4ª justa) — Subdominante. Ápice da frase, cria tensão suave.",
+      "Si — Retorno descendente na escala por graus conjuntos.",
+      "Lá — Nota de passagem que conduz à tônica.",
+      "Sol — Breve retorno ao centro de repouso.",
+      "Mi (6ª de G) — Repouso suave e incompleto na relativa menor.",
+      "Sol — Reinício da subfrase.",
+      "Lá — Nota de passagem.",
+      "Sol — Nota de passagem.",
+      "Lá — Tensão suspensa no segundo grau.",
+      "Lá — Sustentação em Lá (9ª do acorde de G)."
+    ]
+  },
+  {
+    notes: "sol la si DO si la sol mi si la sol sol",
+    chord: "Am",
+    section: "📜 Verso 1",
+    lyrics: "Tu vens chegando Pra brincar no meu quintal",
+    theory: [
+      "Sol (7ª menor de Am) — Abre a frase com uma cor de 7ª sobre Lá menor.",
+      "Lá (Tônica de Am) — Repouso no segundo grau menor do tom de G.",
+      "Si (9ª de Am) — Tensão suave de nona.",
+      "Dó (3ª menor de Am) — Caráter menor bem definido.",
+      "Si (9ª) — Descida na escala.",
+      "Lá (Tônica de Am) — Nota de apoio.",
+      "Sol (7ª) — Passagem.",
+      "Mi (5ª de Am) — Nota estável do acorde.",
+      "Si (9ª de Am) — Início da resolução.",
+      "Lá (Tônica de Am) — Nota de apoio.",
+      "Sol (7ª) — Conexão.",
+      "Sol (7ª) — Sustentação da tensão preparando o Dó Maior."
+    ]
+  },
+  {
+    notes: "sol la si DO si la sol mi sol la sol la mi",
+    chord: "C",
+    section: "📜 Verso 1",
+    lyrics: "No teu cavalo Peito nu, cabelo ao vento",
+    theory: [
+      "Sol (5ª de C) — Abertura da frase sobre o acorde subdominante.",
+      "Lá (6ª de C) — Nota de passagem.",
+      "Si (7ª maior de C) — Sonoridade lírica e moderna de 7ª maior.",
+      "Dó (Tônica de C) — Repouso no quarto grau do tom.",
+      "Si (7ª maior) — Passagem descendente.",
+      "Lá (6ª) — Nota de passagem.",
+      "Sol (5ª) — Nota de apoio.",
+      "Mi (3ª de C) — Terça maior do acorde, muito estável.",
+      "Sol — Nota de passagem.",
+      "Lá — Nota de passagem.",
+      "Sol — Passagem.",
+      "Lá — Passagem.",
+      "Mi (3ª de C) — Longo repouso na terça de C Maior."
+    ]
+  },
+  {
+    notes: "sol la si DO si la sol mi si la sol sol",
+    chord: "G",
+    section: "📜 Verso 1",
+    lyrics: "E o sol quarando Nossas roupas no varal",
+    theory: [
+      "Sol (Tônica) — Retorno ao acorde inicial estável (G).",
+      "Lá (2º grau) — Passagem.",
+      "Si (3ª maior) — Brilho maior do tom principal.",
+      "Dó (4ª) — Tensão passageira.",
+      "Si (3ª) — Resolução.",
+      "Lá — Passagem.",
+      "Sol — Tônica.",
+      "Mi — Grau de passagem.",
+      "Si — Terça de G.",
+      "Lá — Segunda de G.",
+      "Sol — Tônica.",
+      "Sol — Resolução perfeita na tônica de Sol Maior!"
+    ]
+  },
+
+  // Verso 2
+  {
+    notes: "sol la si DO si la sol mi sol la sol la la",
+    chord: "G",
+    section: "📜 Verso 2",
+    lyrics: "Na bruma leve das paixões Que vêm de dentro",
+    theory: [
+      "Sol (Tônica) — Reinício do ciclo melódico do verso.",
+      "Lá (2º grau).",
+      "Si (3ª maior).",
+      "Dó (4ª justa).",
+      "Si — Descida.",
+      "Lá.",
+      "Sol — Tônica.",
+      "Mi — 6º grau.",
+      "Sol.",
+      "Lá.",
+      "Sol.",
+      "Lá.",
+      "Lá — Suspensão em Lá."
+    ]
+  },
+  {
+    notes: "sol la si DO si la sol mi si la sol sol",
+    chord: "Am",
+    section: "📜 Verso 2",
+    lyrics: "Tu vens chegando Pra brincar no meu quintal",
+    theory: [
+      "Sol (7ª menor de Am).",
+      "Lá (Tônica de Am).",
+      "Si (9ª).",
+      "Dó (3ª menor).",
+      "Si.",
+      "Lá.",
+      "Sol.",
+      "Mi (5ª).",
+      "Si.",
+      "Lá.",
+      "Sol.",
+      "Sol — Tensão estendida."
+    ]
+  },
+  {
+    notes: "sol la si DO si la sol mi sol la sol la mi",
+    chord: "C",
+    section: "📜 Verso 2",
+    lyrics: "No teu cavalo Peito nu, cabelo ao vento",
+    theory: [
+      "Sol (5ª de C).",
+      "Lá.",
+      "Si (7ª maior).",
+      "Dó (Tônica).",
+      "Si.",
+      "Lá.",
+      "Sol.",
+      "Mi (3ª).",
+      "Sol.",
+      "Lá.",
+      "Sol.",
+      "Lá.",
+      "Mi — Repouso na terça de C."
+    ]
+  },
+  {
+    notes: "sol la si DO si la sol mi si la sol la sol",
+    chord: "G",
+    section: "📜 Verso 2",
+    lyrics: "E o sol quarando Nossas roupas no varal",
+    theory: [
+      "Sol (Tônica).",
+      "Lá.",
+      "Si (3ª maior).",
+      "Dó (4ª).",
+      "Si.",
+      "Lá.",
+      "Sol — Tônica.",
+      "Mi.",
+      "Si — Terça.",
+      "Lá — Segunda.",
+      "Sol — Tônica.",
+      "Lá (2º grau) — Variação melódica de conexão com a subida do refrão.",
+      "Sol — Resolução."
+    ]
+  },
+
+  // Refrão 1
+  {
+    notes: "sol RE MI si",
+    chord: "Em",
+    section: "🔥 Refrão 1",
+    lyrics: "Tu vens, tu vens",
+    durations: [0.5, 1.5, 0.5, 1.5],
+    theory: [
+      "Sol — Refrão abre em Mi menor (relativa menor), cor vibrante.",
+      "Ré (7ª de Em) — Salto ascendente dramático de quinta justa.",
+      "Mi (Tônica de Em) — Oitava alta! O clímax melódico.",
+      "Si (5ª de Em) — Queda de quarta, repousando na quinta de Em."
+    ]
+  },
+  {
+    notes: "la DO si mi sol la sol sol",
+    chord: "F_C_G",
+    section: "🔥 Refrão 1",
+    lyrics: "Eu já escuto os teus sinais",
+    theory: [
+      "Lá (3ª de F) — Sobre Fá Maior (bVII), um empréstimo modal do Mixolídio rústico nordestino.",
+      "Dó (5ª de F) — Caráter brilhante do acorde de Fá.",
+      "Si (7ª maior de C) — Transição para Dó Maior (IV).",
+      "Mi (3ª de C) — Apoio na terça de C.",
+      "Sol (Tônica de G) — Retorno triunfante à tônica G (I).",
+      "Lá (2º grau) — Passagem.",
+      "Sol — Tônica.",
+      "Sol — Repouso e finalização da cadência."
+    ]
+  },
+  {
+    notes: "sol RE MI si",
+    chord: "Em",
+    section: "🔥 Refrão 1",
+    lyrics: "Tu vens, tu vens",
+    durations: [0.5, 1.5, 0.5, 1.5],
+    theory: [
+      "Sol — Tônica de G / 3ª de Em.",
+      "Ré — Salto para a nota aguda.",
+      "Mi — Oitava alta.",
+      "Si — Estabilização."
+    ]
+  },
+  {
+    notes: "la DO si mi sol la sol sol",
+    chord: "F_C_G",
+    section: "🔥 Refrão 1",
+    lyrics: "Eu já escuto os teus sinais",
+    theory: [
+      "Lá — Acorde Fá Maior.",
+      "Dó — Acorde Fá Maior.",
+      "Si — Acorde Dó Maior.",
+      "Mi — Acorde Dó Maior.",
+      "Sol — Acorde Sol Maior.",
+      "Lá — Passagem.",
+      "Sol — Tônica.",
+      "Sol — Resolução."
+    ]
+  },
+
+  // Verso 3
+  {
+    notes: "sol la si DO si la sol mi sol la sol la la",
+    chord: "Am",
+    section: "📜 Verso 3",
+    lyrics: "A voz do anjo sussurrou no meu ouvido",
+    theory: [
+      "Sol (7ª menor de Am) — Verso abre em Lá menor (IIm), tom melancólico e reflexivo.",
+      "Lá (Tônica de Am).",
+      "Si (9ª).",
+      "Dó (3ª menor).",
+      "Si.",
+      "Lá.",
+      "Sol.",
+      "Mi (5ª).",
+      "Sol.",
+      "Lá.",
+      "Sol.",
+      "Lá.",
+      "Lá — Repouso suspenso em Lá."
+    ]
+  },
+  {
+    notes: "sol la si DO si la sol mi si la sol sol",
+    chord: "C_G",
+    section: "📜 Verso 3",
+    lyrics: "Eu não duvido, já escuto os teus sinais",
+    theory: [
+      "Sol (5ª de C) — Transição para Dó Maior (IV).",
+      "Lá (6ª).",
+      "Si (7ª maior).",
+      "Dó (Tônica).",
+      "Si.",
+      "Lá.",
+      "Sol.",
+      "Mi (3ª de C).",
+      "Si (3ª de G) — Transição para Sol Maior (I).",
+      "Lá (2º grau).",
+      "Sol (Tônica).",
+      "Sol — Resolução perfeita."
+    ]
+  },
+  {
+    notes: "sol la si DO si la sol mi sol la sol la mi",
+    chord: "Am",
+    section: "📜 Verso 3",
+    lyrics: "Que tu virias numa manhã de domingo",
+    theory: [
+      "Sol (7ª de Am).",
+      "Lá.",
+      "Si (9ª).",
+      "Dó (3ª menor).",
+      "Si.",
+      "Lá.",
+      "Sol.",
+      "Mi (5ª).",
+      "Sol.",
+      "Lá.",
+      "Sol.",
+      "Lá.",
+      "Mi — Repouso na terça de C / quinta de Am."
+    ]
+  },
+  {
+    notes: "sol la si DO si la sol mi si la sol sol",
+    chord: "C_G",
+    section: "📜 Verso 3",
+    lyrics: "Eu te anuncio nos sinos das catedrais",
+    theory: [
+      "Sol (5ª de C).",
+      "Lá.",
+      "Si (7ª maior).",
+      "Dó (Tônica).",
+      "Si.",
+      "Lá.",
+      "Sol.",
+      "Mi (3ª de C).",
+      "Si (3ª de G) — Resolução final para G.",
+      "Lá.",
+      "Sol.",
+      "Sol — Finalização."
+    ]
+  },
+
+  // Refrão 2
+  {
+    notes: "sol RE MI si",
+    chord: "Em",
+    section: "🔥 Refrão 2",
+    lyrics: "Tu vens, tu vens",
+    durations: [0.5, 1.5, 0.5, 1.5],
+    theory: [
+      "Sol — Abertura em Em.",
+      "Ré — Salto agudo.",
+      "Mi — Pico agudo.",
+      "Si — Apoio."
+    ]
+  },
+  {
+    notes: "la DO si mi sol la sol sol",
+    chord: "F_C_G",
+    section: "🔥 Refrão 2",
+    lyrics: "Eu já escuto os teus sinais",
+    theory: [
+      "Lá — Acorde Fá Maior (Mixolídio).",
+      "Dó — Acorde Fá Maior.",
+      "Si — Acorde Dó Maior.",
+      "Mi — Acorde Dó Maior.",
+      "Sol — Acorde Sol Maior.",
+      "Lá.",
+      "Sol.",
+      "Sol — Resolução."
+    ]
+  },
+  {
+    notes: "sol RE MI si",
+    chord: "Em",
+    section: "🔥 Refrão 2",
+    lyrics: "Tu vens, tu vens",
+    durations: [0.5, 1.5, 0.5, 1.5],
+    theory: [
+      "Sol.",
+      "Ré.",
+      "Mi.",
+      "Si."
+    ]
+  },
+  {
+    notes: "la DO si mi sol la sol sol",
+    chord: "F_C_G",
+    section: "🔥 Refrão 2",
+    lyrics: "Eu já escuto os teus sinais",
+    theory: [
+      "Lá — Acorde Fá Maior.",
+      "Dó — Acorde Fá Maior.",
+      "Si — Acorde Dó Maior.",
+      "Mi — Acorde Dó Maior.",
+      "Sol — Acorde Sol Maior.",
+      "Lá.",
+      "Sol.",
+      "Sol — Resolução final!"
+    ]
+  }
+];
+
+const buildAnunciacaoPreset = (): PresetNote[] => {
+  const list: PresetNote[] = [];
+  phrases.forEach((phrase) => {
+    const noteNames = phrase.notes.split(" ");
+    noteNames.forEach((nName, idx) => {
+      const midi = solfegeToMidi[nName];
+      if (!midi) return;
+      
+      let duration = 0.5;
+      if (phrase.durations && phrase.durations[idx] !== undefined) {
+        duration = phrase.durations[idx];
+      } else if (idx === noteNames.length - 1) {
+        duration = 1.5;
+      }
+      
+      let chord = phrase.chord;
+      if (phrase.chord === "F_C_G") {
+        if (idx < 2) chord = "F";
+        else if (idx < 4) chord = "C";
+        else chord = "G";
+      } else if (phrase.chord === "C_G") {
+        if (idx < 8) chord = "C";
+        else chord = "G";
+      }
+      
+      const theory = phrase.theory[idx] || `${nName.toUpperCase()} — Nota da melodia.`;
+      
+      list.push({
+        midi,
+        duration,
+        chord,
+        section: phrase.section,
+        theory: phrase.lyrics ? `"${phrase.lyrics}": ${theory}` : theory,
+      });
+    });
+  });
+  return list;
+};
+
+const anunciacaoPresetData: PresetNote[] = buildAnunciacaoPreset();
+
 
 interface EarTranscriptionProps {
   selectedInstrument: Instrument;
   selectedTuning: Tuning;
+  isEditorOpen: boolean;
+  setIsEditorOpen: (val: boolean) => void;
+  isDocked: boolean;
+  setIsDocked: (val: boolean) => void;
+  isMinimized: boolean;
+  setIsMinimized: (val: boolean) => void;
+  isTaskbarCollapsed: boolean;
+  /** Altura atual do painel do sequenciador (vem do App.tsx para sincronizar paddingBottom) */
+  editorHeight: number;
+  /** Callback para atualizar a altura — sobe até o App.tsx que controla o paddingBottom da página */
+  onEditorHeightChange: (height: number) => void;
 }
 
 interface KeyConfig {
@@ -13,14 +465,6 @@ interface KeyConfig {
   root: string;
   type: 'major' | 'minor';
   pitchClasses: number[];
-}
-
-interface MelodyNote {
-  id: string;
-  noteName: string;
-  freq: number;
-  stringIdx: number;
-  fret: number;
 }
 
 // Generate the 24 Major & Minor keys
@@ -75,39 +519,80 @@ const getMinorHarmonizedField = (rootPc: number): { name: string; suffix: string
 
 let audioCtx: AudioContext | null = null;
 
-const playNoteSound = (frequency: number) => {
+const playNoteSound = (frequency: number, durationSec: number = 0.4) => {
   try {
     if (!audioCtx) {
       audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      console.debug('[playNoteSound] created audioCtx', { state: audioCtx.state });
     }
+
+    const scheduleOsc = (ctx: AudioContext) => {
+      console.debug('[playNoteSound] scheduleOsc', { frequency, durationSec, state: ctx.state, now: ctx.currentTime });
+      const osc = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(frequency, ctx.currentTime);
+
+      const now = ctx.currentTime;
+      gainNode.gain.setValueAtTime(0, now);
+      gainNode.gain.linearRampToValueAtTime(0.3, now + 0.015);
+      gainNode.gain.setValueAtTime(0.3, now + durationSec - 0.05);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, now + durationSec);
+
+      osc.connect(gainNode);
+      gainNode.connect(ctx.destination);
+
+      const startTime = ctx.currentTime + 0.001;
+      osc.start(startTime);
+      osc.stop(startTime + durationSec);
+    };
+
     if (audioCtx.state === 'suspended') {
-      audioCtx.resume();
+      console.debug('[playNoteSound] audioCtx suspended - resuming');
+      audioCtx.resume().then(() => {
+        console.debug('[playNoteSound] audioCtx resumed', { state: audioCtx?.state, now: audioCtx?.currentTime });
+        if (audioCtx) scheduleOsc(audioCtx as AudioContext);
+      }).catch((err) => {
+        console.warn('AudioContext resume failed:', err);
+        if (audioCtx) scheduleOsc(audioCtx as AudioContext);
+      });
+    } else {
+      console.debug('[playNoteSound] scheduling immediately', { state: audioCtx.state, now: audioCtx.currentTime });
+      scheduleOsc(audioCtx as AudioContext);
     }
-
-    const osc = audioCtx.createOscillator();
-    const gainNode = audioCtx.createGain();
-
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(frequency, audioCtx.currentTime);
-
-    const now = audioCtx.currentTime;
-    gainNode.gain.setValueAtTime(0, now);
-    gainNode.gain.linearRampToValueAtTime(0.3, now + 0.015);
-    gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
-
-    osc.connect(gainNode);
-    gainNode.connect(audioCtx.destination);
-
-    osc.start(now);
-    osc.stop(now + 0.6);
   } catch (err) {
-    console.error("Erro ao reproduzir som:", err);
+    console.error('Erro ao reproduzir som:', err);
   }
+};
+
+const createDefaultMelody = (): MelodyNote[] => {
+  return Array.from({ length: 16 }, (_, idx) => {
+    const id = `default-rest-${idx}-${Math.random()}`;
+    return {
+      id,
+      stepId: `step-${id}`,
+      noteName: "Pausa",
+      freq: 0,
+      stringIdx: -1,
+      fret: -1,
+      duration: 1.0
+    };
+  });
 };
 
 export const EarTranscription: React.FC<EarTranscriptionProps> = ({
   selectedInstrument,
-  selectedTuning
+  selectedTuning,
+  isEditorOpen,
+  setIsEditorOpen,
+  isDocked,
+  setIsDocked,
+  isMinimized,
+  setIsMinimized,
+  isTaskbarCollapsed,
+  editorHeight,
+  onEditorHeightChange,
 }) => {
   const numStrings = selectedTuning.strings.length;
   const maxFrets = 12;
@@ -116,9 +601,13 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
   const [referenceKeyName, setReferenceKeyName] = useState<string>("");
 
   // Melody state: ordered sequence of clicked notes
-  const [melody, setMelody] = useState<MelodyNote[]>([]);
+  const [melody, setMelody] = useState<MelodyNote[]>(createDefaultMelody);
   const [isPlayingMelody, setIsPlayingMelody] = useState(false);
-  const [currentPlayingIndex, setCurrentPlayingIndex] = useState(-1);
+  const [selectedNoteIdx, setSelectedNoteIdx] = useState<number | null>(null);
+  const [bpm, setBpm] = useState<number>(120);
+
+  // Layout states for hybrid window / docked visualizer
+  const [windowPos, setWindowPos] = useState({ x: 50, y: 450 });
 
   // List of chords added by user (e.g. ["Dm", "G", "C"])
   const [selectedChords, setSelectedChords] = useState<string[]>([]);
@@ -127,13 +616,89 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
   const [chordRoot, setChordRoot] = useState<string>("C");
   const [chordSuffix, setChordSuffix] = useState<string>("");
 
+  // Audio Sample Player states
+  const [sampleUrl, setSampleUrl] = useState<string | null>(null);
+  const [sampleName, setSampleName] = useState<string | null>(null);
+  const [playbackRate, setPlaybackRate] = useState<number>(1.0);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const getBestPositionForMidi = (midi: number): { stringIdx: number, fret: number } => {
+    let bestString = 0;
+    let bestFret = 0;
+    let minFret = Infinity;
+    
+    for (let s = 0; s < numStrings; s++) {
+      const openMidi = selectedTuning.strings[s];
+      const f = midi - openMidi;
+      if (f >= 0 && f <= maxFrets) {
+        if (f < minFret) {
+          minFret = f;
+          bestString = s;
+          bestFret = f;
+        }
+      }
+    }
+    return { stringIdx: bestString, fret: bestFret };
+  };
+
+  const ensureAudioContextActive = async (): Promise<AudioContext | null> => {
+    try {
+      console.debug('[ensureAudioContextActive] called', { existing: !!audioCtx, state: audioCtx?.state });
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        console.debug('[ensureAudioContextActive] created audioCtx', { state: audioCtx.state });
+      }
+      if (audioCtx.state === 'suspended') {
+        console.debug('[ensureAudioContextActive] resuming audioCtx');
+        await audioCtx.resume();
+      }
+      console.debug('[ensureAudioContextActive] result', { state: audioCtx.state, now: audioCtx.currentTime });
+      return audioCtx;
+    } catch (e) {
+      console.warn("Could not resume AudioContext:", e);
+      return audioCtx;
+    }
+  };
+
+  const handleLoadAnunciacao = () => {
+    setBpm(109);
+    setSelectedChords(["G", "Am", "C", "Em", "F"]);
+    setReferenceKeyName("G Maior");
+
+    const presetNotes: MelodyNote[] = anunciacaoPresetData.map((item, idx) => {
+      const pos = getBestPositionForMidi(item.midi);
+      const noteName = midiToNoteName(item.midi, false); // G Major uses sharps
+      const freq = 440 * Math.pow(2, (item.midi - 69) / 12);
+      const noteId = `preset-${Date.now()}-${idx}-${Math.random()}`;
+      return {
+        id: noteId,
+        stepId: `step-preset-${idx}`,
+        noteName,
+        freq,
+        stringIdx: pos.stringIdx,
+        fret: pos.fret,
+        duration: item.duration,
+        suggestedChord: item.chord,
+        theory: item.theory,
+        section: item.section,
+      };
+    });
+
+    setMelody(presetNotes);
+    setSelectedNoteIdx(null);
+    setIsEditorOpen(true);
+    setIsMinimized(false);
+  };
+
   // Clear state when tuning changes
   useEffect(() => {
-    setMelody([]);
+    setMelody(createDefaultMelody());
     setSelectedChords([]);
     setIsPlayingMelody(false);
-    setCurrentPlayingIndex(-1);
+    setSelectedNoteIdx(null);
   }, [selectedTuning]);
+
+
 
   // Convert referenceKeyName to key configuration
   const activeRefKey = PRESET_KEYS.find(k => k.name === referenceKeyName);
@@ -156,58 +721,95 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
     const freq = getNoteFreqAtFret(stringIdx, fret);
     
     // Play sound immediately
-    playNoteSound(freq);
+    playNoteSound(freq, 0.4);
 
-    // Append to melody sequence
-    const newNote: MelodyNote = {
-      id: `${Date.now()}-${Math.random()}`,
-      noteName,
-      freq,
-      stringIdx,
-      fret
-    };
-    setMelody(prev => [...prev, newNote]);
-  };
-
-  const handleClearNotes = () => {
-    setMelody([]);
-    setIsPlayingMelody(false);
-    setCurrentPlayingIndex(-1);
-  };
-
-  const handleUndoMelody = () => {
-    if (melody.length > 0) {
-      setMelody(prev => prev.slice(0, -1));
+    if (selectedNoteIdx !== null && selectedNoteIdx >= 0 && selectedNoteIdx < melody.length) {
+      // Update selected note in-place (updates string and fret precisely)
+      setMelody(prev => prev.map((n, idx) => {
+        if (idx === selectedNoteIdx) {
+          return {
+            ...n,
+            noteName,
+            freq,
+            stringIdx,
+            fret
+          };
+        }
+        return n;
+      }));
+      // Clear selection after editing to prevent overwriting the same note
+      setSelectedNoteIdx(null);
+    } else {
+      // No note is selected: find the first Rest note ("Pausa") in the sequence and replace it
+      setMelody(prev => {
+        const firstRestIdx = prev.findIndex(n => n.fret === -1);
+        if (firstRestIdx !== -1) {
+          return prev.map((n, idx) => {
+            if (idx === firstRestIdx) {
+              return {
+                ...n,
+                noteName,
+                freq,
+                stringIdx,
+                fret
+              };
+            }
+            return n;
+          });
+        } else {
+          // If no rests are found, append a new note
+          const noteId = `${Date.now()}-${Math.random()}`;
+          const newNote: MelodyNote = {
+            id: noteId,
+            stepId: `step-${noteId}`,
+            noteName,
+            freq,
+            stringIdx,
+            fret,
+            duration: 1.0
+          };
+          return [...prev, newNote];
+        }
+      });
+      setSelectedNoteIdx(null);
     }
   };
 
-  const handleRemoveMelodyNote = (indexToRemove: number) => {
-    setMelody(prev => prev.filter((_, idx) => idx !== indexToRemove));
+  const handleClearNotes = () => {
+    setMelody(createDefaultMelody());
     setIsPlayingMelody(false);
-    setCurrentPlayingIndex(-1);
+    setSelectedNoteIdx(null);
   };
 
-  const handlePlayMelody = () => {
-    if (melody.length === 0 || isPlayingMelody) return;
-    setIsPlayingMelody(true);
-    let index = 0;
-    
-    const playNext = () => {
-      if (index >= melody.length) {
-        setIsPlayingMelody(false);
-        setCurrentPlayingIndex(-1);
-        return;
+  const handleUndoMelody = () => {
+    setMelody(prev => {
+      // Find the last index that is not a Rest
+      let lastActiveIdx = -1;
+      for (let i = prev.length - 1; i >= 0; i--) {
+        if (prev[i].fret !== -1) {
+          lastActiveIdx = i;
+          break;
+        }
       }
+      if (lastActiveIdx === -1) return prev;
       
-      setCurrentPlayingIndex(index);
-      playNoteSound(melody[index].freq);
-      
-      index++;
-      setTimeout(playNext, 450); // 450ms tempo per note
-    };
-    
-    playNext();
+      return prev.map((n, idx) => {
+        if (idx === lastActiveIdx) {
+          return {
+            ...n,
+            noteName: "Pausa",
+            freq: 0,
+            stringIdx: -1,
+            fret: -1
+          };
+        }
+        return n;
+      });
+    });
+    setSelectedNoteIdx(null);
   };
+
+
 
   const handleClearChords = () => {
     setSelectedChords([]);
@@ -387,8 +989,16 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
     return activeRefKey.pitchClasses.includes(midi % 12);
   };
 
+
+
   return (
-    <div className="bg-[#ece9d8] text-black border-2 border-white border-r-[#808080] border-bottom-[#808080] p-4 flex flex-col gap-4 w-full shadow-md">
+    <div 
+      style={{ paddingBottom: isDocked && isEditorOpen
+        ? (isMinimized ? '75px' : `${editorHeight + 16}px`)
+        : '0px'
+      }}
+      className="bg-[#ece9d8] text-black border-2 border-white border-r-[#808080] border-bottom-[#808080] p-4 flex flex-col gap-4 w-full shadow-md transition-all duration-300 relative"
+    >
       
       {/* Box Header (XP style) */}
       <div className="bg-gradient-to-r from-[#0058e6] to-[#3a8bfb] text-white px-2 py-1 flex justify-between items-center font-bold text-sm select-none">
@@ -464,6 +1074,103 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
 
           </div>
 
+          {/* Audio Sample Player (Windows XP Style) */}
+          <div className="bg-[#d4d0c8] p-3 border border-[#808080] rounded shadow-inner font-mono text-xs flex flex-col gap-2.5">
+            <span className="font-bold text-gray-700 flex items-center gap-1.5 border-b border-dashed border-[#808080] pb-1.5">
+              📻 Reprodutor de Sample & Áudio de Referência (Ouvido)
+            </span>
+            
+            <div className="flex flex-wrap items-center gap-3">
+              {/* File Input */}
+              <div className="flex flex-col gap-1">
+                <label className="font-bold text-gray-600 text-[10px]">Carregar Arquivo de Áudio:</label>
+                <div className="relative">
+                  <input
+                    type="file"
+                    accept="audio/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const url = URL.createObjectURL(file);
+                        setSampleUrl(url);
+                        setSampleName(file.name);
+                      }
+                    }}
+                    className="hidden"
+                    id="sample-file-upload"
+                  />
+                  <label
+                    htmlFor="sample-file-upload"
+                    className="px-2.5 py-1 bg-[#ece9d8] border border-white border-r-[#808080] border-bottom-[#808080] font-bold active:border-t-[#808080] active:border-l-[#808080] hover:bg-white cursor-pointer select-none text-[11px] flex items-center gap-1"
+                  >
+                    📂 {sampleName ? "Trocar Áudio" : "Escolher Áudio..."}
+                  </label>
+                </div>
+              </div>
+
+              {/* Preset Loader */}
+              <div className="flex flex-col gap-1">
+                <label className="font-bold text-gray-600 text-[10px]">Presets de Treino:</label>
+                <button
+                  onClick={handleLoadAnunciacao}
+                  className="px-2.5 py-1 bg-gradient-to-r from-[#0058e6] to-[#3a8bfb] text-white border border-[#002fa7] font-bold active:scale-95 hover:from-[#0047c4] cursor-pointer text-[11px] flex items-center gap-1 rounded-sm shadow-sm"
+                  title="Carregar melodia de Anunciação de Alceu Valença a 109 BPM"
+                >
+                  🎵 Anunciação (Alceu Valença)
+                </button>
+              </div>
+
+              {/* Sample playback controls if a file is loaded */}
+              {sampleUrl && (
+                <div className="flex items-center gap-2.5 pt-4">
+                  <audio
+                    ref={audioRef}
+                    src={sampleUrl}
+                    controls
+                    className="h-7 outline-none scale-90 sm:scale-100 origin-left"
+                    onPlay={() => {
+                      if (audioRef.current) {
+                        audioRef.current.playbackRate = playbackRate;
+                      }
+                    }}
+                  />
+                  
+                  {/* Playback speed control */}
+                  <div className="flex items-center gap-1.5 bg-white/50 border border-gray-400 px-2 py-0.5 rounded-sm">
+                    <span className="font-bold text-gray-600 text-[10px]">Velocidade:</span>
+                    <select
+                      value={playbackRate}
+                      onChange={(e) => {
+                        const rate = parseFloat(e.target.value);
+                        setPlaybackRate(rate);
+                        if (audioRef.current) {
+                          audioRef.current.playbackRate = rate;
+                        }
+                      }}
+                      className="bg-transparent font-bold text-[10px] outline-none cursor-pointer"
+                    >
+                      <option value="0.5">0.5x (Lento)</option>
+                      <option value="0.75">0.75x</option>
+                      <option value="1.0">1.0x (Normal)</option>
+                      <option value="1.25">1.25x</option>
+                      <option value="1.5">1.5x (Rápido)</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            {sampleName && (
+              <div className="text-[10px] text-gray-500 font-semibold truncate max-w-full">
+                Arquivo ativo: <span className="text-[#002fa7]">{sampleName}</span>
+              </div>
+            )}
+
+            <div className="text-[9px] text-gray-500 border-t border-dashed border-gray-400 pt-1.5 mt-1.5 leading-normal">
+              💡 <strong>Dica de Ritmo (Baião):</strong> O tempo padrão de <em>"Anunciação"</em> é <strong>109 BPM</strong>. Músicos e softwares frequentemente utilizam contagem dobrada (<strong>195 BPM a 200 BPM</strong>) para loops de bateria rápidos ou para facilitar a escrita da subdivisão rápida do baião caipira.
+            </div>
+          </div>
+
           {/* Visual Fretboard */}
           <div className="flex flex-col overflow-x-auto pb-2 retro-scrollbar">
             <div className="min-w-[700px] bg-[#ece9d8] border border-[#808080] p-4 flex flex-col relative select-none">
@@ -471,6 +1178,17 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-1.5 text-[10px] font-mono text-gray-600 mb-2 font-bold w-full">
                 <span>Monte a melodia clicando nas notas do braço abaixo na sequência:</span>
                 <div className="flex gap-1 shrink-0">
+                  {!isEditorOpen && (
+                    <button 
+                      onClick={() => {
+                        setIsEditorOpen(true);
+                        setIsMinimized(false);
+                      }}
+                      className="px-2 py-0.5 bg-[#0058e6] text-white border border-blue-800 hover:bg-blue-600 active:scale-95 cursor-pointer font-bold flex items-center gap-1.5 rounded-sm shadow-sm"
+                    >
+                      🎵 Abrir Editor de Melodia
+                    </button>
+                  )}
                   <button 
                     onClick={handleUndoMelody}
                     disabled={melody.length === 0}
@@ -525,32 +1243,24 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
                         const isClicked = clickedFrets.has(cellKey);
                         const isScale = isScaleNote(stringIdx, fret);
                         const noteName = getNoteNameAtFret(stringIdx, fret);
-                        
-                        // Check if this specific cell is currently being animated/played
-                        const isCurrentlyPlayingCell = isPlayingMelody && 
-                          currentPlayingIndex >= 0 && 
-                          melody[currentPlayingIndex].stringIdx === stringIdx && 
-                          melody[currentPlayingIndex].fret === fret;
-
                         const isRootNote = activeRefKey && (noteName === activeRefKey.root || (useFlats && noteName === NOTE_NAMES_FLAT[noteNameToPitchClass(activeRefKey.root)]) || (!useFlats && noteName === NOTE_NAMES_SHARP[noteNameToPitchClass(activeRefKey.root)]));
 
                         return (
                           <div
                             key={`cell-${stringIdx}-${fret}`}
+                            id={`fretboard-cell-${stringIdx}-${fret}`}
                             onClick={() => handleCellClick(stringIdx, fret)}
                             style={{
                               width: fret === 0 ? '60px' : '52px',
                             }}
                             className={`h-full border-r border-[#8a7f70] flex items-center justify-center cursor-pointer transition-all hover:bg-black/5 relative z-20 ${
-                              isCurrentlyPlayingCell
-                                ? 'bg-[#ff9d00] text-white font-extrabold scale-105 border border-red-500 z-30 animate-pulse'
-                                : isClicked 
-                                  ? 'bg-[#0058e6]/70 text-white font-bold' 
-                                  : isScale 
-                                    ? isRootNote
-                                      ? 'bg-[#228b22]/15 hover:bg-[#228b22]/20'
-                                      : 'bg-green-100/40'
-                                    : ''
+                              isClicked 
+                                ? 'bg-[#0058e6]/70 text-white font-bold' 
+                                : isScale 
+                                  ? isRootNote
+                                    ? 'bg-[#228b22]/15 hover:bg-[#228b22]/20'
+                                    : 'bg-green-100/40'
+                                  : ''
                             }`}
                           >
                             {/* Fret number or guide */}
@@ -559,8 +1269,8 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
                             </span>
 
                             {/* Reference scale dot outline if guide is enabled */}
-                            {isScale && !isClicked && !isCurrentlyPlayingCell && (
-                              <div className={`absolute w-1.5 h-1.5 rounded-full ${isRootNote ? 'bg-red-500' : 'bg-green-600'} opacity-75`} />
+                            {isScale && !isClicked && (
+                              <div className={`absolute w-1.5 h-1.5 rounded-full ${isRootNote ? 'bg-red-500' : 'bg-green-600'} opacity-75 fretboard-scale-dot`} />
                             )}
                           </div>
                         );
@@ -612,47 +1322,7 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
             </div>
           </div>
 
-          {/* Melody Sequence List and Player Bar */}
-          <div className="bg-white border-2 border-[#808080] border-r-white border-bottom-white p-3 font-mono text-xs flex flex-col gap-2">
-            <div className="flex justify-between items-center border-b border-dashed border-[#808080] pb-2">
-              <span className="font-bold text-gray-700">Sequência da Melodia Tirada ({melody.length} notas):</span>
-              <button 
-                onClick={handlePlayMelody}
-                disabled={melody.length === 0 || isPlayingMelody}
-                className="px-3 py-1 bg-gradient-to-r from-[#228b22] to-[#2ecc71] text-white border border-green-800 font-bold active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed hover:from-green-600 hover:to-green-400 cursor-pointer select-none flex items-center gap-1.5 rounded-sm"
-              >
-                {isPlayingMelody ? "▶ Tocando..." : "▶ Ouvir Melodia"}
-              </button>
-            </div>
 
-            <div className="flex gap-2 items-center bg-[#ece9d8]/50 border border-dotted border-[#808080] p-2 overflow-x-auto whitespace-nowrap min-h-[50px] retro-scrollbar">
-              {melody.length === 0 ? (
-                <span className="text-gray-400 italic text-[11px]">Nenhuma nota tocada. Toque no braço acima para construir a melodia passo a passo!</span>
-              ) : (
-                 melody.map((note, index) => {
-                  const isPlaying = isPlayingMelody && currentPlayingIndex === index;
-                  return (
-                    <div key={note.id} className="flex items-center gap-1.5 shrink-0">
-                      <button
-                        onClick={() => handleRemoveMelodyNote(index)}
-                        title="Clique para remover esta nota"
-                        className={`px-2 py-1 rounded-sm border font-bold text-xs shadow-sm transition-all cursor-pointer ${
-                          isPlaying 
-                            ? 'bg-[#ff9d00] text-white border-orange-700 scale-115 font-black ring-2 ring-orange-300' 
-                            : 'bg-white text-black border-gray-400 hover:bg-red-600 hover:text-white hover:border-red-700'
-                        }`}
-                      >
-                        {note.noteName}
-                      </button>
-                      {index < melody.length - 1 && (
-                        <span className="text-gray-400 font-bold text-sm">➔</span>
-                      )}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
 
           {/* Active notes pool visual indicator */}
           <div className="bg-white border border-[#808080] p-3 font-mono text-xs">
@@ -835,9 +1505,44 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
             )}
           </div>
 
-        </div>
-
       </div>
+
+    </div>
+
+      <MelodySequenceEditor
+        melody={melody}
+        setMelody={setMelody}
+        isPlayingMelody={isPlayingMelody}
+        setIsPlayingMelody={setIsPlayingMelody}
+        selectedNoteIdx={selectedNoteIdx}
+        setSelectedNoteIdx={setSelectedNoteIdx}
+        bpm={bpm}
+        setBpm={setBpm}
+        playNoteSound={playNoteSound}
+        ensureAudioContextActive={ensureAudioContextActive}
+        selectedTuning={selectedTuning}
+        selectedInstrument={selectedInstrument}
+        useFlats={useFlats}
+        midiToNoteName={midiToNoteName}
+        getNoteNameAtFret={getNoteNameAtFret}
+        getNoteFreqAtFret={getNoteFreqAtFret}
+        numStrings={numStrings}
+        maxFrets={maxFrets}
+        isEditorOpen={isEditorOpen}
+        setIsEditorOpen={setIsEditorOpen}
+        isDocked={isDocked}
+        setIsDocked={setIsDocked}
+        isMinimized={isMinimized}
+        setIsMinimized={setIsMinimized}
+        windowPos={windowPos}
+        setWindowPos={setWindowPos}
+        selectedChords={selectedChords}
+        setSelectedChords={setSelectedChords}
+        sortedMatches={sortedMatches}
+        isTaskbarCollapsed={isTaskbarCollapsed}
+        editorHeight={editorHeight}
+        onEditorHeightChange={onEditorHeightChange}
+      />
 
     </div>
   );

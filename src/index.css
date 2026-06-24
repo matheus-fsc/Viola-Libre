@@ -100,3 +100,43 @@ body {
   image-rendering: pixelated;
 }
 
+/* Direct DOM playback highlight style */
+.note-playing {
+  background-color: #ff9d00 !important;
+  color: white !important;
+  border-color: #c2410c !important;
+  font-weight: bold !important;
+  transform: scale(1.01) !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+}
+
+.fretboard-playing {
+  background-color: #ff9d00 !important;
+  color: white !important;
+  font-weight: 800 !important;
+  transform: scale(1.05) !important;
+  border: 1px solid #ef4444 !important;
+  z-index: 30 !important;
+  animation: fretboard-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes fretboard-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: .7;
+  }
+}
+
+/* Custom utility to hide scrollbars on scrollable tabs/containers */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+
+
