@@ -14,7 +14,12 @@ function parseSuffix(suffix: string) {
   let has9 = false;
   let hasb5 = false;
 
-  if (suffix.includes('m7(b5)')) {
+  if (suffix.includes('m7(b5)(9)')) {
+    quality = 'm';
+    seventh = '7';
+    hasb5 = true;
+    has9 = true;
+  } else if (suffix.includes('m7(b5)')) {
     quality = 'm';
     seventh = '7';
     hasb5 = true;
@@ -62,6 +67,10 @@ function parseSuffix(suffix: string) {
       has9 = true;
     } else if (suffix === 'add9') {
       has9 = true;
+    } else if (suffix === '7(b5)(9)') {
+      seventh = '7';
+      hasb5 = true;
+      has9 = true;
     } else if (suffix === '7(b5)') {
       seventh = '7';
       hasb5 = true;
@@ -79,7 +88,9 @@ function getSuffixFromBuilder(
 ): string {
   if (quality === 'm') {
     if (hasb5) {
-      if (seventh === '7') return 'm7(b5)';
+      if (seventh === '7') {
+        return has9 ? 'm7(b5)(9)' : 'm7(b5)';
+      }
       return 'dim';
     }
     if (seventh === '7') {
@@ -112,7 +123,9 @@ function getSuffixFromBuilder(
   
   // Quality: 'M' (Maior)
   if (hasb5) {
-    if (seventh === '7') return '7(b5)';
+    if (seventh === '7') {
+      return has9 ? '7(b5)(9)' : '7(b5)';
+    }
     return '';
   }
   if (seventh === '7') {

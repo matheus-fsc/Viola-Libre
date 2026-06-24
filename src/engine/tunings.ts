@@ -400,6 +400,18 @@ export const CHORD_FORMULAS: ChordFormula[] = [
     suffix: "7(#5)",
     intervals: [0, 4, 8, 10],
     requiredIntervals: [0, 4, 8, 10]
+  },
+  {
+    name: "Menor com Sétima, Quinta Bemol e Nona",
+    suffix: "m7(b5)(9)",
+    intervals: [0, 3, 6, 10, 14],
+    requiredIntervals: [0, 3, 6, 10, 14]
+  },
+  {
+    name: "Sétima com Quinta Bemol e Nona",
+    suffix: "7(b5)(9)",
+    intervals: [0, 4, 6, 10, 14],
+    requiredIntervals: [0, 4, 6, 10, 14]
   }
 ];
 
