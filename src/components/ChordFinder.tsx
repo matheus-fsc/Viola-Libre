@@ -26,10 +26,10 @@ function parseSuffix(suffix: string) {
       seventh = 'Maj7';
     } else if (suffix === 'm(add9)') {
       has9 = true;
-    } else if (suffix === 'm9') {
+    } else if (suffix === 'm7(9)') {
       seventh = '7';
       has9 = true;
-    } else if (suffix === 'm(Maj9)') {
+    } else if (suffix === 'm(Maj7)(9)') {
       seventh = 'Maj7';
       has9 = true;
     }
@@ -54,10 +54,10 @@ function parseSuffix(suffix: string) {
       seventh = '7';
     } else if (suffix === 'Maj7') {
       seventh = 'Maj7';
-    } else if (suffix === '9') {
+    } else if (suffix === '7(9)') {
       seventh = '7';
       has9 = true;
-    } else if (suffix === 'Maj9') {
+    } else if (suffix === 'Maj7(9)') {
       seventh = 'Maj7';
       has9 = true;
     } else if (suffix === 'add9') {
@@ -83,10 +83,10 @@ function getSuffixFromBuilder(
       return 'dim';
     }
     if (seventh === '7') {
-      return has9 ? 'm9' : 'm7';
+      return has9 ? 'm7(9)' : 'm7';
     }
     if (seventh === 'Maj7') {
-      return has9 ? 'm(Maj9)' : 'm(Maj7)';
+      return has9 ? 'm(Maj7)(9)' : 'm(Maj7)';
     }
     return has9 ? 'm(add9)' : 'm';
   }
@@ -116,10 +116,10 @@ function getSuffixFromBuilder(
     return '';
   }
   if (seventh === '7') {
-    return has9 ? '9' : '7';
+    return has9 ? '7(9)' : '7';
   }
   if (seventh === 'Maj7') {
-    return has9 ? 'Maj9' : 'Maj7';
+    return has9 ? 'Maj7(9)' : 'Maj7';
   }
   return has9 ? 'add9' : '';
 }

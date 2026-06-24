@@ -337,13 +337,13 @@ export const CHORD_FORMULAS: ChordFormula[] = [
   },
   {
     name: "Nona",
-    suffix: "9",
+    suffix: "7(9)",
     intervals: [0, 4, 7, 10, 14],
     requiredIntervals: [0, 4, 10, 14] // 5th can be omitted
   },
   {
     name: "Menor com Nona",
-    suffix: "m9",
+    suffix: "m7(9)",
     intervals: [0, 3, 7, 10, 14],
     requiredIntervals: [0, 3, 10, 14]
   },
@@ -373,7 +373,7 @@ export const CHORD_FORMULAS: ChordFormula[] = [
   },
   {
     name: "Sétima Maior e Nona",
-    suffix: "Maj9",
+    suffix: "Maj7(9)",
     intervals: [0, 4, 7, 11, 14],
     requiredIntervals: [0, 4, 11, 14]
   },
@@ -385,7 +385,7 @@ export const CHORD_FORMULAS: ChordFormula[] = [
   },
   {
     name: "Menor com Sétima Maior e Nona",
-    suffix: "m(Maj9)",
+    suffix: "m(Maj7)(9)",
     intervals: [0, 3, 7, 11, 14],
     requiredIntervals: [0, 3, 11, 14]
   },
