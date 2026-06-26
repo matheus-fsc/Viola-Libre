@@ -424,6 +424,198 @@ export const CHORD_FORMULAS: ChordFormula[] = [
     suffix: "m6(9)",
     intervals: [0, 3, 7, 9, 14],
     requiredIntervals: [0, 3, 9, 14]
+  },
+  {
+    name: "Menor com Sétima e Décima Primeira",
+    suffix: "m7(11)",
+    intervals: [0, 3, 7, 10, 17],
+    requiredIntervals: [0, 3, 10, 17]
+  },
+  {
+    name: "Sétima com Décima Primeira",
+    suffix: "7(11)",
+    intervals: [0, 4, 7, 10, 17],
+    requiredIntervals: [0, 4, 10, 17]
+  },
+  {
+    name: "Sétima Maior com Décima Primeira Aumentada",
+    suffix: "Maj7(#11)",
+    intervals: [0, 4, 7, 11, 18],
+    requiredIntervals: [0, 4, 11, 18]
+  },
+  {
+    name: "Power Chord (Quinta)",
+    suffix: "5",
+    intervals: [0, 7],
+    requiredIntervals: [0, 7]
+  },
+  {
+    name: "Sétima Maior",
+    suffix: "7M",
+    intervals: [0, 4, 7, 11],
+    requiredIntervals: [0, 4, 11]
+  },
+  {
+    name: "Power Chord com Sétima Maior",
+    suffix: "5(7M)",
+    intervals: [0, 7, 11],
+    requiredIntervals: [0, 7, 11]
+  },
+  {
+    name: "Suspenso 4",
+    suffix: "4",
+    intervals: [0, 5, 7],
+    requiredIntervals: [0, 5]
+  },
+  {
+    name: "Suspenso",
+    suffix: "sus",
+    intervals: [0, 5, 7],
+    requiredIntervals: [0, 5]
+  },
+  {
+    name: "Nona",
+    suffix: "9",
+    intervals: [0, 4, 7, 10, 14],
+    requiredIntervals: [0, 4, 10, 14]
+  },
+  {
+    name: "Sétima Maior com Nona",
+    suffix: "7M(9)",
+    intervals: [0, 4, 7, 11, 14],
+    requiredIntervals: [0, 4, 11, 14]
+  },
+  {
+    name: "Sétima Maior com Nona",
+    suffix: "Maj9",
+    intervals: [0, 4, 7, 11, 14],
+    requiredIntervals: [0, 4, 11, 14]
+  },
+  {
+    name: "Menor com Nona",
+    suffix: "m9",
+    intervals: [0, 3, 7, 10, 14],
+    requiredIntervals: [0, 3, 10, 14]
+  },
+  {
+    name: "Décima Primeira",
+    suffix: "11",
+    intervals: [0, 4, 7, 10, 14, 17],
+    requiredIntervals: [0, 4, 10, 17]
+  },
+  {
+    name: "Menor com Décima Primeira",
+    suffix: "m11",
+    intervals: [0, 3, 7, 10, 14, 17],
+    requiredIntervals: [0, 3, 10, 17]
+  },
+  {
+    name: "Décima Terceira",
+    suffix: "13",
+    intervals: [0, 4, 7, 10, 14, 21],
+    requiredIntervals: [0, 4, 10, 21]
+  },
+  {
+    name: "Menor com Décima Terceira",
+    suffix: "m13",
+    intervals: [0, 3, 7, 10, 14, 21],
+    requiredIntervals: [0, 3, 10, 21]
+  },
+  {
+    name: "Sétima com Quarta",
+    suffix: "7(4)",
+    intervals: [0, 5, 7, 10],
+    requiredIntervals: [0, 5, 10]
+  },
+  {
+    name: "Menor com Sétima e Quarta",
+    suffix: "m7(4)",
+    intervals: [0, 3, 7, 10, 17],
+    requiredIntervals: [0, 3, 10, 17]
+  },
+  {
+    name: "Sétima com Décima Terceira",
+    suffix: "7(13)",
+    intervals: [0, 4, 7, 10, 21],
+    requiredIntervals: [0, 4, 10, 21]
+  },
+  {
+    name: "Nona Adicionada",
+    suffix: "(add9)",
+    intervals: [0, 4, 7, 14],
+    requiredIntervals: [0, 4, 14]
+  },
+  {
+    name: "Menor com Nona Adicionada",
+    suffix: "madd9",
+    intervals: [0, 3, 7, 14],
+    requiredIntervals: [0, 3, 14]
+  },
+  {
+    name: "Diminuto",
+    suffix: "°",
+    intervals: [0, 3, 6],
+    requiredIntervals: [0, 3, 6]
+  },
+  {
+    name: "Diminuto com Sétima",
+    suffix: "°7",
+    intervals: [0, 3, 6, 9],
+    requiredIntervals: [0, 3, 6, 9]
+  },
+  {
+    name: "Meio Diminuto (Menor 7 com Quinta Bemol)",
+    suffix: "m7(5-)",
+    intervals: [0, 3, 6, 10],
+    requiredIntervals: [0, 3, 6, 10]
+  },
+  {
+    name: "Dominante com Quinta Bemol",
+    suffix: "7(5-)",
+    intervals: [0, 4, 6, 10],
+    requiredIntervals: [0, 4, 6, 10]
+  },
+  {
+    name: "Sétima com Nona Bemol",
+    suffix: "7(9-)",
+    intervals: [0, 4, 7, 10, 13],
+    requiredIntervals: [0, 4, 10, 13]
+  },
+  {
+    name: "Sétima com Nona Aumentada",
+    suffix: "7(9+)",
+    intervals: [0, 4, 7, 10, 15],
+    requiredIntervals: [0, 4, 10, 15]
+  },
+  {
+    name: "Aumentado com Sétima",
+    suffix: "7(5+)",
+    intervals: [0, 4, 8, 10],
+    requiredIntervals: [0, 4, 8, 10]
+  },
+  {
+    name: "Sétima com Nona (Formato de Barra)",
+    suffix: "7/9",
+    intervals: [0, 4, 7, 10, 14],
+    requiredIntervals: [0, 4, 10, 14]
+  },
+  {
+    name: "Menor com Sétima e Nona (Formato de Barra)",
+    suffix: "m7/9",
+    intervals: [0, 3, 7, 10, 14],
+    requiredIntervals: [0, 3, 10, 14]
+  },
+  {
+    name: "Sétima com Nona Bemol (Formato de Barra)",
+    suffix: "7/9-",
+    intervals: [0, 4, 7, 10, 13],
+    requiredIntervals: [0, 4, 10, 13]
+  },
+  {
+    name: "Sétima com Nona Aumentada (Formato de Barra)",
+    suffix: "7/9+",
+    intervals: [0, 4, 7, 10, 15],
+    requiredIntervals: [0, 4, 10, 15]
   }
 ];
 

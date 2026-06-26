@@ -1,6 +1,16 @@
 import React from 'react';
 import type { Voicing, Tuning } from '../engine/types';
 import { midiToNoteName } from '../engine/chordCalculator';
+import { StarIcon } from './Icons';
+
+export const IconWarning: React.FC<{ className?: string }> = ({ className = "w-3 h-3" }) => (
+  <svg className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+    <path d="M8 2l6 11H2L8 2z" fill="#ffcc00" stroke="#cc9900" strokeWidth="1"/>
+    <line x1="8" y1="6" x2="8" y2="9" stroke="#333" strokeWidth="1.5" strokeLinecap="round"/>
+    <circle cx="8" cy="11" r="1" fill="#333"/>
+  </svg>
+);
+
 
 export const IconNotepad: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => (
   <svg className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -53,6 +63,14 @@ export const IconTrash: React.FC<{ className?: string }> = ({ className = "w-4 h
   </svg>
 );
 
+export const IconInfo: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => (
+  <svg className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+    <circle cx="8" cy="8" r="7" fill="#3a8bfb" stroke="#002fa7" strokeWidth="1"/>
+    <rect x="7" y="7" width="2" height="5" fill="#ffffff" />
+    <circle cx="8" cy="4.5" r="1.2" fill="#ffffff" />
+  </svg>
+);
+
 interface FretboardDiagramProps {
   voicing: Voicing;
   tuning: Tuning;
@@ -62,6 +80,13 @@ interface FretboardDiagramProps {
   isInCifra?: boolean;
   onToggleCifra?: () => void;
   useFlats?: boolean;
+  compact?: boolean;
+  variationCurrentIndex?: number;
+  variationTotal?: number;
+  onNextVariation?: (e: React.MouseEvent) => void;
+  onPrevVariation?: (e: React.MouseEvent) => void;
+  onInfoClick?: (e: React.MouseEvent) => void;
+  infoActive?: boolean;
 }
 
 export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
@@ -72,7 +97,14 @@ export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
   onToggleFavorite,
   isInCifra = false,
   onToggleCifra,
-  useFlats = false
+  useFlats = false,
+  compact = false,
+  variationCurrentIndex,
+  variationTotal,
+  onNextVariation,
+  onPrevVariation,
+  onInfoClick,
+  infoActive = false
 }) => {
   const { frets, notes, barre } = voicing;
   const numStrings = tuning.strings.length;
@@ -123,11 +155,23 @@ export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
 
 
   return (
-    <div className="bg-[#ece9d8] text-black border-2 border-white border-r-[#808080] border-bottom-[#808080] shadow-sm p-4 w-[200px] flex flex-col items-center relative select-none">
+    <div className={compact 
+      ? "bg-transparent text-black w-full flex flex-col items-center relative select-none p-1" 
+      : "bg-[#ece9d8] text-black border-2 border-white border-r-[#808080] border-bottom-[#808080] shadow-sm p-4 w-[200px] flex flex-col items-center relative select-none"
+    }>
       {/* Title bar of the chord card */}
       <div className="w-full flex justify-between items-center mb-2 px-1 border-b border-[#d4d0c8] pb-1">
         <span className="font-bold text-lg font-mono text-[#002fa7]">{chordName}</span>
         <div className="flex gap-2 items-center">
+          {onInfoClick && (
+            <button
+              onClick={onInfoClick}
+              className={`cursor-pointer focus:outline-none hover:scale-110 transition-transform flex items-center justify-center ${infoActive ? 'scale-110 drop-shadow-md' : ''}`}
+              title="Informações de Teoria (Tom)"
+            >
+              <IconInfo className="w-4 h-4" />
+            </button>
+          )}
           {onToggleCifra && (
             <button
               onClick={onToggleCifra}
@@ -137,13 +181,15 @@ export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
               {isInCifra ? <IconRemoveDoc className="w-4 h-4" /> : <IconAddDoc className="w-4 h-4" />}
             </button>
           )}
-          <button
-            onClick={onToggleFavorite}
-            className="cursor-pointer text-sm focus:outline-none hover:scale-110 transition-transform"
-            title={isFavorite ? "Remover dos favoritos" : "Favoritar posição"}
-          >
-            {isFavorite ? "★" : "☆"}
-          </button>
+          {onToggleFavorite && (
+            <button
+              onClick={onToggleFavorite}
+              className={`cursor-pointer focus:outline-none hover:scale-110 transition-transform flex items-center justify-center ${isFavorite ? 'text-[#ff7f27]' : 'text-gray-500 hover:text-gray-700'}`}
+              title={isFavorite ? "Remover dos favoritos" : "Favoritar posição"}
+            >
+              <StarIcon className="w-4 h-4" fill={isFavorite ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.5" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -330,13 +376,36 @@ export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
           <span className="font-bold text-black">{120 - voicing.score > 80 ? "Difícil" : 120 - voicing.score > 40 ? "Média" : "Fácil"}</span>
         </div>
         {voicing.hasInteriorMute && (
-          <div className="text-[9px] font-bold text-[#cc3300] font-mono mt-1 bg-[#ffcccc]/70 border border-[#cc3300] rounded px-1 py-0.5 text-center shadow-sm select-none">
-            ⚠️ Abafamento Interno
+          <div className="text-[9px] font-bold text-[#cc3300] font-mono mt-1 bg-[#ffcccc]/70 border border-[#cc3300] rounded px-1 py-0.5 text-center shadow-sm select-none flex items-center justify-center gap-1">
+            <IconWarning className="w-3 h-3 text-[#cc3300]" />
+            <span>Abafamento Interno</span>
           </div>
         )}
         <div className="text-[9px] font-mono text-gray-500 text-left mt-1.5 truncate" title={voicing.notes.join(' ')}>
           Notas: {voicing.notes.filter(n => n !== 'X').join(', ')}
         </div>
+        
+        {variationTotal && variationTotal > 1 && variationCurrentIndex !== undefined && onNextVariation && onPrevVariation && (
+          <div className="flex items-center justify-between mt-2 pt-1 border-t border-[#ece9d8] bg-[#f5f5f5] px-1 rounded">
+            <button 
+              onClick={onPrevVariation}
+              className="px-2 py-0.5 text-[#0058e6] hover:bg-[#e0e0e0] font-bold text-[10px] rounded"
+              title="Variação Anterior"
+            >
+              &lt;
+            </button>
+            <span className="text-[9px] font-bold text-gray-700">
+              {variationCurrentIndex + 1} / {variationTotal}
+            </span>
+            <button 
+              onClick={onNextVariation}
+              className="px-2 py-0.5 text-[#0058e6] hover:bg-[#e0e0e0] font-bold text-[10px] rounded"
+              title="Próxima Variação"
+            >
+              &gt;
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

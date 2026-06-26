@@ -20,5 +20,17 @@ dist-ssr
 *.suo
 *.ntvs*
 *.njsproj
-*.sln
 *.sw?
+
+# Env files
+.env
+.env.*
+!.env.example
+
+# Database and Cache
+*.sqlite
+*.sqlite3
+*.db
+scrapper/cifras_data.sqlite
+__pycache__/
+*.pyc
