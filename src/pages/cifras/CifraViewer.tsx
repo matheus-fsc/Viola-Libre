@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { FileText, Eye, Heart } from 'lucide-react';
 import { getCifra, incrementView, favoriteCifra, updateDifficulty, type CifraDetail } from '../../services/api';
 import { buildChord, calculateVoicings, noteNameToPitchClass } from '../../engine/chordCalculator';
 import { PRESET_INSTRUMENTS, NOTE_NAMES_SHARP, NOTE_NAMES_FLAT } from '../../engine/tunings';
@@ -108,6 +109,10 @@ export const CifraViewer: React.FC = () => {
   const [favoriteChords, setFavoriteChords] = useState<Record<string, boolean>>({});
   const [infoPopupChord, setInfoPopupChord] = useState<string | null>(null);
 
+  // Instrument and Tuning states
+  const [selectedInstId, setSelectedInstId] = useState<string>(PRESET_INSTRUMENTS[0].id);
+  const [selectedTuningId, setSelectedTuningId] = useState<string>(PRESET_INSTRUMENTS[0].defaultTuningId || PRESET_INSTRUMENTS[0].tunings[0].id);
+
   useEffect(() => {
     if (artistSlug && songSlug) {
       setLoading(true);
@@ -178,9 +183,9 @@ export const CifraViewer: React.FC = () => {
     return originalChords.map(c => transposeChordString(c, transposeOffset, false));
   }, [originalChords, transposeOffset]);
 
-  // Default instrument (Viola) and tuning (Cebolão E) for the diagram rendering
-  const defaultInst = PRESET_INSTRUMENTS[0];
-  const defaultTuning = defaultInst.tunings[0];
+  // Derived Instrument and Tuning
+  const currentInst = PRESET_INSTRUMENTS.find(i => i.id === selectedInstId) || PRESET_INSTRUMENTS[0];
+  const currentTuning = currentInst.tunings.find(t => t.id === selectedTuningId) || currentInst.tunings[0];
 
   if (loading) {
     return (
@@ -236,8 +241,8 @@ export const CifraViewer: React.FC = () => {
 
       {/* Window Header */}
       <div className="winxp-gradient-blue text-white px-2 py-1 flex items-center justify-between font-bold text-sm mb-2 rounded-t select-none">
-        <div className="flex items-center truncate">
-          <span className="mr-2">📝</span>
+        <div className="flex items-center gap-2 truncate">
+          <FileText size={16} />
           <span className="truncate">{cifra.title} - {artistSlug}</span>
         </div>
         <button 
@@ -255,11 +260,11 @@ export const CifraViewer: React.FC = () => {
         <div className="bevel-out bg-[var(--color-winxp-panel)] p-2 flex flex-wrap items-center justify-between gap-4 text-sm shrink-0">
           
           <div className="flex items-center gap-3">
-            <span className="text-gray-600 flex items-center gap-1" title="Visualizações">
-              👁️ {cifra.views || 1}
+            <span className="text-gray-600 flex items-center gap-1 font-bold" title="Visualizações">
+              <Eye size={16} className="text-blue-600" /> {cifra.views || 1}
             </span>
-            <span className="text-gray-600 flex items-center gap-1" title="Favoritos">
-              ❤️ {cifra.favorited || 0}
+            <span className="text-gray-600 flex items-center gap-1 font-bold" title="Favoritos">
+              <Heart size={16} className="text-red-500" /> {cifra.favorited || 0}
             </span>
             
             <div className="flex items-center gap-1 ml-2">
@@ -281,6 +286,40 @@ export const CifraViewer: React.FC = () => {
               <span className="font-bold text-xs bg-white border border-gray-400 px-1 text-[#002fa7] min-w-[20px] text-center">
                 {songKey || '?'}
               </span>
+            </div>
+
+            <div className="flex items-center gap-2 ml-4">
+              <div className="flex items-center gap-1">
+                <label className="font-bold text-[11px] uppercase tracking-wider text-gray-700">Instrumento:</label>
+                <select 
+                  value={selectedInstId}
+                  onChange={(e) => {
+                    const newInst = PRESET_INSTRUMENTS.find(i => i.id === e.target.value);
+                    if (newInst) {
+                      setSelectedInstId(newInst.id);
+                      setSelectedTuningId(newInst.defaultTuningId || newInst.tunings[0].id);
+                    }
+                  }}
+                  className="bevel-in bg-white px-1 py-0 text-xs outline-none cursor-pointer max-w-[100px]"
+                >
+                  {PRESET_INSTRUMENTS.map(inst => (
+                    <option key={inst.id} value={inst.id}>{inst.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center gap-1">
+                <label className="font-bold text-[11px] uppercase tracking-wider text-gray-700">Afinação:</label>
+                <select 
+                  value={selectedTuningId}
+                  onChange={(e) => setSelectedTuningId(e.target.value)}
+                  className="bevel-in bg-white px-1 py-0 text-xs outline-none cursor-pointer max-w-[100px]"
+                >
+                  {currentInst.tunings.map(tuning => (
+                    <option key={tuning.id} value={tuning.id}>{tuning.name.split(' (')[0]}</option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
 
@@ -309,9 +348,10 @@ export const CifraViewer: React.FC = () => {
             <button 
               onClick={handleFavorite}
               disabled={isFavoriting}
-              className="bevel-out bg-[var(--color-winxp-panel)] px-3 py-1 text-xs font-bold flex items-center gap-1 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
+              className="bevel-out bg-[var(--color-winxp-panel)] px-3 py-1 text-xs font-bold flex items-center gap-1 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white text-black"
             >
-              <span className={isFavoriting ? 'opacity-50' : ''}>❤️ Favoritar</span>
+              <Heart size={14} className={`${isFavoriting ? 'opacity-50' : ''} ${cifra.favorited && cifra.favorited > 0 ? "fill-red-500 text-red-500" : "text-gray-600"}`} /> 
+              <span className={isFavoriting ? 'opacity-50' : ''}>Favoritar</span>
             </button>
           </div>
         </div>
@@ -321,7 +361,7 @@ export const CifraViewer: React.FC = () => {
           <div className="bevel-out bg-[var(--color-winxp-panel)] p-2 shrink-0 flex flex-col gap-1 transition-all">
             <div className="flex justify-between items-center cursor-pointer" onClick={() => setIsCarouselExpanded(!isCarouselExpanded)}>
               <span className="text-xs font-bold text-[#002fa7] flex items-center gap-1">
-                Acordes ({currentChords.length}) - {defaultTuning.name}
+                Acordes ({currentChords.length}) - {currentTuning.name}
               </span>
               <button className="text-[10px] font-bold border border-gray-400 px-2 py-0.5 bg-[#ece9d8] hover:bg-white active:bg-gray-200">
                 {isCarouselExpanded ? "Ocultar Diagramas" : "Expandir Visualização"}
@@ -335,7 +375,7 @@ export const CifraViewer: React.FC = () => {
                 if (root) {
                   try {
                     const chordObj = buildChord(root, suffix, bass || undefined);
-                    voicings = calculateVoicings(defaultTuning, chordObj);
+                    voicings = calculateVoicings(currentTuning, chordObj);
                   } catch (e) {
                     // fallback
                   }
@@ -367,7 +407,7 @@ export const CifraViewer: React.FC = () => {
                     {bestVoicing ? (
                       <FretboardDiagram
                         voicing={bestVoicing}
-                        tuning={defaultTuning}
+                        tuning={currentTuning}
                         chordName={chordName}
                         compact={!isCarouselExpanded}
                         isFavorite={isFav}
