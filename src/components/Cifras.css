@@ -1,0 +1,52 @@
+/* Estilos Globais para o Cifra Viewer (Renderizado via dangerouslySetInnerHTML) */
+.cifra-viewer-content {
+  font-family: 'Fira Code', 'Courier New', Courier, monospace;
+  font-size: 15px;
+  line-height: 1.6;
+  color: inherit;
+  background-color: transparent;
+  width: 100%;
+}
+
+.cifra-viewer-content pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.cifra-viewer-content .tablatura,
+.cifra-viewer-content .cnt {
+  color: #555555; /* Cinza escuro para tablaturas */
+  display: block;
+}
+
+/* Destacando os acordes (tags <b>) */
+.cifra-viewer-content b {
+  color: #002fa7; /* Azul clássico WinXP */
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  display: inline-block;
+}
+
+.cifra-viewer-content b:hover {
+  color: #cc3300; /* Vermelho WinXP no hover */
+  text-decoration: underline;
+}
+
+/* Micro-animações para botões de ação */
+.btn-premium {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-premium:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(56, 189, 248, 0.3);
+}
+
+.btn-premium:active {
+  transform: translateY(0);
+}

@@ -14,6 +14,7 @@ function parseSuffix(suffix: string) {
   let seventh: 'none' | '7' | 'Maj7' | '6' = 'none';
   let has9 = false;
   let hasb5 = false;
+  let has11 = false;
 
   if (suffix.includes('m7(b5)(9)')) {
     quality = 'm';
@@ -35,6 +36,9 @@ function parseSuffix(suffix: string) {
     } else if (suffix === 'm7(9)') {
       seventh = '7';
       has9 = true;
+    } else if (suffix === 'm7(11)') {
+      seventh = '7';
+      has11 = true;
     } else if (suffix === 'm(Maj7)(9)') {
       seventh = 'Maj7';
       has9 = true;
@@ -68,9 +72,15 @@ function parseSuffix(suffix: string) {
     } else if (suffix === '7(9)') {
       seventh = '7';
       has9 = true;
+    } else if (suffix === '7(11)') {
+      seventh = '7';
+      has11 = true;
     } else if (suffix === 'Maj7(9)') {
       seventh = 'Maj7';
       has9 = true;
+    } else if (suffix === 'Maj7(#11)') {
+      seventh = 'Maj7';
+      has11 = true;
     } else if (suffix === 'add9') {
       has9 = true;
     } else if (suffix === '7(b5)(9)') {
@@ -88,14 +98,15 @@ function parseSuffix(suffix: string) {
     }
   }
 
-  return { quality, seventh, has9, hasb5 };
+  return { quality, seventh, has9, hasb5, has11 };
 }
 
 function getSuffixFromBuilder(
   quality: 'M' | 'm' | 'sus4' | 'sus2' | 'dim' | 'aug',
   seventh: 'none' | '7' | 'Maj7' | '6',
   has9: boolean,
-  hasb5: boolean
+  hasb5: boolean,
+  has11: boolean
 ): string {
   if (quality === 'm') {
     if (hasb5) {
@@ -105,6 +116,7 @@ function getSuffixFromBuilder(
       return 'dim';
     }
     if (seventh === '7') {
+      if (has11) return 'm7(11)';
       return has9 ? 'm7(9)' : 'm7';
     }
     if (seventh === 'Maj7') {
@@ -143,9 +155,11 @@ function getSuffixFromBuilder(
     return '';
   }
   if (seventh === '7') {
+    if (has11) return '7(11)';
     return has9 ? '7(9)' : '7';
   }
   if (seventh === 'Maj7') {
+    if (has11) return 'Maj7(#11)';
     return has9 ? 'Maj7(9)' : 'Maj7';
   }
   if (seventh === '6') {
@@ -162,23 +176,51 @@ export const ChordFinder: React.FC<ChordFinderProps> = ({
   onChordChange,
   resultsCount
 }) => {
-  const { quality, seventh, has9, hasb5 } = parseSuffix(selectedSuffix);
+  const { quality, seventh, has9, hasb5, has11 } = parseSuffix(selectedSuffix);
 
   const updateChord = (
     q: 'M' | 'm' | 'sus4' | 'sus2' | 'dim' | 'aug',
     s: 'none' | '7' | 'Maj7' | '6',
     n9: boolean,
-    b5: boolean
+    b5: boolean,
+    n11: boolean
   ) => {
+    const targetQuality = q;
     let targetSeventh = s;
-    if ((q === 'sus2' || q === 'dim' || q === 'aug') && (s === 'Maj7' || s === '6')) {
-      targetSeventh = 'none';
-    }
+    let target9 = n9;
     let targetB5 = b5;
-    if (q !== 'M' && q !== 'm') {
+    let target11 = n11;
+
+    // If 11 is turned ON:
+    if (target11 && !has11) {
+      target9 = false; // mutually exclusive with 9
+      if (targetQuality === 'm') {
+        targetSeventh = '7';
+      } else if (targetQuality === 'M') {
+        if (targetSeventh !== '7' && targetSeventh !== 'Maj7') {
+          targetSeventh = '7';
+        }
+      }
+    }
+
+    // If 9 is turned ON:
+    if (target9 && !has9) {
+      target11 = false; // mutually exclusive with 11
+    }
+
+    // If seventh is changed to something incompatible with 11:
+    if (targetSeventh !== '7' && targetSeventh !== 'Maj7') {
+      target11 = false;
+    }
+
+    // If quality is changed to something incompatible:
+    if (targetQuality !== 'M' && targetQuality !== 'm') {
+      target11 = false;
+      target9 = false;
       targetB5 = false;
     }
-    const suffix = getSuffixFromBuilder(q, targetSeventh, n9, targetB5);
+
+    const suffix = getSuffixFromBuilder(targetQuality, targetSeventh, target9, targetB5, target11);
     onChordChange(selectedRootName, suffix, selectedBassName, selectedCustomNotes);
   };
 
@@ -301,7 +343,7 @@ export const ChordFinder: React.FC<ChordFinderProps> = ({
             ).map(q => (
               <button
                 key={q.id}
-                onClick={() => updateChord(q.id, seventh, has9, hasb5)}
+                onClick={() => updateChord(q.id, seventh, has9, hasb5, has11)}
                 className={`text-xs font-mono py-1 border select-none cursor-pointer ${
                   quality === q.id
                     ? 'bg-gradient-to-b from-[#0058e6] to-[#3a8bfb] text-white border-[#002fa7] font-bold'
@@ -333,7 +375,7 @@ export const ChordFinder: React.FC<ChordFinderProps> = ({
                 <button
                   key={s.id}
                   disabled={disabled}
-                  onClick={() => updateChord(quality, s.id, has9, hasb5)}
+                  onClick={() => updateChord(quality, s.id, has9, hasb5, has11)}
                   className={`text-xs font-mono py-1 border select-none cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
                     seventh === s.id
                       ? 'bg-gradient-to-b from-[#0058e6] to-[#3a8bfb] text-white border-[#002fa7] font-bold'
@@ -347,34 +389,48 @@ export const ChordFinder: React.FC<ChordFinderProps> = ({
           </div>
         </div>
 
-        {/* 3. Extensions (9th & b5) */}
-        <div className="grid grid-cols-2 gap-1 mt-1">
+        {/* 3. Extensions (9th, 11th & b5) */}
+        <div className="grid grid-cols-3 gap-1 mt-1">
           {/* Ninth */}
           <button
             disabled={quality !== 'M' && quality !== 'm'}
-            onClick={() => updateChord(quality, seventh, !has9, hasb5)}
-            className={`text-xs font-mono py-1 border select-none cursor-pointer flex justify-center items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed ${
+            onClick={() => updateChord(quality, seventh, !has9, hasb5, has11)}
+            className={`text-[11px] font-mono py-1 border select-none cursor-pointer flex justify-center items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed ${
               has9
                 ? 'bg-gradient-to-b from-[#0058e6] to-[#3a8bfb] text-white border-[#002fa7] font-bold'
                 : 'bg-[#ece9d8] hover:bg-white border-white border-r-[#808080] border-bottom-[#808080]'
             }`}
           >
-            <input type="checkbox" checked={has9} disabled={quality !== 'M' && quality !== 'm'} readOnly className="pointer-events-none" />
+            <input type="checkbox" checked={has9} disabled={quality !== 'M' && quality !== 'm'} readOnly className="pointer-events-none scale-90" />
             <span>Nona (9)</span>
+          </button>
+
+          {/* Eleventh */}
+          <button
+            disabled={quality !== 'M' && quality !== 'm'}
+            onClick={() => updateChord(quality, seventh, has9, hasb5, !has11)}
+            className={`text-[11px] font-mono py-1 border select-none cursor-pointer flex justify-center items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed ${
+              has11
+                ? 'bg-gradient-to-b from-[#0058e6] to-[#3a8bfb] text-white border-[#002fa7] font-bold'
+                : 'bg-[#ece9d8] hover:bg-white border-white border-r-[#808080] border-bottom-[#808080]'
+            }`}
+          >
+            <input type="checkbox" checked={has11} disabled={quality !== 'M' && quality !== 'm'} readOnly className="pointer-events-none scale-90" />
+            <span>11ª (11)</span>
           </button>
 
           {/* Flat 5 */}
           <button
             disabled={quality !== 'M' && quality !== 'm'}
-            onClick={() => updateChord(quality, seventh, has9, !hasb5)}
-            className={`text-xs font-mono py-1 border select-none cursor-pointer flex justify-center items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed ${
+            onClick={() => updateChord(quality, seventh, has9, !hasb5, has11)}
+            className={`text-[11px] font-mono py-1 border select-none cursor-pointer flex justify-center items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed ${
               hasb5
                 ? 'bg-gradient-to-b from-[#0058e6] to-[#3a8bfb] text-white border-[#002fa7] font-bold'
                 : 'bg-[#ece9d8] hover:bg-white border-white border-r-[#808080] border-bottom-[#808080]'
             }`}
           >
-            <input type="checkbox" checked={hasb5} disabled={quality !== 'M' && quality !== 'm'} readOnly className="pointer-events-none" />
-            <span>Quinta Bemol (b5)</span>
+            <input type="checkbox" checked={hasb5} disabled={quality !== 'M' && quality !== 'm'} readOnly className="pointer-events-none scale-90" />
+            <span>5ª Bemol</span>
           </button>
         </div>
       </div>
