@@ -616,6 +616,18 @@ export const CHORD_FORMULAS: ChordFormula[] = [
     suffix: "7/9+",
     intervals: [0, 4, 7, 10, 15],
     requiredIntervals: [0, 4, 10, 15]
+  },
+  {
+    name: "Segunda Adicionada",
+    suffix: "2",
+    intervals: [0, 4, 7, 14],
+    requiredIntervals: [0, 4, 14]
+  },
+  {
+    name: "Menor com Segunda Adicionada",
+    suffix: "m2",
+    intervals: [0, 3, 7, 14],
+    requiredIntervals: [0, 3, 14]
   }
 ];
 
