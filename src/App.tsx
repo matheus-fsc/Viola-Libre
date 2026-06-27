@@ -833,7 +833,7 @@ function App() {
 
   return (
     <div
-      className="min-h-screen flex flex-col justify-between overflow-x-hidden font-sans select-none relative"
+      className="h-[100dvh] flex flex-col justify-between overflow-hidden font-sans select-none relative"
       style={{ paddingBottom: sequencerPad }}
     >
 
@@ -841,7 +841,7 @@ function App() {
       <div className="flex-1 p-4 md:p-6 flex flex-col items-center justify-start z-10 max-w-7xl w-full mx-auto gap-6">
         
         {/* Main Application Window */}
-        <div className="w-full bg-[#ece9d8] border-[3px] border-[#0058e6] rounded-t-lg shadow-2xl flex flex-col">
+        <div className={`w-full bg-[#ece9d8] border-[3px] border-[#0058e6] rounded-t-lg shadow-2xl flex flex-col ${activeTab === 'cifras' ? 'flex-1 min-h-0' : ''}`}>
           
           {/* Main Title Bar */}
           <div className="winxp-gradient-blue text-white px-3 py-1.5 flex justify-between items-center rounded-t-md border-b-2 border-[#002fa7] select-none">
@@ -940,7 +940,7 @@ function App() {
 
           {/* Conditional tab rendering */}
           {activeTab === 'cifras' && (
-            <div className="w-full max-w-full flex flex-col p-2 sm:p-4 gap-4" style={{ minHeight: '400px' }}>
+            <div className="flex-1 w-full max-w-full flex flex-col p-2 sm:p-4 gap-4 min-h-0 bg-[#f5f4eb] overflow-hidden">
               <CifrasApp />
             </div>
           )}

@@ -69,6 +69,8 @@ export interface GlobalSearchResult {
   artist_name: string;
   artist_slug: string;
   version_name?: string;
+  views?: number;
+  likes?: number;
 }
 
 export const searchSongsGlobal = async (query: string): Promise<GlobalSearchResult[]> => {

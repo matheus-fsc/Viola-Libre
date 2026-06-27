@@ -15,6 +15,9 @@
  *   engine.setVoice(new SamplerVoice(...));        // Switch instrument
  */
 
+// @ts-ignore
+import Soundfont, { InstrumentName } from 'soundfont-player';
+
 // --- Instrument Voice Interface (Strategy Pattern) ---
 
 export interface InstrumentVoice {
@@ -23,7 +26,7 @@ export interface InstrumentVoice {
   /** Human-readable display name */
   readonly name: string;
   /** Play a note at the given frequency for the given duration */
-  play(ctx: AudioContext, frequency: number, durationSec: number): void;
+  play(ctx: AudioContext, frequency: number, durationSec: number, delaySec?: number): void;
   /** Optional: release resources when voice is swapped out */
   dispose?(): void;
 }
@@ -52,26 +55,26 @@ export class OscillatorVoice implements InstrumentVoice {
     this.maxGain = options?.maxGain ?? 0.3;
   }
 
-  play(ctx: AudioContext, frequency: number, durationSec: number): void {
+  play(ctx: AudioContext, frequency: number, durationSec: number, delaySec: number = 0): void {
     const osc = ctx.createOscillator();
     const gainNode = ctx.createGain();
 
     osc.type = this.waveType;
     osc.frequency.setValueAtTime(frequency, ctx.currentTime);
 
-    const now = ctx.currentTime;
+    const start = ctx.currentTime + delaySec;
     const safeDuration = Math.max(durationSec, this.attackTime + this.releaseTime + 0.01);
 
-    gainNode.gain.setValueAtTime(0, now);
-    gainNode.gain.linearRampToValueAtTime(this.maxGain, now + this.attackTime);
-    gainNode.gain.setValueAtTime(this.maxGain, now + safeDuration - this.releaseTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.001, now + safeDuration);
+    gainNode.gain.setValueAtTime(0, start);
+    gainNode.gain.linearRampToValueAtTime(this.maxGain, start + this.attackTime);
+    gainNode.gain.setValueAtTime(this.maxGain, start + safeDuration - this.releaseTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.001, start + safeDuration);
 
     osc.connect(gainNode);
     gainNode.connect(ctx.destination);
 
-    osc.start(now);
-    osc.stop(now + safeDuration);
+    osc.start(start);
+    osc.stop(start + safeDuration);
   }
 }
 
@@ -80,19 +83,19 @@ export class PluckedStringVoice implements InstrumentVoice {
   readonly id = 'plucked-string';
   readonly name = 'Corda Dedilhada';
 
-  play(ctx: AudioContext, frequency: number, durationSec: number): void {
-    const now = ctx.currentTime;
+  play(ctx: AudioContext, frequency: number, durationSec: number, delaySec: number = 0): void {
+    const start = ctx.currentTime + delaySec;
     const safeDuration = Math.max(durationSec, 0.15);
 
     // Fundamental oscillator
     const osc1 = ctx.createOscillator();
     osc1.type = 'triangle';
-    osc1.frequency.setValueAtTime(frequency, now);
+    osc1.frequency.setValueAtTime(frequency, start);
 
     // Slight harmonic overtone
     const osc2 = ctx.createOscillator();
     osc2.type = 'sine';
-    osc2.frequency.setValueAtTime(frequency * 2, now);
+    osc2.frequency.setValueAtTime(frequency * 2, start);
 
     // Gain nodes
     const gain1 = ctx.createGain();
@@ -100,23 +103,23 @@ export class PluckedStringVoice implements InstrumentVoice {
     const masterGain = ctx.createGain();
 
     // Pluck envelope: sharp attack, fast decay, gentle release
-    gain1.gain.setValueAtTime(0, now);
-    gain1.gain.linearRampToValueAtTime(0.35, now + 0.005);
-    gain1.gain.exponentialRampToValueAtTime(0.15, now + 0.08);
-    gain1.gain.exponentialRampToValueAtTime(0.001, now + safeDuration);
+    gain1.gain.setValueAtTime(0, start);
+    gain1.gain.linearRampToValueAtTime(0.35, start + 0.005);
+    gain1.gain.exponentialRampToValueAtTime(0.15, start + 0.08);
+    gain1.gain.exponentialRampToValueAtTime(0.001, start + safeDuration);
 
-    gain2.gain.setValueAtTime(0, now);
-    gain2.gain.linearRampToValueAtTime(0.12, now + 0.003);
-    gain2.gain.exponentialRampToValueAtTime(0.001, now + safeDuration * 0.5);
+    gain2.gain.setValueAtTime(0, start);
+    gain2.gain.linearRampToValueAtTime(0.12, start + 0.003);
+    gain2.gain.exponentialRampToValueAtTime(0.001, start + safeDuration * 0.5);
 
-    masterGain.gain.setValueAtTime(1, now);
+    masterGain.gain.setValueAtTime(1, start);
 
     // Filter to darken the sound over time (like a real string)
     const filter = ctx.createBiquadFilter();
     filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(frequency * 6, now);
-    filter.frequency.exponentialRampToValueAtTime(frequency * 1.5, now + safeDuration);
-    filter.Q.setValueAtTime(1, now);
+    filter.frequency.setValueAtTime(frequency * 6, start);
+    filter.frequency.exponentialRampToValueAtTime(frequency * 1.5, start + safeDuration);
+    filter.Q.setValueAtTime(1, start);
 
     // Connect
     osc1.connect(gain1);
@@ -126,21 +129,69 @@ export class PluckedStringVoice implements InstrumentVoice {
     filter.connect(masterGain);
     masterGain.connect(ctx.destination);
 
-    osc1.start(now);
-    osc2.start(now);
-    osc1.stop(now + safeDuration);
-    osc2.stop(now + safeDuration);
+    osc1.start(start);
+    osc2.start(start);
+    osc1.stop(start + safeDuration);
+    osc2.stop(start + safeDuration);
+  }
+}
+
+/** Realistic SoundFont MIDI Voice (Powered by soundfont-player) */
+export class SoundFontVoice implements InstrumentVoice {
+  readonly id: string;
+  name: string;
+  instrumentName: InstrumentName;
+  private player: Soundfont.Player | null = null;
+  private isLoading: boolean = false;
+
+  constructor(id: string, name: string, instrumentName: InstrumentName) {
+    this.id = id;
+    this.name = name;
+    this.instrumentName = instrumentName;
+  }
+
+  async load(ctx: AudioContext) {
+    if (!this.player && !this.isLoading) {
+      this.isLoading = true;
+      try {
+        this.player = await Soundfont.instrument(ctx, this.instrumentName);
+      } catch (err) {
+        console.error(`Failed to load soundfont ${this.instrumentName}`, err);
+      }
+      this.isLoading = false;
+    }
+  }
+
+  play(ctx: AudioContext, frequency: number, durationSec: number, delaySec: number = 0): void {
+    const midi = Math.round(12 * Math.log2(frequency / 440) + 69);
+    
+    if (this.player) {
+      this.player.play(midi as any as string, ctx.currentTime + delaySec, { duration: durationSec });
+    }
+  }
+
+  playMidi(ctx: AudioContext, midi: number, durationSec: number, delaySec: number = 0): void {
+    if (this.player) {
+      this.player.play(midi as any as string, ctx.currentTime + delaySec, { duration: durationSec });
+    }
+  }
+
+  dispose() {
+    this.player = null;
   }
 }
 
 // --- Registry of available voices ---
 
 const VOICE_REGISTRY: InstrumentVoice[] = [
+  new SoundFontVoice('violao-nylon', 'Violão Nylon (Real)', 'acoustic_guitar_nylon'),
+  new SoundFontVoice('violao-aco', 'Violão Aço (Real)', 'acoustic_guitar_steel'),
+  new SoundFontVoice('piano', 'Piano (Real)', 'acoustic_grand_piano'),
+  new SoundFontVoice('sanfona', 'Sanfona (Real)', 'accordion'),
+  new PluckedStringVoice(),
   new OscillatorVoice(),
   new OscillatorVoice({ waveType: 'sine', maxGain: 0.25 }),
   new OscillatorVoice({ waveType: 'square', maxGain: 0.15 }),
-  new OscillatorVoice({ waveType: 'sawtooth', maxGain: 0.15 }),
-  new PluckedStringVoice(),
 ];
 
 // --- Audio Engine Singleton ---
@@ -204,7 +255,7 @@ export class AudioEngine {
   }
 
   /** Play a note by frequency */
-  playNote(frequency: number, durationSec: number = 0.4): void {
+  playNote(frequency: number, durationSec: number = 0.4, delaySec: number = 0): void {
     try {
       if (!this.ctx) {
         this.ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
@@ -212,15 +263,15 @@ export class AudioEngine {
       if (this.ctx.state === 'suspended') {
         this.ctx.resume();
       }
-      this.voice.play(this.ctx, frequency, durationSec);
+      this.voice.play(this.ctx, frequency, durationSec, delaySec);
     } catch (err) {
       console.error('AudioEngine: Erro ao reproduzir nota:', err);
     }
   }
 
   /** Play a note by MIDI number */
-  playMidi(midi: number, durationSec: number = 0.4): void {
+  playMidi(midi: number, durationSec: number = 0.4, delaySec: number = 0): void {
     const freq = AudioEngine.midiToFrequency(midi);
-    this.playNote(freq, durationSec);
+    this.playNote(freq, durationSec, delaySec);
   }
 }

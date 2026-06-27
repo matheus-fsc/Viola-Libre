@@ -1,5 +1,6 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { VirtuosoGrid } from 'react-virtuoso';
 import { Flame, Heart, FileText, Mic2, Music, Guitar } from 'lucide-react';
 import { 
   getArtists,
@@ -14,7 +15,25 @@ import {
   type GlobalSearchResult 
 } from '../../services/api';
 
+const GridList = React.forwardRef<HTMLDivElement, any>((props, ref) => (
+  <div {...props} ref={ref} className="flex flex-wrap pt-2" />
+));
+const GridItem = (props: any) => (
+  <div {...props} className="w-full sm:w-1/2 md:w-1/3 lg:w-1/4 p-1.5 flex-none box-border" />
+);
+
 export const ArtistList: React.FC = () => {
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!wrapperRef.current) return;
+    const observer = new ResizeObserver((entries) => {
+      // console.log('VIOLA LIBRE LOG: Altura do container Virtuoso:', entries[0].contentRect.height, 'px');
+    });
+    observer.observe(wrapperRef.current);
+    return () => observer.disconnect();
+  }, []);
+
   const [artists, setArtists] = useState<Artist[]>([]);
   const [loadingArtists, setLoadingArtists] = useState(true);
   
@@ -32,8 +51,6 @@ export const ArtistList: React.FC = () => {
   const [generoArtists, setGeneroArtists] = useState<Artist[]>([]);
   const [loadingGeneroArtists, setLoadingGeneroArtists] = useState(false);
 
-  // Exibir 32 por padrão para fechar o grid responsivo (8 linhas de 4)
-  const [visibleCount, setVisibleCount] = useState(32);
   const [selectedLetter, setSelectedLetter] = useState<string | null>(null);
 
   const navigate = useNavigate();
@@ -148,11 +165,6 @@ export const ArtistList: React.FC = () => {
   const normalizedSearch = normalizeText(search);
   const searchWords = normalizedSearch.split(/\s+/).filter(Boolean);
 
-  // Reset pagination
-  useEffect(() => {
-    setVisibleCount(32);
-  }, [normalizedSearch, searchMode, selectedGenero, selectedLetter]);
-
   const filteredArtists = useMemo(() => {
     let arr = Array.isArray(artists) ? artists : [];
     
@@ -198,35 +210,20 @@ export const ArtistList: React.FC = () => {
       .filter(item => item.score > 0)
       .sort((a, b) => b.score - a.score)
       .map(item => item.artist);
-  }, [artists, normalizedSearch, searchWords]);
+  }, [artists, normalizedSearch, searchWords, selectedLetter, searchMode]);
 
-  // Background Cache Queue (Pré-carregamento agressivo)
-  // Carrega silenciosamente as músicas dos artistas que estão visíveis na tela
-  useEffect(() => {
-    if (searchMode === 'artistas' || (searchMode === 'generos' && selectedGenero)) {
-      const listToCache = searchMode === 'artistas' ? filteredArtists : generoArtists;
-      const visible = listToCache.slice(0, visibleCount);
-      
-      visible.forEach((artist, i) => {
-        // Enfileira os requests espaçados por 30ms para não travar a rede do usuário
-        setTimeout(() => {
-          getSongs(artist.slug).catch(() => {});
-        }, i * 30);
-      });
-    }
-  }, [filteredArtists, generoArtists, searchMode, selectedGenero, visibleCount]);
 
   return (
-    <div className="flex flex-col h-full bg-[var(--color-winxp-bg)] p-2">
+    <div className="flex-1 min-h-0 flex flex-col h-full bg-[var(--color-winxp-bg)] p-2">
       {/* Window Header */}
       <div className="winxp-gradient-blue text-white px-2 py-1 flex items-center font-bold text-sm mb-2 rounded-t select-none">
         <Music size={16} className="mr-2" />
         Explorador de Cifras
       </div>
 
-      <div className="flex-1 bevel-in bg-white p-4 overflow-y-auto flex flex-col retro-scrollbar">
+      <div className="flex-1 bevel-in bg-white p-4 flex flex-col overflow-hidden min-h-0">
         {/* Filtros e Tabs Rápidas */}
-        <div className="flex flex-wrap gap-2 mb-4 p-2 bg-[var(--color-winxp-panel)] bevel-out">
+        <div className="flex flex-wrap gap-2 mb-4 p-2 bg-[var(--color-winxp-panel)] bevel-out shrink-0">
           <button 
             onClick={() => { setSearchMode('artistas'); setSearch(''); setSelectedGenero(null); }}
             className={`px-3 py-1 text-sm font-bold border transition-colors ${searchMode === 'artistas' ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#e0dfd6] text-black border-gray-400 hover:bg-gray-300'}`}
@@ -261,7 +258,7 @@ export const ArtistList: React.FC = () => {
 
         {/* Search Input (Apenas visivel em Artistas ou Musicas) */}
         {(searchMode === 'artistas' || searchMode === 'musicas') && (
-          <div className="flex items-center w-full mb-4">
+          <div className="flex items-center w-full mb-4 shrink-0">
             <input 
               type="text" 
               placeholder={searchMode === 'artistas' ? "Buscar pelo nome do artista..." : "Buscar nome da música (mín. 2 letras)..."}
@@ -274,7 +271,7 @@ export const ArtistList: React.FC = () => {
 
         {/* Alphabet Filter (Apenas visível em Artistas) */}
         {searchMode === 'artistas' && !search && (
-          <div className="flex flex-wrap gap-1 mb-4 justify-center">
+          <div className="flex flex-wrap gap-1 mb-4 justify-center shrink-0">
             {['ALL', 'A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','#'].map(letter => (
               <button
                 key={letter}
@@ -292,54 +289,58 @@ export const ArtistList: React.FC = () => {
         )}
 
         {/* Content Area */}
-        <div className="flex-1 pb-10">
+        <div className="flex-1 flex flex-col overflow-hidden relative min-h-0">
           {searchMode === 'artistas' && (
-            loadingArtists ? (
+loadingArtists ? (
               <div className="flex items-center justify-center h-full text-sm text-gray-600">
                 Carregando artistas...
               </div>
             ) : (
-              <div className="flex flex-col gap-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                  {filteredArtists.slice(0, visibleCount).map(artist => (
-                    <div 
-                      key={artist.id}
-                      onClick={() => navigate(`/${artist.slug}`)}
-                      className="bevel-out bg-[var(--color-winxp-panel)] p-2 flex items-center cursor-pointer hover:bg-[#e0dfd6] active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white select-none"
-                    >
-                      <div className="w-8 h-8 mr-3 bg-white bevel-in flex items-center justify-center text-lg text-gray-600 group-hover:text-[#316ac5]">
-                        <Mic2 size={18} />
-                      </div>
-                      <div className="flex flex-col flex-1 truncate">
-                        <span className="font-bold text-sm truncate">{artist.name}</span>
-                        {artist.genre && <span className="text-[10px] text-gray-500 uppercase">{artist.genre}</span>}
-                      </div>
-                    </div>
-                  ))}
-                  {filteredArtists.length === 0 && (
-                    <div className="col-span-full text-center text-sm text-gray-500 py-8">
-                      Nenhum artista encontrado com "{search}"
-                    </div>
-                  )}
-                </div>
-                
-                {/* Botão Exibir Mais para Artistas */}
-                {visibleCount < filteredArtists.length && (
-                  <div className="flex justify-center mt-4">
-                    <button 
-                      onClick={() => setVisibleCount(prev => prev + 32)}
-                      className="bevel-out bg-[var(--color-winxp-panel)] px-6 py-2 font-bold text-sm hover:bg-[#e0dfd6] active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
-                    >
-                      Exibir Mais ({filteredArtists.length - visibleCount} restantes)
-                    </button>
+              <div className="flex-1 w-full min-h-0 flex flex-col" ref={wrapperRef}>
+                {filteredArtists.length === 0 ? (
+                  <div className="text-center text-sm text-gray-500 py-8">
+                    Nenhum artista encontrado com "{search}"
                   </div>
+                ) : (
+                  <VirtuosoGrid
+                    style={{ flex: 1, width: '100%' }}
+                    className="retro-scrollbar pr-2 pb-10"
+                      data={filteredArtists}
+                      components={{
+                        List: GridList,
+                        Item: GridItem
+                      }}
+                      itemContent={(index, artist) => (
+                        <div 
+                          key={artist.id}
+                          onClick={() => navigate(`/${artist.slug}`)}
+                          className="bevel-out bg-[var(--color-winxp-panel)] p-2 flex items-center cursor-pointer hover:bg-[#e0dfd6] active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white select-none h-[52px]"
+                        >
+                          <div className="w-8 h-8 mr-3 bg-white bevel-in flex items-center justify-center text-lg text-gray-600 group-hover:text-[#316ac5]">
+                            <Mic2 size={18} />
+                          </div>
+                          <div className="flex flex-col flex-1 truncate">
+                            <span className="font-bold text-sm truncate">{artist.name}</span>
+                            {artist.genre && <span className="text-[10px] text-gray-500 uppercase">{artist.genre}</span>}
+                          </div>
+                        </div>
+                      )}
+                      rangeChanged={({ startIndex, endIndex }) => {
+                        const visible = filteredArtists.slice(startIndex, endIndex + 1);
+                        visible.forEach((artist, i) => {
+                          setTimeout(() => {
+                            getSongs(artist.slug).catch(() => {});
+                          }, i * 30);
+                        });
+                      }}
+                    />
                 )}
               </div>
             )
           )}
 
           {searchMode === 'musicas' && (
-            <div className="flex flex-col h-full">
+            <div className="flex-1 flex flex-col overflow-hidden min-h-0">
               {loadingSongs ? (
                 <div className="flex items-center justify-center h-full text-sm text-gray-600">
                   Buscando músicas...
@@ -349,44 +350,41 @@ export const ArtistList: React.FC = () => {
                   Digite pelo menos 2 caracteres para buscar músicas em todo o banco.
                 </div>
               ) : (
-                <div className="flex flex-col gap-2">
-                  {songResults.slice(0, visibleCount).map(song => (
-                    <div 
-                      key={song.id}
-                      onClick={() => navigate(`/${song.artist_slug}/${song.slug}`)}
-                      className="flex items-center p-2 hover:bg-[#316ac5] hover:text-white cursor-pointer select-none group border border-transparent hover:border-dotted hover:border-white transition-none"
-                    >
-                      <div className="mr-3 text-gray-500 group-hover:text-white">
-                        <FileText size={18} />
-                      </div>
-                      <div className="flex-1 flex flex-col md:flex-row md:items-center justify-between">
-                        <div className="flex flex-col">
-                          <span className="text-sm font-bold">{song.title}</span>
-                          <span className="text-xs text-gray-500 group-hover:text-gray-200">{song.artist_name}</span>
-                        </div>
-                        {song.version_name && (
-                          <span className="mt-1 md:mt-0 text-xs bg-gray-200 text-gray-700 px-1 border border-gray-400 group-hover:bg-[#1a3b6e] group-hover:text-white group-hover:border-transparent w-fit">
-                            {song.version_name}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                  {songResults.length === 0 && search.length >= 2 && (
+                <div className="flex-1 w-full min-h-0">
+                  {songResults.length === 0 && search.length >= 2 ? (
                     <div className="text-center text-sm text-gray-500 py-8">
                       Nenhuma música encontrada contendo "{search}"
                     </div>
-                  )}
-
-                  {/* Botão Exibir Mais para Busca de Músicas */}
-                  {visibleCount < songResults.length && (
-                    <div className="flex justify-center mt-4">
-                      <button 
-                        onClick={() => setVisibleCount(prev => prev + 32)}
-                        className="bevel-out bg-[var(--color-winxp-panel)] px-6 py-2 font-bold text-sm hover:bg-[#e0dfd6] active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
-                      >
-                        Exibir Mais ({songResults.length - visibleCount} restantes)
-                      </button>
+                  ) : (
+                    <VirtuosoGrid
+                      style={{ flex: 1, width: '100%' }}
+                      className="retro-scrollbar pr-2 pb-10"
+                        data={songResults}
+                        listClassName="flex flex-col gap-2 pb-8"
+                        itemContent={(index, song) => (
+                          <div 
+                            key={song.id}
+                            onClick={() => navigate(`/${song.artist_slug}/${song.slug}`)}
+                            className="flex items-center p-2 hover:bg-[#316ac5] hover:text-white cursor-pointer select-none group border border-transparent hover:border-dotted hover:border-white transition-none"
+                          >
+                            <div className="mr-3 text-gray-500 group-hover:text-white">
+                              <FileText size={18} />
+                            </div>
+                            <div className="flex-1 flex flex-col md:flex-row md:items-center justify-between">
+                              <div className="flex flex-col">
+                                <span className="text-sm font-bold">{song.title}</span>
+                                <span className="text-xs text-gray-500 group-hover:text-gray-200">{song.artist_name}</span>
+                              </div>
+                              {song.version_name && (
+                                <span className="mt-1 md:mt-0 text-xs bg-gray-200 text-gray-700 px-1 border border-gray-400 group-hover:bg-[#1a3b6e] group-hover:text-white group-hover:border-transparent w-fit">
+                                  {song.version_name}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      />
+                      )}
                     </div>
                   )}
                 </div>
@@ -395,53 +393,55 @@ export const ArtistList: React.FC = () => {
           )}
 
           {(searchMode === 'top_views' || searchMode === 'top_likes') && (
-            <div className="flex flex-col h-full">
+            <div className="flex-1 flex flex-col overflow-hidden min-h-0">
               {loadingSongs ? (
                 <div className="flex items-center justify-center h-full text-sm text-gray-600">
                   Carregando ranking...
                 </div>
               ) : (
-                <div className="flex flex-col gap-2">
-                  <h3 className="flex items-center gap-2 font-bold text-[#316ac5] mb-2 border-b border-gray-300 pb-1">
+                <div className="flex-1 w-full flex flex-col min-h-0">
+                  <h3 className="flex items-center gap-2 font-bold text-[#316ac5] mb-2 border-b border-gray-300 pb-1 shrink-0">
                     {searchMode === 'top_views' ? (
                       <><Flame size={18} className="text-orange-500" /> Top 50 Mais Visualizadas</>
                     ) : (
                       <><Heart size={18} className="text-red-500" /> Top 50 Mais Curtidas</>
                     )}
                   </h3>
-                  {songResults.slice(0, visibleCount).map((song, index) => (
-                    <div 
-                      key={song.id}
-                      onClick={() => navigate(`/${song.artist_slug}/${song.slug}`)}
-                      className="flex items-center p-2 hover:bg-[#316ac5] hover:text-white cursor-pointer select-none group border border-transparent hover:border-dotted hover:border-white transition-none"
-                    >
-                      <div className="w-6 font-bold text-gray-400 group-hover:text-white">
-                        {index + 1}º
-                      </div>
-                      <div className="mr-3 text-gray-500 group-hover:text-white">
-                        {searchMode === 'top_views' ? <Flame size={18} className="text-orange-500 group-hover:text-white" /> : <Heart size={18} className="text-red-500 group-hover:text-white" />}
-                      </div>
-                      <div className="flex-1 flex flex-col md:flex-row md:items-center justify-between">
-                        <div className="flex flex-col">
-                          <span className="text-sm font-bold">{song.title}</span>
-                          <span className="text-xs text-gray-500 group-hover:text-gray-200">{song.artist_name}</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  {songResults.length === 0 && (
+                  {songResults.length === 0 ? (
                     <div className="text-center text-sm text-gray-500 py-8">
                       Nenhuma música encontrada no ranking.
                     </div>
-                  )}
-                  {visibleCount < songResults.length && (
-                    <div className="flex justify-center mt-4">
-                      <button 
-                        onClick={() => setVisibleCount(prev => prev + 30)}
-                        className="bevel-out bg-[var(--color-winxp-panel)] px-6 py-2 font-bold text-sm hover:bg-[#e0dfd6] active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
-                      >
-                        Exibir Mais ({songResults.length - visibleCount} restantes)
-                      </button>
+                  ) : (
+                    <VirtuosoGrid
+                      style={{ flex: 1, width: '100%' }}
+                      className="retro-scrollbar pr-2 pb-10"
+                        data={songResults}
+                        listClassName="flex flex-col gap-2 pb-8"
+                        itemContent={(index, song) => (
+                          <div 
+                            key={song.id}
+                            onClick={() => navigate(`/${song.artist_slug}/${song.slug}`)}
+                            className="flex items-center p-2 hover:bg-[#316ac5] hover:text-white cursor-pointer select-none group border border-transparent hover:border-dotted hover:border-white transition-none"
+                          >
+                            <div className="w-6 font-bold text-gray-400 group-hover:text-white">
+                              {index + 1}º
+                            </div>
+                            <div className="mr-3 text-gray-500 group-hover:text-white">
+                              {searchMode === 'top_views' ? <Flame size={18} className="text-orange-500 group-hover:text-white" /> : <Heart size={18} className="text-red-500 group-hover:text-white" />}
+                            </div>
+                            <div className="flex-1 flex flex-col md:flex-row md:items-center justify-between">
+                              <div className="flex flex-col">
+                                <span className="text-sm font-bold">{song.title}</span>
+                                <span className="text-xs text-gray-500 group-hover:text-gray-200">{song.artist_name}</span>
+                              </div>
+                              <span className="text-xs font-bold text-gray-500 group-hover:text-gray-200 mt-1 md:mt-0">
+                                {searchMode === 'top_views' ? `${song.views} views` : `${song.likes} likes`}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      />
+                      )}
                     </div>
                   )}
                 </div>
@@ -450,33 +450,35 @@ export const ArtistList: React.FC = () => {
           )}
 
           {searchMode === 'generos' && (
-            <div className="flex flex-col h-full">
+            <div className="flex-1 flex flex-col overflow-hidden min-h-0">
               {!selectedGenero ? (
                 loadingGeneros ? (
                   <div className="flex items-center justify-center h-full text-sm text-gray-600">
                     Carregando gêneros...
                   </div>
                 ) : (
-                  <div className="flex flex-wrap gap-3 mt-2">
-                    {generos.map(g => (
-                      <button
-                        key={g}
-                        onClick={() => setSelectedGenero(g)}
-                        className="bevel-out bg-[var(--color-winxp-panel)] px-4 py-3 font-bold text-sm hover:bg-[#e0dfd6] active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white shadow-sm flex items-center gap-2"
-                      >
-                        <Guitar size={18} className="text-gray-600" /> {g}
-                      </button>
-                    ))}
-                    {generos.length === 0 && (
-                      <div className="w-full text-center text-sm text-gray-500 py-8">
-                        Nenhum gênero catalogado no momento.
-                      </div>
-                    )}
+                  <div className="flex-1 overflow-y-auto retro-scrollbar pr-2 pb-10">
+                    <div className="flex flex-wrap gap-3 mt-2">
+                      {generos.map(g => (
+                        <button
+                          key={g}
+                          onClick={() => setSelectedGenero(g)}
+                          className="bevel-out bg-[var(--color-winxp-panel)] px-4 py-3 font-bold text-sm hover:bg-[#e0dfd6] active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white shadow-sm flex items-center gap-2"
+                        >
+                          <Guitar size={18} className="text-gray-600" /> {g}
+                        </button>
+                      ))}
+                      {generos.length === 0 && (
+                        <div className="w-full text-center text-sm text-gray-500 py-8">
+                          Nenhum gênero catalogado no momento.
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )
               ) : (
-                <div className="flex flex-col gap-4">
-                  <div className="flex items-center gap-3 border-b border-gray-300 pb-2 mb-2">
+                <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+                  <div className="flex items-center gap-3 border-b border-gray-300 pb-2 mb-2 shrink-0">
                     <button 
                       onClick={() => setSelectedGenero(null)}
                       className="text-sm font-bold bg-[#316ac5] text-white px-2 py-1 bevel-out active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
@@ -491,33 +493,31 @@ export const ArtistList: React.FC = () => {
                       Carregando artistas de {selectedGenero}...
                     </div>
                   ) : (
-                    <>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                        {generoArtists.slice(0, visibleCount).map(artist => (
+                    <VirtuosoGrid
+                      style={{ flex: 1, width: '100%' }}
+                      className="retro-scrollbar pr-2 pb-10"
+                        data={generoArtists}
+                        components={{
+                          List: GridList,
+                          Item: GridItem
+                        }}
+                        itemContent={(index, artist) => (
                           <div 
                             key={artist.id}
                             onClick={() => navigate(`/${artist.slug}`)}
-                            className="bevel-out bg-[var(--color-winxp-panel)] p-2 flex items-center cursor-pointer hover:bg-[#e0dfd6] active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white select-none"
+                            className="bevel-out bg-[var(--color-winxp-panel)] p-2 flex items-center cursor-pointer hover:bg-[#e0dfd6] active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white select-none h-[52px]"
                           >
                             <div className="w-8 h-8 mr-3 bg-white bevel-in flex items-center justify-center text-lg text-gray-600 group-hover:text-[#316ac5]">
                               <Mic2 size={18} />
                             </div>
-                            <span className="font-bold text-sm truncate">{artist.name}</span>
+                            <div className="flex flex-col flex-1 truncate">
+                              <span className="font-bold text-sm truncate">{artist.name}</span>
+                            </div>
                           </div>
-                        ))}
-                      </div>
-                      
-                      {visibleCount < generoArtists.length && (
-                        <div className="flex justify-center mt-4">
-                          <button 
-                            onClick={() => setVisibleCount(prev => prev + 32)}
-                            className="bevel-out bg-[var(--color-winxp-panel)] px-6 py-2 font-bold text-sm hover:bg-[#e0dfd6] active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
-                          >
-                            Exibir Mais ({generoArtists.length - visibleCount} restantes)
-                          </button>
-                        </div>
+                        )}
+                      />
                       )}
-                    </>
+                    </div>
                   )}
                 </div>
               )}
