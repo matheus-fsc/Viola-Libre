@@ -1,6 +1,7 @@
 import React from 'react';
 import type { Voicing, Tuning } from '../engine/types';
 import { midiToNoteName } from '../engine/chordCalculator';
+import { AudioEngine } from '../engine/AudioEngine';
 import { StarIcon } from './Icons';
 
 export const IconWarning: React.FC<{ className?: string }> = ({ className = "w-3 h-3" }) => (
@@ -154,10 +155,36 @@ export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
 
 
 
+  // Play chord (strum) when clicking the diagram
+  const handlePlayChord = async (e: React.MouseEvent) => {
+    // Ignore clicks on action buttons
+    if ((e.target as HTMLElement).closest('button')) return;
+
+    const engine = AudioEngine.getInstance();
+    await engine.ensureContext();
+
+    let strumDelay = 0;
+    // Iterate from highest string index (lowest pitch in tuning, usually) 
+    // Wait, tuning.strings are from highest to lowest? 
+    // Usually tuning.strings is low pitch to high pitch (e.g. E2, A2, D3, G3, B3, E4)
+    // We want to strum from lowest pitch to highest pitch.
+    for (let i = 0; i < numStrings; i++) {
+      const fret = frets[i];
+      if (fret !== -1) {
+        // String is not muted
+        const midi = tuning.strings[i] + fret;
+        engine.playMidi(midi, 2.0, strumDelay);
+        strumDelay += 0.035; // 35ms stagger for a natural strum
+      }
+    }
+  };
+
   return (
-    <div className={compact 
-      ? "bg-transparent text-black w-full flex flex-col items-center relative select-none p-1" 
-      : "bg-[#ece9d8] text-black border-2 border-white border-r-[#808080] border-bottom-[#808080] shadow-sm p-4 w-[200px] flex flex-col items-center relative select-none"
+    <div 
+      onClick={handlePlayChord}
+      className={compact 
+      ? "bg-transparent text-black w-full flex flex-col items-center relative select-none p-1 cursor-pointer hover:bg-gray-100 transition-colors rounded" 
+      : "bg-[#ece9d8] text-black border-2 border-white border-r-[#808080] border-bottom-[#808080] shadow-sm p-4 w-[200px] flex flex-col items-center relative select-none cursor-pointer hover:bg-[#e4dfc9] transition-colors"
     }>
       {/* Title bar of the chord card */}
       <div className="w-full flex justify-between items-center mb-2 px-1 border-b border-[#d4d0c8] pb-1">

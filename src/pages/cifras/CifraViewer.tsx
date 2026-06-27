@@ -4,6 +4,7 @@ import { FileText, Eye, Heart } from 'lucide-react';
 import { getCifra, incrementView, favoriteCifra, updateDifficulty, type CifraDetail } from '../../services/api';
 import { buildChord, calculateVoicings, noteNameToPitchClass } from '../../engine/chordCalculator';
 import { PRESET_INSTRUMENTS, NOTE_NAMES_SHARP, NOTE_NAMES_FLAT } from '../../engine/tunings';
+import { AudioEngine } from '../../engine/AudioEngine';
 import { FretboardDiagram } from '../../components/FretboardDiagram';
 import '../../components/Cifras.css';
 
@@ -112,6 +113,25 @@ export const CifraViewer: React.FC = () => {
   // Instrument and Tuning states
   const [selectedInstId, setSelectedInstId] = useState<string>(PRESET_INSTRUMENTS[0].id);
   const [selectedTuningId, setSelectedTuningId] = useState<string>(PRESET_INSTRUMENTS[0].defaultTuningId || PRESET_INSTRUMENTS[0].tunings[0].id);
+
+  // Synchronize AudioEngine with the selected instrument
+  useEffect(() => {
+    const engine = AudioEngine.getInstance();
+    const voices = AudioEngine.getAvailableVoices();
+    
+    // Default mapping: 'viola' -> 'violao-aco' (Steel String), 'violao' -> 'violao-nylon'
+    let targetVoiceId = 'violao-nylon';
+    if (selectedInstId === 'viola') {
+      targetVoiceId = 'violao-aco';
+    } else if (selectedInstId === 'piano') {
+      targetVoiceId = 'piano';
+    }
+    
+    const voice = voices.find(v => v.id === targetVoiceId);
+    if (voice) {
+      engine.setVoice(voice);
+    }
+  }, [selectedInstId]);
 
   useEffect(() => {
     if (artistSlug && songSlug) {
