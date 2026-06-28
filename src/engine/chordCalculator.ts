@@ -32,6 +32,58 @@ export function midiToNoteName(midi: number, useFlats: boolean): string {
   return useFlats ? NOTE_NAMES_FLAT[pc] : NOTE_NAMES_SHARP[pc];
 }
 
+// Parse a chord string like "Am7/E" into { root, suffix, bass }
+export function parseChordString(chordStr: string): { root: string; suffix: string; bass: string } {
+  let root = '';
+  let suffix = '';
+  let bass = '';
+
+  const parts = chordStr.split('/');
+  let mainChord = parts[0].trim();
+
+  for (let i = 1; i < parts.length; i++) {
+    const part = parts[i].trim();
+    if (/^\d/.test(part)) {
+      mainChord += '/' + part;
+    } else {
+      bass = part;
+    }
+  }
+
+  if (mainChord.length >= 2 && (mainChord[1] === '#' || mainChord[1] === 'b')) {
+    root = mainChord.slice(0, 2);
+    suffix = mainChord.slice(2);
+  } else if (mainChord.length >= 1) {
+    root = mainChord.slice(0, 1);
+    suffix = mainChord.slice(1);
+  }
+
+  return { root, suffix, bass };
+}
+
+// Transpose a chord string by semitones. Uses +120 offset to handle negative semitones safely.
+export function transposeChordString(chordStr: string, semitones: number, preferFlats: boolean): string {
+  const { root, suffix, bass } = parseChordString(chordStr);
+  if (!root) return chordStr;
+
+  try {
+    const rootPc = noteNameToPitchClass(root);
+    const transposedRootPc = (rootPc + semitones + 120) % 12;
+    const transposedRoot = preferFlats ? NOTE_NAMES_FLAT[transposedRootPc] : NOTE_NAMES_SHARP[transposedRootPc];
+
+    let transposedBass = '';
+    if (bass) {
+      const bassPc = noteNameToPitchClass(bass);
+      const transposedBassPc = (bassPc + semitones + 120) % 12;
+      transposedBass = preferFlats ? NOTE_NAMES_FLAT[transposedBassPc] : NOTE_NAMES_SHARP[transposedBassPc];
+    }
+
+    return transposedRoot + suffix + (transposedBass ? '/' + transposedBass : '');
+  } catch {
+    return chordStr;
+  }
+}
+
 // Build a Chord object from root name, formula suffix, and optional bass name
 export function buildChord(rootName: string, suffix: string, bassName?: string): Chord {
   const root = noteNameToPitchClass(rootName);

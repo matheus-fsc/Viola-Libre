@@ -528,6 +528,12 @@ export const CHORD_FORMULAS: ChordFormula[] = [
     requiredIntervals: [0, 5, 10]
   },
   {
+    name: "Sétima com Quarta e Nona",
+    suffix: "7(4/9)",
+    intervals: [0, 5, 7, 10, 14],
+    requiredIntervals: [0, 5, 10, 14]
+  },
+  {
     name: "Menor com Sétima e Quarta",
     suffix: "m7(4)",
     intervals: [0, 3, 7, 10, 17],
@@ -628,6 +634,18 @@ export const CHORD_FORMULAS: ChordFormula[] = [
     suffix: "m2",
     intervals: [0, 3, 7, 14],
     requiredIntervals: [0, 3, 14]
+  },
+  {
+    name: "Segunda Aumentada Adicionada",
+    suffix: "2+",
+    intervals: [0, 4, 7, 15],
+    requiredIntervals: [0, 4, 15]
+  },
+  {
+    name: "Menor com Segunda Aumentada Adicionada",
+    suffix: "m2+",
+    intervals: [0, 3, 7, 15],
+    requiredIntervals: [0, 3, 15]
   }
 ];
 

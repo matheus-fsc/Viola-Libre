@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { Tuning, Instrument } from '../engine/types';
 import { detectChord, midiToNoteName, shouldUseFlats } from '../engine/chordCalculator';
 
@@ -18,9 +18,6 @@ export const InteractiveFretboard: React.FC<InteractiveFretboardProps> = ({
   const numStrings = selectedTuning.strings.length;
   const maxFrets = 12;
 
-  const [prevTuning, setPrevTuning] = useState<Tuning>(selectedTuning);
-  const [prevLoadedFrets, setPrevLoadedFrets] = useState<number[] | undefined>(loadedFrets);
-
   // State for active frets on each string (0: open, -1: muted, 1-12: fretted)
   const [activeFrets, setActiveFrets] = useState<number[]>(() => {
     if (loadedFrets && loadedFrets.length === numStrings) {
@@ -29,16 +26,15 @@ export const InteractiveFretboard: React.FC<InteractiveFretboardProps> = ({
     return new Array(numStrings).fill(0);
   });
 
-  // Sync activeFrets state when selectedTuning or loadedFrets changes
-  if (selectedTuning !== prevTuning || loadedFrets !== prevLoadedFrets) {
-    setPrevTuning(selectedTuning);
-    setPrevLoadedFrets(loadedFrets);
+  // Sync activeFrets when tuning changes (reset) or when a voicing is loaded externally
+  useEffect(() => {
     if (loadedFrets && loadedFrets.length === numStrings) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setActiveFrets([...loadedFrets]);
     } else {
       setActiveFrets(new Array(numStrings).fill(0));
     }
-  }
+  }, [selectedTuning, loadedFrets, numStrings]);
 
   // Derive detected chords whenever active frets or tuning changes
   const detectedChords = React.useMemo(() => {

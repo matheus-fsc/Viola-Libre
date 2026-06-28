@@ -42,7 +42,27 @@ const cache = {
   artistasPorGenero: {} as Record<string, Artist[]>,
 };
 
+export interface ArtistPage {
+  artists: Artist[];
+  total: number;
+  offset: number;
+  limit: number;
+}
+
 // Services
+export const getArtistsPaginated = async (
+  offset = 0,
+  limit = 50,
+  letra = '',
+  q = ''
+): Promise<ArtistPage> => {
+  const params = new URLSearchParams({ offset: String(offset), limit: String(limit) });
+  if (letra) params.set('letra', letra);
+  if (q) params.set('q', q);
+  const { data } = await api.get<ArtistPage>(`/api/artistas?${params}`);
+  return data;
+};
+
 export const getInitialArtists = async (): Promise<Artist[]> => {
   const { data } = await api.get<Artist[]>('/api/artistas/iniciais');
   return data;
@@ -69,8 +89,6 @@ export interface GlobalSearchResult {
   artist_name: string;
   artist_slug: string;
   version_name?: string;
-  views?: number;
-  likes?: number;
 }
 
 export const searchSongsGlobal = async (query: string): Promise<GlobalSearchResult[]> => {
@@ -80,9 +98,9 @@ export const searchSongsGlobal = async (query: string): Promise<GlobalSearchResu
 };
 
 export const getTopSongs = async (): Promise<GlobalSearchResult[]> => {
-  if (cache.songs['top']) return cache.songs['top'] as any;
+  if (cache.songs['top']) return cache.songs['top'] as unknown as GlobalSearchResult[];
   const { data } = await api.get<GlobalSearchResult[]>('/api/rankings/top-musicas');
-  cache.songs['top'] = data as any;
+  cache.songs['top'] = data as unknown as Song[];
   return data;
 };
 
@@ -157,7 +175,7 @@ export const favoriteCifra = async (artistSlug: string, songSlug: string): Promi
     });
   } catch (validationError) {
     console.error("Dados malformados, requisição abortada para poupar o servidor:", validationError);
-    throw new Error("Dados inválidos. Não foi possível favoritar.");
+    throw new Error("Dados inválidos. Não foi possível favoritar.", { cause: validationError });
   }
 
   await api.post(`/api/cifra/${artistSlug}/${safeSongSlug}/favorite`, { user_hash: hash }, {
@@ -174,6 +192,68 @@ export const updateDifficulty = async (artistSlug: string, songSlug: string, dif
       'X-API-Key': import.meta.env.VITE_API_KEY || 'viola_live_nBcrg1wcNlUPMdOt9H83kaEK8BSzn1LB9K6UuJ-Nc1U'
     }
   });
+};
+
+// Sequências
+export interface SequenciaData {
+  artistSlug: string;
+  songSlug: string;
+  songTitle: string;
+  transposeOffset: number;
+  selectedInstId: string;
+  selectedTuningId: string;
+  voicingFilter: {
+    proximity: boolean;
+    maxNotes: boolean;
+    muteFilter: 'any' | 'with_mute' | 'no_mute';
+    prioritizeEasy: boolean;
+  };
+  variationIndices: Record<string, number>;
+  lockedVariations: Record<string, number>;
+  excludedFromFilter: Record<string, boolean>;
+}
+
+export interface RecentSequencia {
+  hash: string;
+  title: string;
+  artistSlug: string;
+  savedAt: string;
+}
+
+const SEQ_STORAGE_KEY = 'viola_sequences_v1';
+
+export const getRecentSequencias = (): RecentSequencia[] => {
+  try { return JSON.parse(localStorage.getItem(SEQ_STORAGE_KEY) || '[]'); }
+  catch { return []; }
+};
+
+export const addRecentSequencia = (entry: RecentSequencia): void => {
+  const list = getRecentSequencias().filter(s => s.hash !== entry.hash);
+  list.unshift(entry);
+  localStorage.setItem(SEQ_STORAGE_KEY, JSON.stringify(list.slice(0, 10)));
+};
+
+export const removeRecentSequencia = (hash: string): void => {
+  const list = getRecentSequencias().filter(s => s.hash !== hash);
+  localStorage.setItem(SEQ_STORAGE_KEY, JSON.stringify(list));
+};
+
+export const saveSequencia = async (data: SequenciaData): Promise<{ hash: string }> => {
+  const { data: result } = await api.post<{ hash: string }>('/api/sequencias', data);
+  return result;
+};
+
+export const loadSequencia = async (hash: string): Promise<{ data: SequenciaData; created_at: string; updated_at: string }> => {
+  const { data: result } = await api.get<{ data: SequenciaData; created_at: string; updated_at: string }>(`/api/sequencias/${hash}`);
+  return result;
+};
+
+export const updateSequencia = async (hash: string, data: SequenciaData): Promise<void> => {
+  await api.put(`/api/sequencias/${hash}`, data);
+};
+
+export const deleteSequencia = async (hash: string): Promise<void> => {
+  await api.delete(`/api/sequencias/${hash}`);
 };
 
 export default api;

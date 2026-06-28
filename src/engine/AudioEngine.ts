@@ -15,8 +15,8 @@
  *   engine.setVoice(new SamplerVoice(...));        // Switch instrument
  */
 
-// @ts-ignore
-import Soundfont, { InstrumentName } from 'soundfont-player';
+import Soundfont from 'soundfont-player';
+import type { InstrumentName } from 'soundfont-player';
 
 // --- Instrument Voice Interface (Strategy Pattern) ---
 
@@ -142,7 +142,7 @@ export class SoundFontVoice implements InstrumentVoice {
   name: string;
   instrumentName: InstrumentName;
   private player: Soundfont.Player | null = null;
-  private isLoading: boolean = false;
+  private isLoading = false;
 
   constructor(id: string, name: string, instrumentName: InstrumentName) {
     this.id = id;
@@ -164,15 +164,13 @@ export class SoundFontVoice implements InstrumentVoice {
 
   play(ctx: AudioContext, frequency: number, durationSec: number, delaySec: number = 0): void {
     const midi = Math.round(12 * Math.log2(frequency / 440) + 69);
-    
-    if (this.player) {
-      this.player.play(midi as any as string, ctx.currentTime + delaySec, { duration: durationSec });
-    }
-  }
 
-  playMidi(ctx: AudioContext, midi: number, durationSec: number, delaySec: number = 0): void {
     if (this.player) {
-      this.player.play(midi as any as string, ctx.currentTime + delaySec, { duration: durationSec });
+      this.player.play(String(midi), ctx.currentTime + delaySec, { duration: durationSec });
+    } else {
+      void this.load(ctx).then(() => {
+        this.player?.play(String(midi), ctx.currentTime + delaySec, { duration: durationSec });
+      });
     }
   }
 
@@ -192,6 +190,7 @@ const VOICE_REGISTRY: InstrumentVoice[] = [
   new OscillatorVoice(),
   new OscillatorVoice({ waveType: 'sine', maxGain: 0.25 }),
   new OscillatorVoice({ waveType: 'square', maxGain: 0.15 }),
+  new OscillatorVoice({ waveType: 'sawtooth', maxGain: 0.15 }),
 ];
 
 // --- Audio Engine Singleton ---
