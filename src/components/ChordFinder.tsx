@@ -33,10 +33,10 @@ function parseSuffix(suffix: string) {
       seventh = 'Maj7';
     } else if (suffix === 'm(add9)') {
       has9 = true;
-    } else if (suffix === 'm7(9)') {
+    } else if (suffix === 'm7(9)' || suffix === 'm9' || suffix === 'm7/9') {
       seventh = '7';
       has9 = true;
-    } else if (suffix === 'm7(11)') {
+    } else if (suffix === 'm7(11)' || suffix === 'm11') {
       seventh = '7';
       has11 = true;
     } else if (suffix === 'm(Maj7)(9)') {
@@ -46,6 +46,8 @@ function parseSuffix(suffix: string) {
       seventh = '6';
     } else if (suffix === 'm6(9)') {
       seventh = '6';
+      has9 = true;
+    } else if (suffix === 'm2' || suffix === 'm2+' || suffix === 'madd9') {
       has9 = true;
     }
   } else if (suffix.startsWith('sus4')) {
@@ -67,21 +69,21 @@ function parseSuffix(suffix: string) {
     quality = 'M';
     if (suffix === '7') {
       seventh = '7';
-    } else if (suffix === 'Maj7') {
+    } else if (suffix === 'Maj7' || suffix === '7M') {
       seventh = 'Maj7';
-    } else if (suffix === '7(9)') {
+    } else if (suffix === '7(9)' || suffix === '9' || suffix === '7/9') {
       seventh = '7';
       has9 = true;
-    } else if (suffix === '7(11)') {
+    } else if (suffix === '7(11)' || suffix === '11') {
       seventh = '7';
       has11 = true;
-    } else if (suffix === 'Maj7(9)') {
+    } else if (suffix === 'Maj7(9)' || suffix === 'Maj9' || suffix === '7M(9)') {
       seventh = 'Maj7';
       has9 = true;
     } else if (suffix === 'Maj7(#11)') {
       seventh = 'Maj7';
       has11 = true;
-    } else if (suffix === 'add9') {
+    } else if (suffix === 'add9' || suffix === '(add9)') {
       has9 = true;
     } else if (suffix === '7(b5)(9)') {
       seventh = '7';
@@ -94,6 +96,14 @@ function parseSuffix(suffix: string) {
       seventh = '6';
     } else if (suffix === '6(9)') {
       seventh = '6';
+      has9 = true;
+    } else if (suffix === '7/9+' || suffix === '7(9+)' || suffix === '7(#9)') {
+      seventh = '7';
+      has9 = true;
+    } else if (suffix === '7/9-' || suffix === '7(9-)' || suffix === '7(b9)') {
+      seventh = '7';
+      has9 = true;
+    } else if (suffix === '2' || suffix === '2+') {
       has9 = true;
     }
   }

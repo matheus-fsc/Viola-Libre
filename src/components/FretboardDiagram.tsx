@@ -86,6 +86,7 @@ interface FretboardDiagramProps {
   variationTotal?: number;
   onNextVariation?: (e: React.MouseEvent) => void;
   onPrevVariation?: (e: React.MouseEvent) => void;
+  variationLocked?: boolean;
   onInfoClick?: (e: React.MouseEvent) => void;
   infoActive?: boolean;
 }
@@ -104,6 +105,7 @@ export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
   variationTotal,
   onNextVariation,
   onPrevVariation,
+  variationLocked = false,
   onInfoClick,
   infoActive = false
 }) => {
@@ -153,36 +155,26 @@ export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
   // Check if nut should be thick (if showing fret 1 at the top)
   const isNutVisible = startFret === 1;
 
-
-
-  // Play chord (strum) when clicking the diagram
   const handlePlayChord = async (e: React.MouseEvent) => {
-    // Ignore clicks on action buttons
     if ((e.target as HTMLElement).closest('button')) return;
 
     const engine = AudioEngine.getInstance();
     await engine.ensureContext();
 
     let strumDelay = 0;
-    // Iterate from highest string index (lowest pitch in tuning, usually) 
-    // Wait, tuning.strings are from highest to lowest? 
-    // Usually tuning.strings is low pitch to high pitch (e.g. E2, A2, D3, G3, B3, E4)
-    // We want to strum from lowest pitch to highest pitch.
     for (let i = 0; i < numStrings; i++) {
       const fret = frets[i];
-      if (fret !== -1) {
-        // String is not muted
-        const midi = tuning.strings[i] + fret;
-        engine.playMidi(midi, 2.0, strumDelay);
-        strumDelay += 0.035; // 35ms stagger for a natural strum
-      }
+      if (fret === -1) continue;
+
+      engine.playMidi(tuning.strings[i] + fret, 2.0, strumDelay);
+      strumDelay += 0.035;
     }
   };
 
   return (
-    <div 
+    <div
       onClick={handlePlayChord}
-      className={compact 
+      className={compact
       ? "bg-transparent text-black w-full flex flex-col items-center relative select-none p-1 cursor-pointer hover:bg-gray-100 transition-colors rounded" 
       : "bg-[#ece9d8] text-black border-2 border-white border-r-[#808080] border-bottom-[#808080] shadow-sm p-4 w-[200px] flex flex-col items-center relative select-none cursor-pointer hover:bg-[#e4dfc9] transition-colors"
     }>
@@ -412,25 +404,33 @@ export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
           Notas: {voicing.notes.filter(n => n !== 'X').join(', ')}
         </div>
         
-        {variationTotal && variationTotal > 1 && variationCurrentIndex !== undefined && onNextVariation && onPrevVariation && (
+        {variationTotal && variationTotal > 1 && variationCurrentIndex !== undefined && (variationLocked || (onNextVariation && onPrevVariation)) && (
           <div className="flex items-center justify-between mt-2 pt-1 border-t border-[#ece9d8] bg-[#f5f5f5] px-1 rounded">
-            <button 
-              onClick={onPrevVariation}
-              className="px-2 py-0.5 text-[#0058e6] hover:bg-[#e0e0e0] font-bold text-[10px] rounded"
-              title="Variação Anterior"
-            >
-              &lt;
-            </button>
-            <span className="text-[9px] font-bold text-gray-700">
+            {variationLocked ? (
+              <span className="w-6" />
+            ) : (
+              <button
+                onClick={onPrevVariation}
+                className="px-2 py-0.5 text-[#0058e6] hover:bg-[#e0e0e0] font-bold text-[10px] rounded"
+                title="Variação Anterior"
+              >
+                &lt;
+              </button>
+            )}
+            <span className={`text-[9px] font-bold ${variationLocked ? 'text-[#cc3300]' : 'text-gray-700'}`}>
               {variationCurrentIndex + 1} / {variationTotal}
             </span>
-            <button 
-              onClick={onNextVariation}
-              className="px-2 py-0.5 text-[#0058e6] hover:bg-[#e0e0e0] font-bold text-[10px] rounded"
-              title="Próxima Variação"
-            >
-              &gt;
-            </button>
+            {variationLocked ? (
+              <span className="w-6" />
+            ) : (
+              <button
+                onClick={onNextVariation}
+                className="px-2 py-0.5 text-[#0058e6] hover:bg-[#e0e0e0] font-bold text-[10px] rounded"
+                title="Próxima Variação"
+              >
+                &gt;
+              </button>
+            )}
           </div>
         )}
       </div>

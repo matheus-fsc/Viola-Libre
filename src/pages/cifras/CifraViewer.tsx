@@ -1,62 +1,27 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { FileText, Eye, Heart } from 'lucide-react';
-import { getCifra, incrementView, favoriteCifra, updateDifficulty, type CifraDetail } from '../../services/api';
-import { buildChord, calculateVoicings, noteNameToPitchClass } from '../../engine/chordCalculator';
-import { PRESET_INSTRUMENTS, NOTE_NAMES_SHARP, NOTE_NAMES_FLAT } from '../../engine/tunings';
+import { FileText, Eye, Heart, Pin, Save } from 'lucide-react';
+import {
+  getCifra, incrementView, favoriteCifra, updateDifficulty, type CifraDetail,
+  saveSequencia, loadSequencia, updateSequencia, deleteSequencia,
+  addRecentSequencia, removeRecentSequencia, getRecentSequencias,
+  type SequenciaData, type RecentSequencia,
+} from '../../services/api';
+import type { Voicing } from '../../engine/types';
+import { buildChord, calculateVoicings, noteNameToPitchClass, parseChordString, transposeChordString } from '../../engine/chordCalculator';
+import { PRESET_INSTRUMENTS } from '../../engine/tunings';
 import { AudioEngine } from '../../engine/AudioEngine';
 import { FretboardDiagram } from '../../components/FretboardDiagram';
 import '../../components/Cifras.css';
 
-function parseChordString(chordStr: string) {
-  let root = '';
-  let suffix = '';
-  let bass = '';
 
-  const parts = chordStr.split('/');
-  let mainChord = parts[0].trim();
-  
-  for (let i = 1; i < parts.length; i++) {
-    const part = parts[i].trim();
-    if (/^\d/.test(part)) {
-      mainChord += '/' + part;
-    } else {
-      bass = part;
-    }
-  }
-
-  if (mainChord.length >= 2 && (mainChord[1] === '#' || mainChord[1] === 'b')) {
-    root = mainChord.slice(0, 2);
-    suffix = mainChord.slice(2);
-  } else if (mainChord.length >= 1) {
-    root = mainChord.slice(0, 1);
-    suffix = mainChord.slice(1);
-  }
-
-  return { root, suffix, bass };
+interface VoicingFilter {
+  proximity: boolean;
+  maxNotes: boolean;
+  muteFilter: 'any' | 'with_mute' | 'no_mute';
+  prioritizeEasy: boolean;
 }
-
-function transposeChordString(chordStr: string, semitones: number, preferFlats: boolean): string {
-  const { root, suffix, bass } = parseChordString(chordStr);
-  if (!root) return chordStr;
-  
-  try {
-    const rootPc = noteNameToPitchClass(root);
-    const transposedRootPc = (rootPc + semitones + 120) % 12;
-    const transposedRoot = preferFlats ? NOTE_NAMES_FLAT[transposedRootPc] : NOTE_NAMES_SHARP[transposedRootPc];
-    
-    let transposedBass = '';
-    if (bass) {
-      const bassPc = noteNameToPitchClass(bass);
-      const transposedBassPc = (bassPc + semitones + 120) % 12;
-      transposedBass = preferFlats ? NOTE_NAMES_FLAT[transposedBassPc] : NOTE_NAMES_SHARP[transposedBassPc];
-    }
-    
-    return transposedRoot + suffix + (transposedBass ? '/' + transposedBass : '');
-  } catch {
-    return chordStr;
-  }
-}
+const DEFAULT_FILTER: VoicingFilter = { proximity: false, maxNotes: false, muteFilter: 'any', prioritizeEasy: false };
 
 function isChordDiatonic(chordName: string, songKey: string): boolean {
   if (!songKey || !chordName) return false;
@@ -109,24 +74,36 @@ export const CifraViewer: React.FC = () => {
   const [variationIndices, setVariationIndices] = useState<Record<string, number>>({});
   const [favoriteChords, setFavoriteChords] = useState<Record<string, boolean>>({});
   const [infoPopupChord, setInfoPopupChord] = useState<string | null>(null);
+  const [voicingFilter, setVoicingFilter] = useState<VoicingFilter>(DEFAULT_FILTER);
+  const [filterPopupOpen, setFilterPopupOpen] = useState(false);
+  const [lockedVariations, setLockedVariations] = useState<Record<string, number>>({});
+  const [excludedFromFilter, setExcludedFromFilter] = useState<Record<string, true>>({});
+
+  // Sequence save/load states
+  const [seqModalOpen, setSeqModalOpen] = useState<'save' | 'load' | null>(null);
+  const [savedHash, setSavedHash] = useState<string | null>(null);
+  const [loadHashInput, setLoadHashInput] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [isLoadingSeq, setIsLoadingSeq] = useState(false);
+  const [seqError, setSeqError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [recentSeqs, setRecentSeqs] = useState<RecentSequencia[]>(() => getRecentSequencias());
 
   // Instrument and Tuning states
   const [selectedInstId, setSelectedInstId] = useState<string>(PRESET_INSTRUMENTS[0].id);
   const [selectedTuningId, setSelectedTuningId] = useState<string>(PRESET_INSTRUMENTS[0].defaultTuningId || PRESET_INSTRUMENTS[0].tunings[0].id);
 
-  // Synchronize AudioEngine with the selected instrument
   useEffect(() => {
     const engine = AudioEngine.getInstance();
     const voices = AudioEngine.getAvailableVoices();
-    
-    // Default mapping: 'viola' -> 'violao-aco' (Steel String), 'violao' -> 'violao-nylon'
+
     let targetVoiceId = 'violao-nylon';
     if (selectedInstId === 'viola') {
       targetVoiceId = 'violao-aco';
     } else if (selectedInstId === 'piano') {
       targetVoiceId = 'piano';
     }
-    
+
     const voice = voices.find(v => v.id === targetVoiceId);
     if (voice) {
       engine.setVoice(voice);
@@ -135,6 +112,7 @@ export const CifraViewer: React.FC = () => {
 
   useEffect(() => {
     if (artistSlug && songSlug) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoading(true);
       setTransposeOffset(0);
       getCifra(artistSlug, songSlug).then((data) => {
@@ -187,6 +165,91 @@ export const CifraViewer: React.FC = () => {
     }
   };
 
+  const buildSeqData = (): SequenciaData => ({
+    artistSlug: artistSlug || '',
+    songSlug: songSlug || '',
+    songTitle: cifra?.title || '',
+    transposeOffset,
+    selectedInstId,
+    selectedTuningId,
+    voicingFilter,
+    variationIndices,
+    lockedVariations,
+    excludedFromFilter,
+  });
+
+  const refreshRecent = () => setRecentSeqs(getRecentSequencias());
+
+  const handleSaveSeq = async (forceNew = false) => {
+    if (!cifra) return;
+    setIsSaving(true);
+    setSeqError(null);
+    try {
+      const data = buildSeqData();
+      let hash: string;
+      if (savedHash && !forceNew) {
+        await updateSequencia(savedHash, data);
+        hash = savedHash;
+      } else {
+        const result = await saveSequencia(data);
+        hash = result.hash;
+        setSavedHash(hash);
+      }
+      addRecentSequencia({ hash, title: cifra.title, artistSlug: artistSlug || '', savedAt: new Date().toISOString() });
+      refreshRecent();
+    } catch (e) {
+      setSeqError('Erro ao salvar. Tente novamente.');
+      console.error(e);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleLoadSeq = async (hash: string) => {
+    if (!hash) return;
+    setIsLoadingSeq(true);
+    setSeqError(null);
+    try {
+      const result = await loadSequencia(hash);
+      const d = result.data;
+      setTransposeOffset(d.transposeOffset);
+      setSelectedInstId(d.selectedInstId);
+      setSelectedTuningId(d.selectedTuningId);
+      setVoicingFilter(d.voicingFilter);
+      setVariationIndices(d.variationIndices);
+      setLockedVariations(d.lockedVariations);
+      setExcludedFromFilter(d.excludedFromFilter as Record<string, true>);
+      setSavedHash(hash);
+      setSeqModalOpen(null);
+      setLoadHashInput('');
+    } catch (e) {
+      setSeqError('Hash não encontrado ou inválido.');
+      console.error(e);
+    } finally {
+      setIsLoadingSeq(false);
+    }
+  };
+
+  const handleDeleteSeq = async (hash: string) => {
+    try {
+      await deleteSequencia(hash);
+      removeRecentSequencia(hash);
+      if (savedHash === hash) setSavedHash(null);
+      refreshRecent();
+    } catch (e) {
+      setSeqError('Erro ao deletar.');
+      console.error(e);
+    }
+  };
+
+  const handleCopyHash = () => {
+    if (!savedHash) return;
+    navigator.clipboard.writeText(savedHash).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(console.error);
+  };
+
   // Derive transformed HTML based on transpose offset
   const displayHtml = useMemo(() => {
     if (!cifra) return '';
@@ -203,9 +266,143 @@ export const CifraViewer: React.FC = () => {
     return originalChords.map(c => transposeChordString(c, transposeOffset, false));
   }, [originalChords, transposeOffset]);
 
-  // Derived Instrument and Tuning
-  const currentInst = PRESET_INSTRUMENTS.find(i => i.id === selectedInstId) || PRESET_INSTRUMENTS[0];
-  const currentTuning = currentInst.tunings.find(t => t.id === selectedTuningId) || currentInst.tunings[0];
+  const currentInst = useMemo(
+    () => PRESET_INSTRUMENTS.find(i => i.id === selectedInstId) || PRESET_INSTRUMENTS[0],
+    [selectedInstId]
+  );
+  const currentTuning = useMemo(
+    () => currentInst.tunings.find(t => t.id === selectedTuningId) || currentInst.tunings[0],
+    [currentInst, selectedTuningId]
+  );
+
+  // Pré-computa todos os voicings (fora do .map para reutilizar no proximity sort)
+  const allVoicings = useMemo(() => {
+    return currentChords.map(chordName => {
+      const { root, suffix, bass } = parseChordString(chordName);
+      if (!root) return [] as Voicing[];
+      try {
+        const chordObj = buildChord(root, suffix, bass || undefined);
+        return calculateVoicings(currentTuning, chordObj);
+      } catch { return [] as Voicing[]; }
+    });
+  }, [currentChords, currentTuning]);
+
+  const displayedVoicings = useMemo(() => {
+    const { proximity, maxNotes, muteFilter, prioritizeEasy } = voicingFilter;
+    const isDefault = !proximity && !maxNotes && muteFilter === 'any' && !prioritizeEasy;
+    if (isDefault && Object.keys(excludedFromFilter).length === 0) return allVoicings;
+
+    const countNotes = (v: Voicing) => v.frets.filter(f => f >= 0).length;
+
+    const hasInternalMute = (v: Voicing): boolean => {
+      let first = -1, last = -1;
+      for (let s = 0; s < v.frets.length; s++) {
+        if (v.frets[s] >= 0) { if (first === -1) first = s; last = s; }
+      }
+      if (first === -1 || first === last) return false;
+      for (let s = first + 1; s < last; s++) { if (v.frets[s] < 0) return true; }
+      return false;
+    };
+
+    // Filtro hard: remove voicings com barra, traste alto (>5) ou abafamento interno
+    // Fallback para array original se nenhum voicing passar
+    const filterEasy = (arr: Voicing[]): Voicing[] => {
+      if (!prioritizeEasy) return arr;
+      const easy = arr.filter(v => {
+        if (v.barre) return false;
+        const fretted = v.frets.filter(f => f > 0);
+        return (fretted.length === 0 || Math.max(...fretted) <= 5) && !hasInternalMute(v);
+      });
+      return easy.length > 0 ? easy : arr;
+    };
+
+    // Acordes travados ou excluídos ficam com allVoicings (sem filtro aplicado)
+    const isPassthrough = (i: number) =>
+      lockedVariations[currentChords[i]] !== undefined || currentChords[i] in excludedFromFilter;
+
+    // Excluídos também são pulados na cadeia de proximidade
+    const findPrevRef = (i: number, result: Voicing[][]): { arr: Voicing[]; name: string } | null => {
+      for (let j = i - 1; j >= 0; j--) {
+        if (!(currentChords[j] in excludedFromFilter) && result[j].length > 0) {
+          return { arr: result[j], name: currentChords[j] };
+        }
+      }
+      return null;
+    };
+
+    const getEffIdx = (chordName: string, arr: Voicing[]): number =>
+      (lockedVariations[chordName] ?? variationIndices[chordName] ?? 0) % arr.length;
+
+    const compareStatic = (a: Voicing, b: Voicing): number => {
+      if (maxNotes) { const d = countNotes(b) - countNotes(a); if (d !== 0) return d; }
+      if (muteFilter === 'with_mute') { const d = Number(hasInternalMute(b)) - Number(hasInternalMute(a)); if (d !== 0) return d; }
+      if (muteFilter === 'no_mute')   { const d = Number(hasInternalMute(a)) - Number(hasInternalMute(b)); if (d !== 0) return d; }
+      return 0;
+    };
+
+    const compareWithProximity = (a: Voicing, b: Voicing, ref: Voicing): number => {
+      const refAct = ref.frets.filter(f => f > 0);
+      const refAvg = refAct.length ? refAct.reduce((x, y) => x + y, 0) / refAct.length : 0;
+      let sharedA = 0, sharedB = 0;
+      for (let s = 0; s < ref.frets.length; s++) {
+        if (ref.frets[s] > 0 && a.frets[s] === ref.frets[s]) sharedA++;
+        if (ref.frets[s] > 0 && b.frets[s] === ref.frets[s]) sharedB++;
+      }
+      if (sharedA !== sharedB) return sharedB - sharedA;
+      const aAct = a.frets.filter(f => f > 0);
+      const bAct = b.frets.filter(f => f > 0);
+      const aAvg = aAct.length ? aAct.reduce((x, y) => x + y, 0) / aAct.length : 0;
+      const bAvg = bAct.length ? bAct.reduce((x, y) => x + y, 0) / bAct.length : 0;
+      const proxDiff = Math.abs(aAvg - refAvg) - Math.abs(bAvg - refAvg);
+      if (proxDiff !== 0) return proxDiff;
+      return compareStatic(a, b);
+    };
+
+    if (proximity && maxNotes) {
+      const result: Voicing[][] = [];
+      for (let i = 0; i < allVoicings.length; i++) {
+        const raw = allVoicings[i];
+        if (raw.length === 0 || isPassthrough(i)) { result.push(raw); continue; }
+
+        const base = filterEasy(raw);
+        const prevRef = findPrevRef(i, result);
+        const proxSorted = prevRef
+          ? [...base].sort((a, b) => compareWithProximity(a, b, prevRef.arr[getEffIdx(prevRef.name, prevRef.arr)]))
+          : [...base].sort(compareStatic);
+        const notesSorted = [...base].sort((a, b) => {
+          const d = countNotes(b) - countNotes(a); if (d !== 0) return d;
+          if (muteFilter === 'with_mute') { const md = Number(hasInternalMute(b)) - Number(hasInternalMute(a)); if (md !== 0) return md; }
+          if (muteFilter === 'no_mute')   { const md = Number(hasInternalMute(a)) - Number(hasInternalMute(b)); if (md !== 0) return md; }
+          return 0;
+        });
+        result.push([...proxSorted, ...notesSorted]);
+      }
+      return result;
+    }
+
+    if (proximity) {
+      const result: Voicing[][] = [];
+      for (let i = 0; i < allVoicings.length; i++) {
+        const raw = allVoicings[i];
+        if (raw.length === 0 || isPassthrough(i)) { result.push(raw); continue; }
+
+        const base = filterEasy(raw);
+        const prevRef = findPrevRef(i, result);
+        result.push(prevRef
+          ? [...base].sort((a, b) => compareWithProximity(a, b, prevRef.arr[getEffIdx(prevRef.name, prevRef.arr)]))
+          : [...base].sort(compareStatic)
+        );
+      }
+      return result;
+    }
+
+    return allVoicings.map((raw, i) => {
+      if (raw.length === 0 || isPassthrough(i)) return raw;
+      return [...filterEasy(raw)].sort(compareStatic);
+    });
+  }, [voicingFilter, allVoicings, variationIndices, currentChords, lockedVariations, excludedFromFilter]);
+
+  const isFilterActive = voicingFilter.proximity || voicingFilter.maxNotes || voicingFilter.muteFilter !== 'any' || voicingFilter.prioritizeEasy;
 
   if (loading) {
     return (
@@ -256,6 +453,172 @@ export const CifraViewer: React.FC = () => {
                 </div>
               )}
            </div>
+        </div>
+      )}
+
+      {/* Sequence Modal */}
+      {seqModalOpen && (
+        <div className="absolute inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-[#ece9d8] bevel-out shadow-xl w-80 select-none">
+            <div className="winxp-gradient-blue text-white px-2 py-1 flex items-center justify-between font-bold text-sm">
+              <div className="flex items-center gap-1.5">
+                <Save size={13} />
+                <span>Sequência de Acordes</span>
+              </div>
+              <button
+                onClick={() => { setSeqModalOpen(null); setSeqError(null); }}
+                className="bg-red-600 border border-white border-r-gray-600 border-b-gray-600 px-1.5 text-white font-bold leading-tight"
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Tabs */}
+            <div className="flex border-b border-gray-400">
+              <button
+                onClick={() => { setSeqModalOpen('save'); setSeqError(null); }}
+                className={`px-3 py-1 text-xs font-bold border-r border-gray-400 ${seqModalOpen === 'save' ? 'bg-[#ece9d8]' : 'bg-[#d4d0c8] hover:bg-[#e8e4d8]'}`}
+              >
+                Salvar
+              </button>
+              <button
+                onClick={() => { setSeqModalOpen('load'); setSeqError(null); }}
+                className={`px-3 py-1 text-xs font-bold ${seqModalOpen === 'load' ? 'bg-[#ece9d8]' : 'bg-[#d4d0c8] hover:bg-[#e8e4d8]'}`}
+              >
+                Carregar
+              </button>
+            </div>
+
+            <div className="p-3 text-xs flex flex-col gap-2">
+              {seqError && (
+                <div className="bg-red-100 border border-red-400 text-red-700 px-2 py-1 text-[10px]">{seqError}</div>
+              )}
+
+              {seqModalOpen === 'save' && (
+                <>
+                  {savedHash ? (
+                    <>
+                      <p className="text-gray-600 text-[10px]">Sequência salva. Guarde o hash para editar depois:</p>
+                      <div className="flex gap-1">
+                        <input
+                          readOnly
+                          value={savedHash}
+                          className="bevel-in bg-white px-2 py-0.5 text-[10px] font-mono flex-1 min-w-0 text-gray-800"
+                        />
+                        <button
+                          onClick={handleCopyHash}
+                          className="bevel-out bg-[#ece9d8] border border-gray-400 px-2 py-0.5 font-bold hover:bg-white whitespace-nowrap text-[10px]"
+                        >
+                          {copied ? '✓ Copiado' : 'Copiar'}
+                        </button>
+                      </div>
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => handleSaveSeq(false)}
+                          disabled={isSaving}
+                          className="bevel-out bg-[var(--color-winxp-panel)] border border-gray-400 px-3 py-0.5 font-bold hover:bg-white flex-1 disabled:opacity-50 text-[10px]"
+                        >
+                          {isSaving ? 'Salvando...' : 'Atualizar'}
+                        </button>
+                        <button
+                          onClick={() => handleSaveSeq(true)}
+                          disabled={isSaving}
+                          className="bevel-out bg-[#ece9d8] border border-gray-400 px-3 py-0.5 font-bold hover:bg-white flex-1 disabled:opacity-50 text-[10px]"
+                        >
+                          Salvar novo
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-gray-600 text-[10px]">Salva instrumento, tom, filtros e variações fixadas. Um hash único será gerado.</p>
+                      <button
+                        onClick={() => handleSaveSeq(false)}
+                        disabled={isSaving}
+                        className="bevel-out bg-[var(--color-winxp-panel)] border border-gray-400 px-3 py-1 font-bold hover:bg-white w-full disabled:opacity-50 text-[10px]"
+                      >
+                        {isSaving ? 'Salvando...' : 'Salvar Sequência'}
+                      </button>
+                    </>
+                  )}
+
+                  {recentSeqs.length > 0 && (
+                    <div className="border-t border-gray-400 pt-2">
+                      <p className="text-[10px] font-bold text-gray-500 mb-1">Recentes:</p>
+                      <div className="flex flex-col gap-0.5 max-h-28 overflow-y-auto retro-scrollbar">
+                        {recentSeqs.map(seq => (
+                          <div key={seq.hash} className="flex items-center gap-1 bg-white border border-gray-200 px-1 py-0.5">
+                            <span className="flex-1 text-[10px] truncate">
+                              {seq.title} <span className="text-gray-400 font-mono">({seq.hash.slice(0, 8)}…)</span>
+                            </span>
+                            <button
+                              onClick={() => handleDeleteSeq(seq.hash)}
+                              className="text-[9px] text-red-500 hover:text-red-700 font-bold shrink-0 px-0.5"
+                              title="Deletar"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {seqModalOpen === 'load' && (
+                <>
+                  <p className="text-gray-600 text-[10px]">Digite o hash para carregar uma sequência salva:</p>
+                  <div className="flex gap-1">
+                    <input
+                      value={loadHashInput}
+                      onChange={e => setLoadHashInput(e.target.value.trim())}
+                      onKeyDown={e => e.key === 'Enter' && handleLoadSeq(loadHashInput)}
+                      placeholder="Cole o hash aqui..."
+                      className="bevel-in bg-white px-2 py-0.5 text-[10px] font-mono flex-1 min-w-0 outline-none"
+                    />
+                    <button
+                      onClick={() => handleLoadSeq(loadHashInput)}
+                      disabled={!loadHashInput || isLoadingSeq}
+                      className="bevel-out bg-[var(--color-winxp-panel)] border border-gray-400 px-2 py-0.5 font-bold hover:bg-white disabled:opacity-50 whitespace-nowrap text-[10px]"
+                    >
+                      {isLoadingSeq ? '...' : 'Carregar'}
+                    </button>
+                  </div>
+
+                  {recentSeqs.length > 0 && (
+                    <div className="border-t border-gray-400 pt-2">
+                      <p className="text-[10px] font-bold text-gray-500 mb-1">Recentes:</p>
+                      <div className="flex flex-col gap-0.5 max-h-36 overflow-y-auto retro-scrollbar">
+                        {recentSeqs.map(seq => (
+                          <div key={seq.hash} className="flex items-center gap-1 bg-white border border-gray-200 px-1 py-0.5">
+                            <div className="flex-1 min-w-0">
+                              <div className="text-[10px] truncate font-bold">{seq.title}</div>
+                              <div className="text-[9px] text-gray-400 font-mono truncate">{seq.hash}</div>
+                            </div>
+                            <button
+                              onClick={() => handleLoadSeq(seq.hash)}
+                              disabled={isLoadingSeq}
+                              className="text-[9px] font-bold bevel-out bg-[#ece9d8] border border-gray-400 px-1.5 py-0 hover:bg-white shrink-0 disabled:opacity-50"
+                            >
+                              Usar
+                            </button>
+                            <button
+                              onClick={() => handleDeleteSeq(seq.hash)}
+                              className="text-[9px] text-red-500 hover:text-red-700 font-bold shrink-0 px-0.5"
+                              title="Deletar"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
@@ -365,13 +728,22 @@ export const CifraViewer: React.FC = () => {
               </button>
             </div>
             
-            <button 
+            <button
               onClick={handleFavorite}
               disabled={isFavoriting}
               className="bevel-out bg-[var(--color-winxp-panel)] px-3 py-1 text-xs font-bold flex items-center gap-1 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white text-black"
             >
-              <Heart size={14} className={`${isFavoriting ? 'opacity-50' : ''} ${cifra.favorited && cifra.favorited > 0 ? "fill-red-500 text-red-500" : "text-gray-600"}`} /> 
+              <Heart size={14} className={`${isFavoriting ? 'opacity-50' : ''} ${cifra.favorited && cifra.favorited > 0 ? "fill-red-500 text-red-500" : "text-gray-600"}`} />
               <span className={isFavoriting ? 'opacity-50' : ''}>Favoritar</span>
+            </button>
+
+            <button
+              onClick={() => setSeqModalOpen('save')}
+              className={`bevel-out px-3 py-1 text-xs font-bold flex items-center gap-1 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white text-black ${savedHash ? 'bg-[#d4edda] border border-green-500' : 'bg-[var(--color-winxp-panel)]'}`}
+              title="Salvar ou carregar sequência de acordes"
+            >
+              <Save size={13} className={savedHash ? 'text-green-700' : 'text-gray-600'} />
+              <span>{savedHash ? 'Sequência ✓' : 'Sequência'}</span>
             </button>
           </div>
         </div>
@@ -383,43 +755,151 @@ export const CifraViewer: React.FC = () => {
               <span className="text-xs font-bold text-[#002fa7] flex items-center gap-1">
                 Acordes ({currentChords.length}) - {currentTuning.name}
               </span>
-              <button className="text-[10px] font-bold border border-gray-400 px-2 py-0.5 bg-[#ece9d8] hover:bg-white active:bg-gray-200">
-                {isCarouselExpanded ? "Ocultar Diagramas" : "Expandir Visualização"}
-              </button>
+              <div className="flex gap-1 items-center relative" onClick={e => e.stopPropagation()}>
+                {/* Reset rápido — aparece só quando há filtro ativo */}
+                {isFilterActive && (
+                  <button
+                    onClick={() => { setVoicingFilter(DEFAULT_FILTER); setVariationIndices({}); setLockedVariations({}); setExcludedFromFilter({}); }}
+                    className="text-[10px] font-bold border border-gray-400 px-2 py-0.5 bg-[#ece9d8] hover:bg-white text-[#cc3300]"
+                    title="Restaurar todos os filtros ao padrão"
+                  >
+                    Restaurar
+                  </button>
+                )}
+
+                {/* Botão de filtro */}
+                <button
+                  onClick={() => setFilterPopupOpen(p => !p)}
+                  className={`text-[10px] font-bold border px-2 py-0.5 ${isFilterActive ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#ece9d8] text-black border-gray-400 hover:bg-white'}`}
+                  title="Filtrar variações de acordes"
+                >
+                  {isFilterActive ? 'Filtros ▼' : 'Filtros ▽'}
+                </button>
+
+                {/* Overlay para fechar ao clicar fora */}
+                {filterPopupOpen && (
+                  <div className="fixed inset-0 z-30" onClick={() => setFilterPopupOpen(false)} />
+                )}
+
+                {/* Popup de filtros */}
+                {filterPopupOpen && (
+                  <div className="absolute right-0 top-full mt-1 z-40 bg-[#ece9d8] bevel-out shadow-lg w-60 text-xs select-none">
+                    <div className="winxp-gradient-blue text-white px-2 py-0.5 flex items-center justify-between font-bold">
+                      <span>Filtrar Variações</span>
+                      <button
+                        onClick={() => setFilterPopupOpen(false)}
+                        className="bg-red-600 border border-white border-r-gray-600 border-b-gray-600 px-1.5 text-white font-bold leading-tight"
+                      >
+                        ×
+                      </button>
+                    </div>
+
+                    <div className="p-2">
+                      {/* Ordenação — checkboxes combinávies */}
+                      <p className="font-bold text-gray-600 uppercase tracking-wider text-[9px] mb-1">Ordenação (combinável)</p>
+                      <label className="flex items-center gap-2 py-0.5 px-1 cursor-pointer hover:bg-white">
+                        <input type="checkbox" checked={voicingFilter.proximity} className="accent-[#316ac5]"
+                          onChange={e => { setVoicingFilter(f => ({ ...f, proximity: e.target.checked })); setVariationIndices({}); }} />
+                        ★ Acordes próximos
+                      </label>
+                      <label className="flex items-center gap-2 py-0.5 px-1 cursor-pointer hover:bg-white">
+                        <input type="checkbox" checked={voicingFilter.maxNotes} className="accent-[#316ac5]"
+                          onChange={e => { setVoicingFilter(f => ({ ...f, maxNotes: e.target.checked })); setVariationIndices({}); }} />
+                        ♪ Mais notas soando
+                      </label>
+
+                      {/* Abafamento — radio exclusivo */}
+                      <p className="font-bold text-gray-600 uppercase tracking-wider text-[9px] mt-2 mb-1">Abafamento Interno</p>
+                      {([
+                        ['any',       'Qualquer'],
+                        ['with_mute', '≈ Com abafamento'],
+                        ['no_mute',   '○ Sem abafamento'],
+                      ] as const).map(([val, label]) => (
+                        <label key={val} className="flex items-center gap-2 py-0.5 px-1 cursor-pointer hover:bg-white">
+                          <input type="radio" name="muteFilter" className="accent-[#316ac5]"
+                            checked={voicingFilter.muteFilter === val}
+                            onChange={() => { setVoicingFilter(f => ({ ...f, muteFilter: val })); setVariationIndices({}); }} />
+                          {label}
+                        </label>
+                      ))}
+
+                      {/* Fáceis — checkbox */}
+                      <div className="border-t border-gray-400 mt-2 pt-2">
+                        <label className="flex items-center gap-2 py-0.5 px-1 cursor-pointer hover:bg-white">
+                          <input type="checkbox" checked={voicingFilter.prioritizeEasy} className="accent-[#316ac5]"
+                            onChange={e => { setVoicingFilter(f => ({ ...f, prioritizeEasy: e.target.checked })); setVariationIndices({}); }} />
+                          Priorizar acordes fáceis
+                        </label>
+                        <p className="text-gray-400 px-1 text-[9px] leading-tight mt-0.5">Exibe só acordes sem barra, sem abafamento interno e até traste 5</p>
+                      </div>
+
+                      <div className="border-t border-gray-400 mt-2 pt-2 flex justify-end">
+                        <button
+                          onClick={() => { setVoicingFilter(DEFAULT_FILTER); setVariationIndices({}); setLockedVariations({}); setExcludedFromFilter({}); }}
+                          className="bevel-out bg-[#ece9d8] border border-gray-400 px-2 py-0.5 hover:bg-white font-bold text-[10px]"
+                        >
+                          Restaurar padrão
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <button className="text-[10px] font-bold border border-gray-400 px-2 py-0.5 bg-[#ece9d8] hover:bg-white active:bg-gray-200" onClick={() => setIsCarouselExpanded(!isCarouselExpanded)}>
+                  {isCarouselExpanded ? "Ocultar" : "Expandir"}
+                </button>
+              </div>
             </div>
             
             <div className={`flex gap-2 overflow-x-auto retro-scrollbar py-2 ${isCarouselExpanded ? 'items-start' : 'items-center'}`}>
               {currentChords.map((chordName, idx) => {
-                const { root, suffix, bass } = parseChordString(chordName);
-                let voicings: any[] = [];
-                if (root) {
-                  try {
-                    const chordObj = buildChord(root, suffix, bass || undefined);
-                    voicings = calculateVoicings(currentTuning, chordObj);
-                  } catch (e) {
-                    // fallback
-                  }
-                }
+                const voicings = displayedVoicings[idx] ?? [];
+                const isChordLocked = chordName in lockedVariations;
 
-                const currentVarIdx = variationIndices[chordName] || 0;
-                const bestVoicing = voicings.length > 0 ? voicings[currentVarIdx % voicings.length] : null;
+                // Índice efetivo: respeita cadeado
+                const rawIdx = variationIndices[chordName] ?? 0;
+                const effectiveIdx = isChordLocked
+                  ? (lockedVariations[chordName] ?? 0) % Math.max(voicings.length, 1)
+                  : rawIdx % Math.max(voicings.length, 1);
+
+                const bestVoicing = voicings.length > 0 ? voicings[effectiveIdx] : null;
 
                 const handleNextVar = (e: React.MouseEvent) => {
                   e.stopPropagation();
-                  setVariationIndices(prev => ({ ...prev, [chordName]: (prev[chordName] || 0) + 1 }));
+                  if (isChordLocked) return;
+                  setVariationIndices(prev => ({ ...prev, [chordName]: rawIdx + 1 }));
                 };
-                
+
                 const handlePrevVar = (e: React.MouseEvent) => {
                   e.stopPropagation();
-                  setVariationIndices(prev => {
-                    const current = prev[chordName] || 0;
-                    return { ...prev, [chordName]: current === 0 ? voicings.length - 1 : current - 1 };
+                  if (isChordLocked) return;
+                  setVariationIndices(prev => ({
+                    ...prev,
+                    [chordName]: rawIdx === 0 ? voicings.length - 1 : rawIdx - 1,
+                  }));
+                };
+
+                const isFav = !!favoriteChords[chordName];
+                const toggleFav = () => setFavoriteChords(prev => ({ ...prev, [chordName]: !prev[chordName] }));
+
+                const isChordExcluded = chordName in excludedFromFilter;
+
+                const toggleLock = () => {
+                  setLockedVariations(prev => {
+                    const next = { ...prev };
+                    if (isChordLocked) delete next[chordName];
+                    else next[chordName] = effectiveIdx;
+                    return next;
                   });
                 };
-                
-                const isFav = !!favoriteChords[chordName];
-                const toggleFav = () => {
-                  setFavoriteChords(prev => ({ ...prev, [chordName]: !prev[chordName] }));
+
+                const toggleExclude = () => {
+                  setExcludedFromFilter(prev => {
+                    const next = { ...prev } as Record<string, true>;
+                    if (isChordExcluded) delete next[chordName];
+                    else next[chordName] = true;
+                    return next;
+                  });
                 };
 
                 return (
@@ -434,10 +914,11 @@ export const CifraViewer: React.FC = () => {
                         onToggleFavorite={toggleFav}
                         isInCifra={false}
                         useFlats={false}
-                        variationCurrentIndex={currentVarIdx % voicings.length}
+                        variationCurrentIndex={effectiveIdx}
                         variationTotal={voicings.length}
                         onNextVariation={handleNextVar}
                         onPrevVariation={handlePrevVar}
+                        variationLocked={isChordLocked}
                         onInfoClick={() => setInfoPopupChord(chordName)}
                         infoActive={infoPopupChord === chordName}
                       />
@@ -446,6 +927,33 @@ export const CifraViewer: React.FC = () => {
                         {chordName}
                       </div>
                     )}
+                    <div className="flex gap-0.5 mt-0.5">
+                      <button
+                        onClick={toggleLock}
+                        className={`flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0 border leading-tight ${
+                          isChordLocked
+                            ? 'bg-[#316ac5] text-white border-[#316ac5]'
+                            : 'bg-[#ece9d8] text-gray-500 border-gray-300 hover:bg-white'
+                        }`}
+                        title={isChordLocked ? 'Soltar variação fixada' : 'Fixar variação atual como âncora'}
+                      >
+                        <Pin size={9} className={isChordLocked ? 'fill-white' : ''} />
+                        {isChordLocked ? 'Fixado' : 'Fixar'}
+                      </button>
+                      {isFilterActive && (
+                        <button
+                          onClick={toggleExclude}
+                          className={`text-[9px] font-bold px-1.5 py-0 border leading-tight ${
+                            isChordExcluded
+                              ? 'bg-[#c06000] text-white border-[#c06000]'
+                              : 'bg-[#ece9d8] text-gray-500 border-gray-300 hover:bg-white'
+                          }`}
+                          title={isChordExcluded ? 'Reaplicar filtro neste acorde' : 'Usar ordem padrão neste acorde'}
+                        >
+                          {isChordExcluded ? 'Padrão' : 'Filtro'}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 );
               })}

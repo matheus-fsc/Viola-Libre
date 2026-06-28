@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import type { Tuning, Instrument } from '../engine/types';
 import { NOTE_NAMES_SHARP, NOTE_NAMES_FLAT, CHORD_FORMULAS } from '../engine/tunings';
 import { noteNameToPitchClass, midiToNoteName, shouldUseFlats } from '../engine/chordCalculator';
@@ -523,42 +523,32 @@ const playNoteSound = (frequency: number, durationSec: number = 0.4) => {
   try {
     if (!audioCtx) {
       audioCtx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-      console.debug('[playNoteSound] created audioCtx', { state: audioCtx.state });
     }
 
     const scheduleOsc = (ctx: AudioContext) => {
-      console.debug('[playNoteSound] scheduleOsc', { frequency, durationSec, state: ctx.state, now: ctx.currentTime });
       const osc = ctx.createOscillator();
       const gainNode = ctx.createGain();
-
       osc.type = 'triangle';
       osc.frequency.setValueAtTime(frequency, ctx.currentTime);
-
       const now = ctx.currentTime;
       gainNode.gain.setValueAtTime(0, now);
       gainNode.gain.linearRampToValueAtTime(0.3, now + 0.015);
       gainNode.gain.setValueAtTime(0.3, now + durationSec - 0.05);
       gainNode.gain.exponentialRampToValueAtTime(0.001, now + durationSec);
-
       osc.connect(gainNode);
       gainNode.connect(ctx.destination);
-
       const startTime = ctx.currentTime + 0.001;
       osc.start(startTime);
       osc.stop(startTime + durationSec);
     };
 
     if (audioCtx.state === 'suspended') {
-      console.debug('[playNoteSound] audioCtx suspended - resuming');
       audioCtx.resume().then(() => {
-        console.debug('[playNoteSound] audioCtx resumed', { state: audioCtx?.state, now: audioCtx?.currentTime });
         if (audioCtx) scheduleOsc(audioCtx as AudioContext);
-      }).catch((err) => {
-        console.warn('AudioContext resume failed:', err);
+      }).catch(() => {
         if (audioCtx) scheduleOsc(audioCtx as AudioContext);
       });
     } else {
-      console.debug('[playNoteSound] scheduling immediately', { state: audioCtx.state, now: audioCtx.currentTime });
       scheduleOsc(audioCtx as AudioContext);
     }
   } catch (err) {
@@ -620,6 +610,7 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
   const [sampleUrl, setSampleUrl] = useState<string | null>(null);
   const [sampleName, setSampleName] = useState<string | null>(null);
   const [playbackRate, setPlaybackRate] = useState<number>(1.0);
+  const [showSamplePlayer, setShowSamplePlayer] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const getBestPositionForMidi = (midi: number): { stringIdx: number, fret: number } => {
@@ -643,16 +634,12 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
 
   const ensureAudioContextActive = async (): Promise<AudioContext | null> => {
     try {
-      console.debug('[ensureAudioContextActive] called', { existing: !!audioCtx, state: audioCtx?.state });
       if (!audioCtx) {
         audioCtx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-        console.debug('[ensureAudioContextActive] created audioCtx', { state: audioCtx.state });
       }
       if (audioCtx.state === 'suspended') {
-        console.debug('[ensureAudioContextActive] resuming audioCtx');
         await audioCtx.resume();
       }
-      console.debug('[ensureAudioContextActive] result', { state: audioCtx.state, now: audioCtx.currentTime });
       return audioCtx;
     } catch (e) {
       console.warn("Could not resume AudioContext:", e);
@@ -690,15 +677,14 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
     setIsMinimized(false);
   };
 
-  // Sync state when tuning changes
-  const [prevTuning, setPrevTuning] = useState(selectedTuning);
-  if (selectedTuning !== prevTuning) {
-    setPrevTuning(selectedTuning);
+  useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect */
     setMelody(createDefaultMelody());
     setSelectedChords([]);
     setIsPlayingMelody(false);
     setSelectedNoteIdx(null);
-  }
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [selectedTuning]);
 
 
 
@@ -1004,8 +990,15 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
       
       {/* Box Header (XP style) */}
       <div className="bg-gradient-to-r from-[#0058e6] to-[#3a8bfb] text-white px-2 py-1 flex justify-between items-center font-bold text-sm select-none">
-        <span>Tirando de Ouvido (Análise de Tom)</span>
-        <span className="font-mono text-xs">Assistente Harmonico</span>
+        <span>Tirando de Ouvido</span>
+        <span className="font-mono text-xs opacity-80">Análise de Tom & Harmonia</span>
+      </div>
+
+      {/* Workflow hint */}
+      <div className="bg-[#fff9e6] border border-[#e0c060] px-3 py-1.5 font-mono text-[10px] text-gray-700 flex flex-wrap gap-x-4 gap-y-0.5 leading-relaxed select-none">
+        <span><strong className="text-[#0058e6]">① Clique notas no braço</strong> → detecção automática de notas</span>
+        <span><strong className="text-[#228b22]">② Tom sugerido aparece</strong> → clique para confirmar a escala</span>
+        <span><strong className="text-[#cc3300]">③ Veja os acordes</strong> que cabem naquele tom</span>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -1076,12 +1069,20 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
 
           </div>
 
-          {/* Audio Sample Player (Windows XP Style) */}
-          <div className="bg-[#d4d0c8] p-3 border border-[#808080] rounded shadow-inner font-mono text-xs flex flex-col gap-2.5">
-            <span className="font-bold text-gray-700 flex items-center gap-1.5 border-b border-dashed border-[#808080] pb-1.5">
-              📻 Reprodutor de Sample & Áudio de Referência (Ouvido)
-            </span>
-            
+          {/* Audio Sample Player (collapsible) */}
+          <div className="bg-[#d4d0c8] border border-[#808080] font-mono text-xs">
+            <button
+              onClick={() => setShowSamplePlayer(s => !s)}
+              className="w-full flex items-center justify-between px-3 py-2 hover:bg-[#c4c0b8] cursor-pointer select-none"
+            >
+              <span className="font-bold text-gray-700 flex items-center gap-1.5">
+                📻 Áudio de Referência / Sample
+                {sampleName && <span className="font-normal text-[10px] text-[#002fa7] truncate max-w-[160px]">— {sampleName}</span>}
+              </span>
+              <span className="text-gray-600 text-[10px]">{showSamplePlayer ? '▲ Fechar' : '▼ Abrir'}</span>
+            </button>
+
+            {showSamplePlayer && <div className="p-3 border-t border-[#808080] flex flex-col gap-2.5">
             <div className="flex flex-wrap items-center gap-3">
               {/* File Input */}
               <div className="flex flex-col gap-1">
@@ -1171,6 +1172,7 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
             <div className="text-[9px] text-gray-500 border-t border-dashed border-gray-400 pt-1.5 mt-1.5 leading-normal">
               💡 <strong>Dica de Ritmo (Baião):</strong> O tempo padrão de <em>"Anunciação"</em> é <strong>109 BPM</strong>. Músicos e softwares frequentemente utilizam contagem dobrada (<strong>195 BPM a 200 BPM</strong>) para loops de bateria rápidos ou para facilitar a escrita da subdivisão rápida do baião caipira.
             </div>
+            </div>}
           </div>
 
           {/* Visual Fretboard */}
@@ -1178,7 +1180,7 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
             <div className="min-w-[700px] bg-[#ece9d8] border border-[#808080] p-4 flex flex-col relative select-none">
               
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-1.5 text-[10px] font-mono text-gray-600 mb-2 font-bold w-full">
-                <span>Monte a melodia clicando nas notas do braço abaixo na sequência:</span>
+                <span>Clique as notas da música no braço (em qualquer ordem ou sequência):</span>
                 <div className="flex gap-1 shrink-0">
                   {!isEditorOpen && (
                     <button 
@@ -1387,8 +1389,9 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
 
           {/* Key Analysis Results */}
           <div className="bg-white border-2 border-[#808080] border-r-white border-bottom-white p-3 flex flex-col gap-2 font-mono text-xs flex-1">
-            <span className="font-bold text-[#002fa7] border-b border-dashed border-[#808080] pb-1.5">
-              Sugestão de Tom Compatível:
+            <span className="font-bold text-[#002fa7] border-b border-dashed border-[#808080] pb-1.5 flex items-center justify-between">
+              <span>Sugestão de Tom:</span>
+              <span className="font-normal text-[9px] text-gray-500">clique para confirmar escala</span>
             </span>
 
             <div className="flex-1 overflow-y-auto max-h-[300px] flex flex-col gap-2 pr-1 retro-scrollbar">
@@ -1398,35 +1401,44 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
                 </div>
               ) : (
                 sortedMatches.slice(0, 5).map(match => {
-                  let progressColor = "bg-[#228b22]"; // green
-                  if (match.percent < 70) progressColor = "bg-[#ff9d00]"; // orange
-                  if (match.percent < 50) progressColor = "bg-[#cc3300]"; // red
+                  let progressColor = "bg-[#228b22]";
+                  if (match.percent < 70) progressColor = "bg-[#ff9d00]";
+                  if (match.percent < 50) progressColor = "bg-[#cc3300]";
+                  const isActive = referenceKeyName === match.name;
 
                   return (
-                    <div 
-                      key={`match-${match.name}`} 
-                      className="border border-[#808080] p-2 hover:bg-[#ece9d8]/40 flex flex-col gap-1.5"
+                    <button
+                      key={`match-${match.name}`}
+                      onClick={() => setReferenceKeyName(isActive ? '' : match.name)}
+                      className={`text-left w-full border p-2 flex flex-col gap-1.5 cursor-pointer transition-colors ${
+                        isActive
+                          ? 'border-[#0058e6] bg-[#e8f0ff]'
+                          : 'border-[#808080] hover:bg-[#ece9d8]/60'
+                      }`}
+                      title={isActive ? 'Clique para desmarcar o tom' : 'Clique para usar este tom como referência'}
                     >
                       <div className="flex justify-between items-center font-bold">
-                        <span className="text-black">{match.name}</span>
+                        <span className={isActive ? 'text-[#0058e6]' : 'text-black'}>
+                          {isActive && '✓ '}{match.name}
+                        </span>
                         <span className="text-[#002fa7]">{match.percent}% compatível</span>
                       </div>
-                      
-                      {/* Progress bar */}
+
                       <div className="w-full h-2 bg-[#ece9d8] border border-[#808080]/30 shadow-inner rounded-sm overflow-hidden">
-                        <div 
-                          className={`h-full ${progressColor}`}
-                          style={{ width: `${match.percent}%` }}
-                        />
+                        <div className={`h-full ${progressColor}`} style={{ width: `${match.percent}%` }} />
                       </div>
 
-                      {/* Info on matching chords */}
                       {selectedChords.length > 0 && (
                         <div className="text-[10px] text-gray-600">
                           Acordes no tom: <strong className="text-gray-900">{match.compatibleChordsCount} / {selectedChords.length}</strong>
                         </div>
                       )}
-                    </div>
+                      {isActive && (
+                        <div className="text-[9px] text-[#0058e6] font-bold">
+                          Escala visível no braço • Acordes listados abaixo
+                        </div>
+                      )}
+                    </button>
                   );
                 })
               )}
@@ -1453,8 +1465,11 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
 
           {/* Recommended Chords Container */}
           <div className="bg-white border-2 border-[#808080] border-r-white border-bottom-white p-3 flex flex-col gap-2 font-mono text-xs">
-            <span className="font-bold text-[#228b22] border-b border-dashed border-[#808080] pb-1.5 flex items-center gap-1.5">
-              Harmonização (Acordes Diatônicos Recomendados):
+            <span className="font-bold text-[#228b22] border-b border-dashed border-[#808080] pb-1.5 flex items-center justify-between">
+              <span>Acordes Diatônicos:</span>
+              {sortedMatches[0] && (
+                <span className="font-normal text-[9px] text-gray-500">{sortedMatches[0]?.name}</span>
+              )}
             </span>
             
             {melody.length === 0 ? (
