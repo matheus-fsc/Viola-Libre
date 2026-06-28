@@ -887,8 +887,15 @@ export const CifraViewer: React.FC = () => {
                 const toggleLock = () => {
                   setLockedVariations(prev => {
                     const next = { ...prev };
-                    if (isChordLocked) delete next[chordName];
-                    else next[chordName] = effectiveIdx;
+                    if (isChordLocked) {
+                      delete next[chordName];
+                    } else if (bestVoicing) {
+                      // effectiveIdx is an index in displayedVoicings (sorted/filtered).
+                      // After locking the chord becomes a passthrough using allVoicings (original order).
+                      // We must store the index in allVoicings, not in the sorted array.
+                      const allIdx = allVoicings[idx].indexOf(bestVoicing);
+                      next[chordName] = allIdx >= 0 ? allIdx : 0;
+                    }
                     return next;
                   });
                 };
