@@ -169,13 +169,18 @@ function resolveMidi(label: string, neighborMidis: number[], position: 'high' | 
 const GUITAR_STD_LABELS = ['e', 'B', 'G', 'D', 'A', 'E'] as const;
 const GUITAR_STD_MIDI   = [64, 59, 55, 50, 45, 40] as const;
 
+// Bare tab line: only dashes, digits, and technique chars — no label or pipe
+const BARE_TAB_RE = /^[-0-9xhpb/\\~^.]+$/;
+const isBareTabLine = (l: string) =>
+  BARE_TAB_RE.test(l) && l.length >= 4 && /[0-9]/.test(l) && /-/.test(l);
+
 export function parseTabText(text: string): ParsedTab | null {
   const rawLines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
-  // Accept labeled lines (E|---) or anonymous lines (|----)
+  // Accept: labeled (E|---), pipe-anonymous (|---), or bare (---3---)
   const LABELED_RE = /^([A-Ga-g#b♭]{1,3})\|(.*?)$/;
   const ANON_RE    = /^\|(.*?)$/;
-  const isTabLine  = (l: string) => LABELED_RE.test(l) || ANON_RE.test(l);
+  const isTabLine  = (l: string) => LABELED_RE.test(l) || ANON_RE.test(l) || isBareTabLine(l);
 
   const tabLines = rawLines.filter(isTabLine);
   if (tabLines.length < 2) return null;
@@ -187,8 +192,10 @@ export function parseTabText(text: string): ParsedTab | null {
       allAnonymous = false;
       return { label: lm[1], content: lm[2].replace(/\|$/, '') };
     }
-    const am = ANON_RE.exec(l)!;
-    return { label: String(i + 1), content: am[1].replace(/\|$/, '') };
+    const am = ANON_RE.exec(l);
+    if (am) return { label: String(i + 1), content: am[1].replace(/\|$/, '') };
+    // Bare line — no pipe at all, content is the whole line
+    return { label: String(i + 1), content: l };
   });
 
   const totalWidth = Math.max(...parsedLines.map(l => l.content.length));
@@ -484,10 +491,10 @@ export function splitHtmlByTabs(html: string): ContentSegment[] {
     const innerText = innerHtml.replace(/<[^>]+>/g, '');
 
     // Verify it actually looks like a tab (has at least 2 tab lines).
-    // Accepts both labeled lines (E|---) and anonymous lines (|---).
+    // Accepts labeled (E|---), pipe-anonymous (|---), and bare (---3---).
     const lines = innerText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
     const tabLineCount = lines.filter(l =>
-      /^[A-Ga-g#b]{1,3}\|/.test(l) || /^\|[-x0-9hpb/\\~^.]/.test(l)
+      /^[A-Ga-g#b]{1,3}\|/.test(l) || /^\|[-x0-9hpb/\\~^.]/.test(l) || isBareTabLine(l)
     ).length;
 
     if (tabLineCount < 2) continue;
@@ -549,7 +556,7 @@ function detectRawTabBlocks(html: string): ContentSegment[] {
 
     // Strip HTML tags and check if it's a tab line
     const stripped = part.replace(/<[^>]+>/g, '').trim();
-    const isTabLn = (/^[A-Ga-g#b]{1,3}\|/.test(stripped) || /^\|[-x0-9]/.test(stripped)) && stripped.includes('-');
+    const isTabLn = (/^[A-Ga-g#b]{1,3}\|/.test(stripped) || /^\|[-x0-9]/.test(stripped) || isBareTabLine(stripped)) && stripped.includes('-');
     if (isTabLn) {
       tabBuffer.push(stripped);
       tabHtmlBuffer.push(part);
