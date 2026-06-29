@@ -165,6 +165,10 @@ function resolveMidi(label: string, neighborMidis: number[], position: 'high' | 
 
 // Parse raw tab text (multi-line string) into ParsedTab
 // Assumes rows ordered high to low (standard tab format)
+// Guitar standard tuning assumed for 6-string anonymous tabs (high to low)
+const GUITAR_STD_LABELS = ['e', 'B', 'G', 'D', 'A', 'E'] as const;
+const GUITAR_STD_MIDI   = [64, 59, 55, 50, 45, 40] as const;
+
 export function parseTabText(text: string): ParsedTab | null {
   const rawLines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
@@ -176,15 +180,30 @@ export function parseTabText(text: string): ParsedTab | null {
   const tabLines = rawLines.filter(isTabLine);
   if (tabLines.length < 2) return null;
 
+  let allAnonymous = true;
   const parsedLines = tabLines.map((l, i) => {
     const lm = LABELED_RE.exec(l);
-    if (lm) return { label: lm[1], content: lm[2].replace(/\|$/, '') };
-    // Anonymous line: assign sequential placeholder label
+    if (lm) {
+      allAnonymous = false;
+      return { label: lm[1], content: lm[2].replace(/\|$/, '') };
+    }
     const am = ANON_RE.exec(l)!;
     return { label: String(i + 1), content: am[1].replace(/\|$/, '') };
   });
 
   const totalWidth = Math.max(...parsedLines.map(l => l.content.length));
+
+  // 6 anonymous rows with no tuning label → assume violão standard (E A D G B e)
+  if (allAnonymous && parsedLines.length === 6) {
+    parsedLines.forEach((l, i) => { l.label = GUITAR_STD_LABELS[i]; });
+    const rows: ParsedTabRow[] = parsedLines.map((line, idx) => ({
+      label: line.label,
+      midiOpen: GUITAR_STD_MIDI[idx],
+      contentRaw: line.content,
+      events: parseRowEvents(line.content),
+    }));
+    return { rows, sourceName: 'Violão Padrão (assumido)', totalWidth };
+  }
 
   // Detect MIDI values for each row
   // First try known tuning
