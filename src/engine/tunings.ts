@@ -414,6 +414,18 @@ export const CHORD_FORMULAS: ChordFormula[] = [
     requiredIntervals: [0, 4, 6, 10, 14]
   },
   {
+    name: "Nona com Quarta Aumentada",
+    suffix: "9(4+)",
+    intervals: [0, 4, 6, 7, 10, 14],
+    requiredIntervals: [0, 4, 6, 10, 14]
+  },
+  {
+    name: "Sétima com Quarta Aumentada",
+    suffix: "7(4+)",
+    intervals: [0, 4, 6, 7, 10],
+    requiredIntervals: [0, 4, 6, 10]
+  },
+  {
     name: "Sexta com Nona",
     suffix: "6(9)",
     intervals: [0, 4, 7, 9, 14],
