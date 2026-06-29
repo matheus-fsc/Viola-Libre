@@ -292,7 +292,8 @@ export function findBestPosition(
   pitch: number,
   targetMidi: number[],
   handPos: number,
-  maxFret = 17
+  maxFret = 17,
+  lastStringIdx = -1
 ): { stringIdx: number; fret: number } | null {
   const candidates: { stringIdx: number; fret: number; dist: number }[] = [];
 
@@ -308,18 +309,16 @@ export function findBestPosition(
 
   if (candidates.length === 0) return null;
 
-  // Sort: prefer open strings, then minimize weighted distance.
-  // Backward shifts (fret significantly below handPos) are penalized so the
-  // algorithm prefers staying in the current hand-position window even if it
-  // means using a different string at a slightly higher fret.
+  // Prefer open strings, then closest to hand position.
+  // Tie-break (distance within 1): keep the same string as the last note
+  // to avoid unnecessary string hops, then prefer lower fret.
   candidates.sort((a, b) => {
     if (a.fret === 0 && b.fret !== 0) return -1;
     if (b.fret === 0 && a.fret !== 0) return 1;
-    // A fret that requires moving the hand back 2+ positions gets a penalty.
-    const backPenalty = (fret: number) => (fret > 0 && fret < handPos - 1) ? 3 : 0;
-    const aScore = a.dist + backPenalty(a.fret);
-    const bScore = b.dist + backPenalty(b.fret);
-    if (aScore !== bScore) return aScore - bScore;
+    if (Math.abs(a.dist - b.dist) > 1) return a.dist - b.dist;
+    const aSame = a.stringIdx === lastStringIdx ? 0 : 1;
+    const bSame = b.stringIdx === lastStringIdx ? 0 : 1;
+    if (aSame !== bSame) return aSame - bSame;
     return a.fret - b.fret;
   });
 
@@ -391,12 +390,13 @@ export function transposeTab(
   }
 
   let handPos = startHandPos;
+  let lastStringIdx = -1;
   const placements: Placement[] = [];
 
   for (const slot of timeline) {
     for (const note of slot.notes) {
       if (note.pitch < 0) continue;
-      const best = findBestPosition(note.pitch, targetMidi, handPos);
+      const best = findBestPosition(note.pitch, targetMidi, handPos, 17, lastStringIdx);
       if (best) {
         placements.push({
           targetStringIdx: best.stringIdx,
@@ -406,6 +406,7 @@ export function transposeTab(
           origWidth: note.origWidth,
         });
         if (best.fret > 0) handPos = best.fret;
+        lastStringIdx = best.stringIdx;
       }
     }
   }
