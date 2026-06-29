@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useMemo } from 'react';
 import {
   parseTabText,
   transposeTab,
@@ -9,17 +9,17 @@ import {
 
 interface Props {
   originalText: string;
-  targetStrings: number[];   // from current tuning (low to high)
-  targetLabel: string;       // e.g., "Viola Caipira — Cebolão em Ré"
-  extraSemitones?: number;   // from chord transpose offset
+  targetStrings: number[];
+  targetLabel: string;
+  extraSemitones?: number;
+  posIdx: number;            // neck position index — controlled by CifraViewer
 }
 
-// Named neck positions for cycling (fret bias for findBestPosition)
-const POSITIONS = [
-  { label: 'Aberta', fret: 0 },
-  { label: '5ª',     fret: 5 },
-  { label: '7ª',     fret: 7 },
-  { label: '12ª',    fret: 12 },
+export const POSITIONS = [
+  { label: 'Aberta', fret: 0  },
+  { label: '5ª pos', fret: 5  },
+  { label: '7ª pos', fret: 7  },
+  { label: '12ª pos', fret: 12 },
 ];
 
 export const TabTransposerBlock: React.FC<Props> = ({
@@ -27,16 +27,11 @@ export const TabTransposerBlock: React.FC<Props> = ({
   targetStrings,
   targetLabel,
   extraSemitones = 0,
+  posIdx,
 }) => {
-  const [posIdx, setPosIdx] = useState(0);
-
-  const parsedTab = useMemo<ParsedTab | null>(() => parseTabText(originalText), [originalText]);
-
-  const targetMidi        = useMemo(() => getTuningMidiHighToLow(targetStrings), [targetStrings]);
-  const targetLabelsHtoL  = useMemo(() => getTuningLabelsHighToLow(targetStrings), [targetStrings]);
-
-  // Reset position when instrument or transpose changes
-  useEffect(() => { setPosIdx(0); }, [targetMidi, extraSemitones]);
+  const parsedTab       = useMemo<ParsedTab | null>(() => parseTabText(originalText), [originalText]);
+  const targetMidi      = useMemo(() => getTuningMidiHighToLow(targetStrings), [targetStrings]);
+  const targetLabelsHtL = useMemo(() => getTuningLabelsHighToLow(targetStrings), [targetStrings]);
 
   const isSameInstrument = useMemo(() => {
     if (!parsedTab) return true;
@@ -50,53 +45,30 @@ export const TabTransposerBlock: React.FC<Props> = ({
   const transposedText = useMemo(() => {
     if (!parsedTab || isSameInstrument) return null;
     try {
-      return transposeTab(
-        parsedTab, targetMidi, targetLabelsHtoL,
-        extraSemitones, POSITIONS[posIdx].fret
-      );
-    } catch {
-      return null;
-    }
-  }, [parsedTab, targetMidi, targetLabelsHtoL, extraSemitones, posIdx, isSameInstrument]);
+      return transposeTab(parsedTab, targetMidi, targetLabelsHtL, extraSemitones, POSITIONS[posIdx].fret);
+    } catch { return null; }
+  }, [parsedTab, targetMidi, targetLabelsHtL, extraSemitones, posIdx, isSameInstrument]);
 
   const displayText = transposedText ?? originalText;
-  const canVary     = transposedText !== null;
   const sourceName  = parsedTab?.sourceName ?? '';
 
   return (
     <div className="my-1">
-      {/* Toolbar: source info + Variar button */}
       <div className="flex items-center gap-2 py-0.5 px-1 bg-[#d4d0c8] border-b border-gray-400">
         <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Tab</span>
-
-        {parsedTab ? (
-          isSameInstrument ? (
-            <span className="text-[9px] text-gray-400 italic">{sourceName}</span>
-          ) : (
-            <>
-              <span className="text-[9px] text-gray-500 italic truncate max-w-[100px]" title={sourceName}>
-                {sourceName}
-              </span>
-              <span className="text-[9px] text-gray-400">→</span>
-              <span className="text-[9px] text-gray-600 truncate max-w-[100px]">{targetLabel}</span>
-
-              {canVary && (
-                <button
-                  onClick={() => setPosIdx(v => (v + 1) % POSITIONS.length)}
-                  className="ml-auto text-[9px] font-bold px-2 py-0.5 border bevel-out bg-[var(--color-winxp-panel)] text-[#002fa7] border-gray-400 hover:bg-white leading-tight"
-                  title={`Variar posição de escala (atual: ${POSITIONS[posIdx].label})`}
-                >
-                  Variar · {POSITIONS[posIdx].label}
-                </button>
-              )}
-            </>
-          )
+        {parsedTab && !isSameInstrument ? (
+          <>
+            <span className="text-[9px] text-gray-500 italic truncate max-w-[90px]" title={sourceName}>{sourceName}</span>
+            <span className="text-[9px] text-gray-400">→</span>
+            <span className="text-[9px] text-[#002fa7]">{targetLabel}</span>
+            <span className="text-[9px] text-gray-400 ml-1">· {POSITIONS[posIdx].label}</span>
+          </>
+        ) : parsedTab ? (
+          <span className="text-[9px] text-gray-400 italic">{sourceName}</span>
         ) : (
-          <span className="text-[9px] text-gray-400 italic">Tab não reconhecida</span>
+          <span className="text-[9px] text-gray-400 italic">não reconhecida</span>
         )}
       </div>
-
-      {/* Tab content */}
       <pre className="m-0 font-mono text-sm leading-snug whitespace-pre text-[#444] overflow-x-auto py-1">
         {displayText}
       </pre>
