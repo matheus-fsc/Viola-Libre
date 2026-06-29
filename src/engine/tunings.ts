@@ -312,6 +312,12 @@ export const CHORD_FORMULAS: ChordFormula[] = [
     requiredIntervals: [0, 4, 8]
   },
   {
+    name: "Menor Aumentado",
+    suffix: "m(#5)",
+    intervals: [0, 3, 8],
+    requiredIntervals: [0, 3, 8]
+  },
+  {
     name: "Suspenso 4",
     suffix: "sus4",
     intervals: [0, 5, 7],

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { FolderOpen, FileText } from 'lucide-react';
 import { getSongs, getCifra, type Song } from '../../services/api';
@@ -22,17 +22,21 @@ export const SongList: React.FC = () => {
     }
   }, [artistSlug]);
 
-  // Fila de Cache Silencioso: Pré-carrega o HTML das cifras que estão visíveis na tela!
+  // Prefetch silencioso: só as primeiras 6 músicas, sem re-disparar ao paginar
+  const prefetchedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    if (artistSlug && songs.length > 0) {
-      const visible = songs.slice(0, visibleCount);
-      visible.forEach((song, i) => {
-        setTimeout(() => {
-          getCifra(artistSlug, song.slug).catch(() => {});
-        }, i * 30); // Tiro escalonado de 30ms para não enforcar o servidor
-      });
-    }
-  }, [songs, visibleCount, artistSlug]);
+    if (!artistSlug || songs.length === 0) return;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    songs.slice(0, 6).forEach((song, i) => {
+      const key = `${artistSlug}/${song.slug}`;
+      if (prefetchedRef.current.has(key)) return;
+      prefetchedRef.current.add(key);
+      timers.push(setTimeout(() => {
+        getCifra(artistSlug, song.slug).catch(() => {});
+      }, i * 400));
+    });
+    return () => timers.forEach(clearTimeout);
+  }, [songs, artistSlug]); // visibleCount removido intencionalmente
 
   const artistName = artistSlug ? artistSlug.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : 'Artista';
 

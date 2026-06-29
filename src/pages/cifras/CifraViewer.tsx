@@ -12,8 +12,8 @@ import { buildChord, calculateVoicings, noteNameToPitchClass, parseChordString, 
 import { PRESET_INSTRUMENTS } from '../../engine/tunings';
 import { AudioEngine } from '../../engine/AudioEngine';
 import { FretboardDiagram } from '../../components/FretboardDiagram';
-import { TabTransposerBlock, POSITIONS } from '../../components/TabTransposerBlock';
-import { splitHtmlByTabs, type ContentSegment } from '../../engine/tabTransposer';
+import { TabTransposerBlock } from '../../components/TabTransposerBlock';
+import { splitHtmlByTabs, TAB_POSITIONS, type ContentSegment } from '../../engine/tabTransposer';
 import '../../components/Cifras.css';
 
 
@@ -710,9 +710,9 @@ export const CifraViewer: React.FC = () => {
             <div className="flex flex-col gap-0.5">
               <label className="font-bold text-[10px] uppercase text-gray-500">POS.TAB:</label>
               <div className="flex items-center gap-1">
-                <button onClick={() => setTabPosIdx(p => (p - 1 + POSITIONS.length) % POSITIONS.length)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white">◀</button>
-                <span className="font-mono text-xs font-bold flex-1 text-center text-[#005500]">{POSITIONS[tabPosIdx].label}</span>
-                <button onClick={() => setTabPosIdx(p => (p + 1) % POSITIONS.length)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white">▶</button>
+                <button onClick={() => setTabPosIdx(p => (p - 1 + TAB_POSITIONS.length) % TAB_POSITIONS.length)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white">◀</button>
+                <span className="font-mono text-xs font-bold flex-1 text-center text-[#005500]">{TAB_POSITIONS[tabPosIdx].label}</span>
+                <button onClick={() => setTabPosIdx(p => (p + 1) % TAB_POSITIONS.length)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white">▶</button>
               </div>
             </div>
 
@@ -773,9 +773,9 @@ export const CifraViewer: React.FC = () => {
               </div>
               <div className="flex items-center bg-[#d4d0c8] bevel-in px-1 py-1 gap-1">
                 <span className="text-[11px] font-bold px-1 text-gray-700">POS.TAB:</span>
-                <button onClick={() => setTabPosIdx(p => (p - 1 + POSITIONS.length) % POSITIONS.length)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white">◀</button>
-                <span className="font-mono text-xs font-bold min-w-[44px] text-center text-[#005500]">{POSITIONS[tabPosIdx].label}</span>
-                <button onClick={() => setTabPosIdx(p => (p + 1) % POSITIONS.length)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white">▶</button>
+                <button onClick={() => setTabPosIdx(p => (p - 1 + TAB_POSITIONS.length) % TAB_POSITIONS.length)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white">◀</button>
+                <span className="font-mono text-xs font-bold min-w-[44px] text-center text-[#005500]">{TAB_POSITIONS[tabPosIdx].label}</span>
+                <button onClick={() => setTabPosIdx(p => (p + 1) % TAB_POSITIONS.length)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white">▶</button>
               </div>
               <button onClick={() => setShowTabs(v => !v)} className={`bevel-out px-3 py-1 text-xs font-bold border border-gray-400 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${!showTabs ? 'bg-[#316ac5] text-white' : 'bg-[var(--color-winxp-panel)] text-[#002fa7]'}`}>{showTabs ? 'Tabs ▼' : 'Tabs ▶'}</button>
               <button onClick={handleFavorite} disabled={isFavoriting} className="bevel-out bg-[var(--color-winxp-panel)] px-3 py-1 text-xs font-bold flex items-center gap-1 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white text-black">

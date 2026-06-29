@@ -8,7 +8,7 @@ export interface ContentSegment {
 
 export interface TabEvent {
   pos: number;       // char position in row content
-  fret: number;      // 0 = open, >=1 = fretted
+  fret: number;      // -1 = muted (x), 0 = open, >=1 = fretted
   width: number;     // chars occupied (1 for 0-9, 2 for 10-24)
   techAfter?: string; // technique after this note (h, p, /, \, ~, b)
 }
@@ -169,18 +169,24 @@ function resolveMidi(label: string, neighborMidis: number[], position: 'high' | 
 const GUITAR_STD_LABELS = ['e', 'B', 'G', 'D', 'A', 'E'] as const;
 const GUITAR_STD_MIDI   = [64, 59, 55, 50, 45, 40] as const;
 
-// Bare tab line: only dashes, digits, and technique chars — no label or pipe
+// Bare tab line: only dashes, digits, x (muted), and technique chars — no label or pipe
 const BARE_TAB_RE = /^[-0-9xhpb/\\~^.]+$/;
 const isBareTabLine = (l: string) =>
-  BARE_TAB_RE.test(l) && l.length >= 4 && /[0-9]/.test(l) && /-/.test(l);
+  BARE_TAB_RE.test(l) && l.length >= 4 && /[0-9x]/.test(l) && /-/.test(l);
 
 export function parseTabText(text: string): ParsedTab | null {
   const rawLines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
-  // Accept: labeled (E|---), pipe-anonymous (|---), or bare (---3---)
+  // Accept: labeled (E|---), pipe-anonymous (|--- or ||--- or |||---), or bare (---3---)
   const LABELED_RE = /^([A-Ga-g#b♭]{1,3})\|(.*?)$/;
-  const ANON_RE    = /^\|(.*?)$/;
-  const isTabLine  = (l: string) => LABELED_RE.test(l) || ANON_RE.test(l) || isBareTabLine(l);
+  const ANON_RE    = /^\|+(.*?)$/;
+  const hasMeaningfulContent = (s: string) => /[-x0-9hpb/\\~^.]/.test(s);
+  const isTabLine  = (l: string) => {
+    if (LABELED_RE.test(l)) return true;
+    const am = ANON_RE.exec(l);
+    if (am) return hasMeaningfulContent(am[1].trim().replace(/\|$/, ''));
+    return isBareTabLine(l);
+  };
 
   const tabLines = rawLines.filter(isTabLine);
   if (tabLines.length < 2) return null;
@@ -193,7 +199,7 @@ export function parseTabText(text: string): ParsedTab | null {
       return { label: lm[1], content: lm[2].replace(/\|$/, '') };
     }
     const am = ANON_RE.exec(l);
-    if (am) return { label: String(i + 1), content: am[1].replace(/\|$/, '') };
+    if (am) return { label: String(i + 1), content: am[1].trim().replace(/\|$/, '').trim() };
     // Bare line — no pipe at all, content is the whole line
     return { label: String(i + 1), content: l };
   });
@@ -273,6 +279,10 @@ function parseRowEvents(content: string): TabEvent[] {
       events.push({ pos: i, fret, width, techAfter });
       i += width;
       if (techAfter) i++; // consume technique char
+    } else if (ch === 'x' || ch === 'X') {
+      // Muted string
+      events.push({ pos: i, fret: -1, width: 1 });
+      i++;
     } else if (/[hpb/\\~^]/.test(ch)) {
       // Loose technique char (before a note), skip
       i++;
@@ -357,6 +367,7 @@ export function transposeTab(
   interface NoteAtPos {
     srcStringIdx: number;
     pitch: number;
+    muted?: boolean;
     techAfter?: string;
     origWidth: number;
     origPos: number;
@@ -372,7 +383,8 @@ export function transposeTab(
         .filter(ev => ev.pos === pos)
         .map(ev => ({
           srcStringIdx: si,
-          pitch: row.midiOpen >= 0 ? row.midiOpen + ev.fret + extraSemitones : -1,
+          pitch: ev.fret === -1 ? -999 : (row.midiOpen >= 0 ? row.midiOpen + ev.fret + extraSemitones : -1),
+          muted: ev.fret === -1 || undefined,
           techAfter: ev.techAfter,
           origWidth: ev.width,
           origPos: ev.pos,
@@ -392,9 +404,17 @@ export function transposeTab(
   let handPos = startHandPos;
   let lastStringIdx = -1;
   const placements: Placement[] = [];
+  const mutedPlacements: { targetStringIdx: number; sourcePos: number }[] = [];
 
   for (const slot of timeline) {
     for (const note of slot.notes) {
+      if (note.muted) {
+        mutedPlacements.push({
+          targetStringIdx: Math.min(note.srcStringIdx, targetMidi.length - 1),
+          sourcePos: slot.pos,
+        });
+        continue;
+      }
       if (note.pitch < 0) continue;
       const best = findBestPosition(note.pitch, targetMidi, handPos, 17, lastStringIdx);
       if (best) {
@@ -435,6 +455,13 @@ export function transposeTab(
     if (p.techAfter) col.hasTechAfter = true;
   }
 
+  // Apply muted (x) placements — fret: -1 signals "output x"
+  for (const mp of mutedPlacements) {
+    const colIdx = posToColIdx.get(mp.sourcePos);
+    if (colIdx === undefined) continue;
+    outputColumns[colIdx].cellsByString.set(mp.targetStringIdx, { fret: -1 });
+  }
+
   // Compute gap (dashes) before each column based on original char positions
   const colGaps: number[] = [];
   for (let i = 0; i < sortedPositions.length; i++) {
@@ -462,9 +489,15 @@ export function transposeTab(
 
       const cell = col.cellsByString.get(si);
       if (cell !== undefined) {
-        const fretStr = String(cell.fret).padStart(col.colWidth, '0');
-        row += fretStr;
-        if (col.hasTechAfter) row += cell.techAfter ?? '-';
+        if (cell.fret < 0) {
+          // Muted string: output 'x' padded to column width
+          const totalW = col.colWidth + (col.hasTechAfter ? 1 : 0);
+          row += 'x' + '-'.repeat(totalW - 1);
+        } else {
+          const fretStr = String(cell.fret).padStart(col.colWidth, '0');
+          row += fretStr;
+          if (col.hasTechAfter) row += cell.techAfter ?? '-';
+        }
       } else {
         // no note on this string in this column — fill with dashes
         row += '-'.repeat(col.colWidth + (col.hasTechAfter ? 1 : 0));
@@ -503,7 +536,7 @@ export function splitHtmlByTabs(html: string): ContentSegment[] {
     // Accepts labeled (E|---), pipe-anonymous (|---), and bare (---3---).
     const lines = innerText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
     const tabLineCount = lines.filter(l =>
-      /^[A-Ga-g#b]{1,3}\|/.test(l) || /^\|[-x0-9hpb/\\~^.]/.test(l) || isBareTabLine(l)
+      /^[A-Ga-g#b]{1,3}\|/.test(l) || /^\|+[-x0-9hpb/\\~^.]/.test(l) || isBareTabLine(l)
     ).length;
 
     if (tabLineCount < 2) continue;
@@ -565,7 +598,7 @@ function detectRawTabBlocks(html: string): ContentSegment[] {
 
     // Strip HTML tags and check if it's a tab line
     const stripped = part.replace(/<[^>]+>/g, '').trim();
-    const isTabLn = (/^[A-Ga-g#b]{1,3}\|/.test(stripped) || /^\|[-x0-9]/.test(stripped) || isBareTabLine(stripped)) && stripped.includes('-');
+    const isTabLn = (/^[A-Ga-g#b]{1,3}\|/.test(stripped) || /^\|+[-x0-9]/.test(stripped) || isBareTabLine(stripped)) && stripped.includes('-');
     if (isTabLn) {
       tabBuffer.push(stripped);
       tabHtmlBuffer.push(part);
@@ -591,3 +624,11 @@ export function getTuningLabelsHighToLow(strings: number[]): string[] {
 export function getTuningMidiHighToLow(strings: number[]): number[] {
   return [...strings].reverse();
 }
+
+// Neck position presets for the tab transposer panel
+export const TAB_POSITIONS = [
+  { label: 'Aberta', fret: 0  },
+  { label: '5ª pos', fret: 5  },
+  { label: '7ª pos', fret: 7  },
+  { label: '12ª pos', fret: 12 },
+] as const;
