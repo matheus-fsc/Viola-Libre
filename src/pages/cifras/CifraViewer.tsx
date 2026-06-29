@@ -5,6 +5,7 @@ import {
   getCifra, incrementView, favoriteCifra, updateDifficulty, type CifraDetail,
   saveSequencia, loadSequencia, updateSequencia, deleteSequencia,
   addRecentSequencia, removeRecentSequencia, getRecentSequencias,
+  getSongs, type Song,
   type SequenciaData, type RecentSequencia,
 } from '../../services/api';
 import type { Voicing } from '../../engine/types';
@@ -70,6 +71,9 @@ export const CifraViewer: React.FC = () => {
   
   // Scraped original chords
   const [originalChords, setOriginalChords] = useState<string[]>([]);
+
+  // Versões da mesma música (mesmo título, slugs diferentes)
+  const [songVersions, setSongVersions] = useState<Song[]>([]);
   
   // Carousel expanded state
   const [isCarouselExpanded, setIsCarouselExpanded] = useState<boolean>(false);
@@ -146,6 +150,15 @@ export const CifraViewer: React.FC = () => {
       });
     }
   }, [artistSlug, songSlug]);
+
+  // Carrega as versões da música (mesmo título) para o seletor de versão
+  useEffect(() => {
+    if (!artistSlug || !cifra?.title) return;
+    const titleKey = cifra.title.trim().toLowerCase();
+    getSongs(artistSlug)
+      .then(all => setSongVersions(all.filter(s => s.title.trim().toLowerCase() === titleKey)))
+      .catch(() => setSongVersions([]));
+  }, [artistSlug, cifra?.title]);
 
   const handleFavorite = async () => {
     if (!artistSlug || !songSlug || isFavoriting || !cifra) return;
@@ -289,6 +302,16 @@ export const CifraViewer: React.FC = () => {
   const isVertical = panelPosition === 'left' || panelPosition === 'right';
   const PANEL_ICONS: Record<typeof panelPosition, string> = { left: '◧', top: '▀', right: '◨', bottom: '▄' };
   const cyclePosition = () => setPanelPosition(p => ({ left: 'top', top: 'right', right: 'bottom', bottom: 'left' } as const)[p]);
+
+  // Versão atualmente exibida (slug normalizado para comparar com o param da rota)
+  const normSlug = (s?: string) => (s || '').replace(/^\//, '');
+  const currentVersionSlug = useMemo(() => {
+    const match = songVersions.find(s => normSlug(s.slug) === normSlug(songSlug));
+    return match ? match.slug : (songVersions[0]?.slug ?? '');
+  }, [songVersions, songSlug]);
+  const handleVersionChange = (slug: string) => {
+    navigate(`/cifras/${artistSlug}/${normSlug(slug)}`);
+  };
 
   // Pré-computa todos os voicings (fora do .map para reutilizar no proximity sort)
   const allVoicings = useMemo(() => {
@@ -682,6 +705,15 @@ export const CifraViewer: React.FC = () => {
               <span className="font-bold text-xs bg-white border border-gray-400 px-1 text-[#002fa7] min-w-[20px] text-center">{songKey || '?'}</span>
             </div>
 
+            {songVersions.length > 1 && (
+              <div className="flex flex-col gap-0.5">
+                <label className="font-bold text-[10px] uppercase text-gray-500">Versão:</label>
+                <select value={currentVersionSlug} onChange={(e) => handleVersionChange(e.target.value)} className="bevel-in bg-white px-1 py-0 text-xs w-full outline-none cursor-pointer">
+                  {songVersions.map(v => (<option key={v.id} value={v.slug}>{v.version_name || 'Principal'}</option>))}
+                </select>
+              </div>
+            )}
+
             <div className="flex flex-col gap-0.5">
               <label className="font-bold text-[10px] uppercase text-gray-500">Instrumento:</label>
               <select value={selectedInstId} onChange={(e) => { const newInst = PRESET_INSTRUMENTS.find(i => i.id === e.target.value); if (newInst) { setSelectedInstId(newInst.id); setSelectedTuningId(newInst.defaultTuningId || newInst.tunings[0].id); setTabPosIdx(0); } }} className="bevel-in bg-white px-1 py-0 text-xs w-full outline-none cursor-pointer">
@@ -751,6 +783,14 @@ export const CifraViewer: React.FC = () => {
                 <label className="font-bold text-[11px] uppercase tracking-wider text-gray-700">Tom:</label>
                 <span className="font-bold text-xs bg-white border border-gray-400 px-1 text-[#002fa7] min-w-[20px] text-center">{songKey || '?'}</span>
               </div>
+              {songVersions.length > 1 && (
+                <div className="flex items-center gap-1">
+                  <label className="font-bold text-[11px] uppercase tracking-wider text-gray-700">Versão:</label>
+                  <select value={currentVersionSlug} onChange={(e) => handleVersionChange(e.target.value)} className="bevel-in bg-white px-1 py-0 text-xs outline-none cursor-pointer max-w-[120px]">
+                    {songVersions.map(v => (<option key={v.id} value={v.slug}>{v.version_name || 'Principal'}</option>))}
+                  </select>
+                </div>
+              )}
               <div className="flex items-center gap-1">
                 <label className="font-bold text-[11px] uppercase tracking-wider text-gray-700">Instrumento:</label>
                 <select value={selectedInstId} onChange={(e) => { const newInst = PRESET_INSTRUMENTS.find(i => i.id === e.target.value); if (newInst) { setSelectedInstId(newInst.id); setSelectedTuningId(newInst.defaultTuningId || newInst.tunings[0].id); setTabPosIdx(0); } }} className="bevel-in bg-white px-1 py-0 text-xs outline-none cursor-pointer max-w-[100px]">

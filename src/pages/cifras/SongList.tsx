@@ -1,7 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { FolderOpen, FileText } from 'lucide-react';
+import { FolderOpen, FileText, Layers } from 'lucide-react';
 import { getSongs, getCifra, type Song } from '../../services/api';
+
+const isPrincipal = (v?: string) => (v || '').toLowerCase().includes('principal');
 
 export const SongList: React.FC = () => {
   const { artistSlug } = useParams<{ artistSlug: string }>();
@@ -9,6 +11,23 @@ export const SongList: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [visibleCount, setVisibleCount] = useState(32);
   const navigate = useNavigate();
+
+  // Deduplica por título: músicas com mesmo nome em versões diferentes aparecem
+  // uma única vez (preferindo a versão "Principal"). O contador guarda quantas
+  // versões existem para exibir o selo "+N versões".
+  const { dedupedSongs, versionCount } = useMemo(() => {
+    const byTitle = new Map<string, Song>();
+    const count = new Map<string, number>();
+    for (const s of songs) {
+      const key = s.title.trim().toLowerCase();
+      count.set(key, (count.get(key) || 0) + 1);
+      const existing = byTitle.get(key);
+      if (!existing || (!isPrincipal(existing.version_name) && isPrincipal(s.version_name))) {
+        byTitle.set(key, s);
+      }
+    }
+    return { dedupedSongs: Array.from(byTitle.values()), versionCount: count };
+  }, [songs]);
 
   useEffect(() => {
     if (artistSlug) {
@@ -62,33 +81,36 @@ export const SongList: React.FC = () => {
           </div>
         ) : (
           <div className="flex flex-col gap-2">
-            {(Array.isArray(songs) ? songs : []).slice(0, visibleCount).map(song => (
-              <div
-                key={song.id}
-                onClick={() => navigate(`/cifras/${artistSlug}/${song.slug}`)}
-                className="flex items-center p-2 hover:bg-[#316ac5] hover:text-white cursor-pointer select-none group border border-transparent hover:border-dotted hover:border-white transition-none"
-              >
-                <div className="mr-3 text-gray-500 group-hover:text-white">
-                  <FileText size={18} />
+            {dedupedSongs.slice(0, visibleCount).map(song => {
+              const nVersions = versionCount.get(song.title.trim().toLowerCase()) || 1;
+              return (
+                <div
+                  key={song.id}
+                  onClick={() => navigate(`/cifras/${artistSlug}/${song.slug}`)}
+                  className="flex items-center p-2 hover:bg-[#316ac5] hover:text-white cursor-pointer select-none group border border-transparent hover:border-dotted hover:border-white transition-none"
+                >
+                  <div className="mr-3 text-gray-500 group-hover:text-white">
+                    <FileText size={18} />
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-sm font-bold">{song.title}</div>
+                  </div>
+                  {nVersions > 1 && (
+                    <span className="text-xs bg-gray-200 text-gray-700 px-1 border border-gray-400 flex items-center gap-1 group-hover:bg-[#1a3b6e] group-hover:text-white group-hover:border-transparent" title={`${nVersions} versões disponíveis`}>
+                      <Layers size={11} /> {nVersions} versões
+                    </span>
+                  )}
                 </div>
-                <div className="flex-1">
-                  <div className="text-sm font-bold">{song.title}</div>
-                </div>
-                {song.version_name && (
-                  <span className="text-xs bg-gray-200 text-gray-700 px-1 border border-gray-400 group-hover:bg-[#1a3b6e] group-hover:text-white group-hover:border-transparent">
-                    {song.version_name}
-                  </span>
-                )}
-              </div>
-            ))}
+              );
+            })}
 
-            {visibleCount < songs.length && (
+            {visibleCount < dedupedSongs.length && (
               <div className="flex justify-center mt-4 mb-4">
                 <button
                   onClick={() => setVisibleCount(prev => prev + 32)}
                   className="bevel-out bg-[var(--color-winxp-panel)] px-6 py-2 font-bold text-sm hover:bg-[#e0dfd6] active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white text-black"
                 >
-                  Exibir Mais ({songs.length - visibleCount} restantes)
+                  Exibir Mais ({dedupedSongs.length - visibleCount} restantes)
                 </button>
               </div>
             )}
