@@ -334,7 +334,8 @@ export function transposeTab(
   sourceTab: ParsedTab,
   targetMidi: number[],
   targetLabels: string[],
-  extraSemitones = 0
+  extraSemitones = 0,
+  startHandPos = 0
 ): string {
   // Build a timeline: each "slot" is a unique char position that has notes
   // Collect all note positions across all source rows
@@ -382,7 +383,7 @@ export function transposeTab(
     origWidth: number;
   }
 
-  let handPos = 0;
+  let handPos = startHandPos;
   const placements: Placement[] = [];
 
   for (const slot of timeline) {

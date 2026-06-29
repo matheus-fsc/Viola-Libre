@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   parseTabText,
   transposeTab,
@@ -14,31 +14,32 @@ interface Props {
   extraSemitones?: number;   // from chord transpose offset
 }
 
+// Named neck positions for cycling (fret bias for findBestPosition)
+const POSITIONS = [
+  { label: 'Aberta', fret: 0 },
+  { label: '5ª',     fret: 5 },
+  { label: '7ª',     fret: 7 },
+  { label: '12ª',    fret: 12 },
+];
+
 export const TabTransposerBlock: React.FC<Props> = ({
   originalText,
   targetStrings,
   targetLabel,
   extraSemitones = 0,
 }) => {
-  const [showTransposed, setShowTransposed] = useState(true);
+  const [posIdx, setPosIdx] = useState(0);
 
   const parsedTab = useMemo<ParsedTab | null>(() => parseTabText(originalText), [originalText]);
 
-  const targetMidi = useMemo(() => getTuningMidiHighToLow(targetStrings), [targetStrings]);
-  const targetLabelsHtoL = useMemo(() => getTuningLabelsHighToLow(targetStrings), [targetStrings]);
+  const targetMidi        = useMemo(() => getTuningMidiHighToLow(targetStrings), [targetStrings]);
+  const targetLabelsHtoL  = useMemo(() => getTuningLabelsHighToLow(targetStrings), [targetStrings]);
 
-  const transposedText = useMemo(() => {
-    if (!parsedTab) return null;
-    try {
-      return transposeTab(parsedTab, targetMidi, targetLabelsHtoL, extraSemitones);
-    } catch {
-      return null;
-    }
-  }, [parsedTab, targetMidi, targetLabelsHtoL, extraSemitones]);
+  // Reset position when instrument or transpose changes
+  useEffect(() => { setPosIdx(0); }, [targetMidi, extraSemitones]);
 
   const isSameInstrument = useMemo(() => {
     if (!parsedTab) return true;
-    // Check if source MIDI roughly matches target MIDI (same instrument)
     const srcMidi = parsedTab.rows.map(r => r.midiOpen).filter(m => m > 0);
     if (srcMidi.length === 0) return true;
     return srcMidi.length === targetMidi.length &&
@@ -46,40 +47,52 @@ export const TabTransposerBlock: React.FC<Props> = ({
       extraSemitones === 0;
   }, [parsedTab, targetMidi, extraSemitones]);
 
-  const canTranspose = parsedTab !== null && transposedText !== null && !isSameInstrument;
+  const transposedText = useMemo(() => {
+    if (!parsedTab || isSameInstrument) return null;
+    try {
+      return transposeTab(
+        parsedTab, targetMidi, targetLabelsHtoL,
+        extraSemitones, POSITIONS[posIdx].fret
+      );
+    } catch {
+      return null;
+    }
+  }, [parsedTab, targetMidi, targetLabelsHtoL, extraSemitones, posIdx, isSameInstrument]);
 
-  const displayText = showTransposed && canTranspose ? transposedText! : originalText;
-
-  const sourceName = parsedTab?.sourceName ?? 'Instrumento original';
+  const displayText = transposedText ?? originalText;
+  const canVary     = transposedText !== null;
+  const sourceName  = parsedTab?.sourceName ?? '';
 
   return (
     <div className="my-1">
-      {/* Transposer toolbar */}
+      {/* Toolbar: source info + Variar button */}
       <div className="flex items-center gap-2 py-0.5 px-1 bg-[#d4d0c8] border-b border-gray-400">
         <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Tab</span>
 
-        {canTranspose ? (
-          <>
-            <span className="text-[9px] text-gray-500 italic truncate max-w-[120px]" title={sourceName}>
-              {sourceName}
-            </span>
-            <span className="text-[9px] text-gray-400">→</span>
-            <button
-              onClick={() => setShowTransposed(v => !v)}
-              className={`text-[9px] font-bold px-2 py-0.5 border leading-tight transition-colors ${
-                showTransposed
-                  ? 'bg-[#316ac5] text-white border-[#1a3a8f]'
-                  : 'bg-[var(--color-winxp-panel)] text-[#002fa7] border-gray-400 hover:bg-white bevel-out'
-              }`}
-              title={showTransposed ? 'Mostrar tab original' : `Transpor para ${targetLabel}`}
-            >
-              {showTransposed ? `◀ Original` : `▶ Transpor → ${targetLabel}`}
-            </button>
-          </>
+        {parsedTab ? (
+          isSameInstrument ? (
+            <span className="text-[9px] text-gray-400 italic">{sourceName}</span>
+          ) : (
+            <>
+              <span className="text-[9px] text-gray-500 italic truncate max-w-[100px]" title={sourceName}>
+                {sourceName}
+              </span>
+              <span className="text-[9px] text-gray-400">→</span>
+              <span className="text-[9px] text-gray-600 truncate max-w-[100px]">{targetLabel}</span>
+
+              {canVary && (
+                <button
+                  onClick={() => setPosIdx(v => (v + 1) % POSITIONS.length)}
+                  className="ml-auto text-[9px] font-bold px-2 py-0.5 border bevel-out bg-[var(--color-winxp-panel)] text-[#002fa7] border-gray-400 hover:bg-white leading-tight"
+                  title={`Variar posição de escala (atual: ${POSITIONS[posIdx].label})`}
+                >
+                  Variar · {POSITIONS[posIdx].label}
+                </button>
+              )}
+            </>
+          )
         ) : (
-          <span className="text-[9px] text-gray-400 italic">
-            {parsedTab ? `${sourceName} • mesmo instrumento` : 'Tab não reconhecida'}
-          </span>
+          <span className="text-[9px] text-gray-400 italic">Tab não reconhecida</span>
         )}
       </div>
 
