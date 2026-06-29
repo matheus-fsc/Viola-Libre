@@ -484,7 +484,7 @@ export const ArtistList: React.FC = () => {
                   {pagedArtists.map(artist => (
                     <div
                       key={artist.id}
-                      onClick={() => navigate(`/${artist.slug}`)}
+                      onClick={() => navigate(`/cifras/${artist.slug}`)}
                       className="bevel-out bg-[var(--color-winxp-panel)] p-2 flex items-center cursor-pointer hover:bg-[#e0dfd6] active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white select-none"
                       style={{ contentVisibility: 'auto', containIntrinsicSize: '0 52px' }}
                     >
@@ -529,7 +529,7 @@ export const ArtistList: React.FC = () => {
                   {songResults.slice(0, visibleCount).map(song => (
                     <div
                       key={song.id}
-                      onClick={() => navigate(`/${song.artist_slug}/${song.slug}`)}
+                      onClick={() => navigate(`/cifras/${song.artist_slug}/${song.slug}`)}
                       className="flex items-center p-2 hover:bg-[#316ac5] hover:text-white cursor-pointer select-none group border border-transparent hover:border-dotted hover:border-white transition-none"
                     >
                       <div className="mr-3 text-gray-500 group-hover:text-white">
@@ -582,7 +582,7 @@ export const ArtistList: React.FC = () => {
                   {songResults.slice(0, visibleCount).map((song, index) => (
                     <div
                       key={song.id}
-                      onClick={() => navigate(`/${song.artist_slug}/${song.slug}`)}
+                      onClick={() => navigate(`/cifras/${song.artist_slug}/${song.slug}`)}
                       className="flex items-center p-2 hover:bg-[#316ac5] hover:text-white cursor-pointer select-none group border border-transparent hover:border-dotted hover:border-white transition-none"
                     >
                       <div className="w-6 font-bold text-gray-400 group-hover:text-white">
@@ -668,7 +668,7 @@ export const ArtistList: React.FC = () => {
                         {generoArtists.slice(0, visibleCount).map(artist => (
                           <div
                             key={artist.id}
-                            onClick={() => navigate(`/${artist.slug}`)}
+                            onClick={() => navigate(`/cifras/${artist.slug}`)}
                             className="bevel-out bg-[var(--color-winxp-panel)] p-2 flex items-center cursor-pointer hover:bg-[#e0dfd6] active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white select-none"
                             style={{ contentVisibility: 'auto', containIntrinsicSize: '0 52px' }}
                           >
