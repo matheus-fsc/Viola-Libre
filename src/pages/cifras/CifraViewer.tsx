@@ -12,6 +12,8 @@ import { buildChord, calculateVoicings, noteNameToPitchClass, parseChordString, 
 import { PRESET_INSTRUMENTS } from '../../engine/tunings';
 import { AudioEngine } from '../../engine/AudioEngine';
 import { FretboardDiagram } from '../../components/FretboardDiagram';
+import { TabTransposerBlock, POSITIONS } from '../../components/TabTransposerBlock';
+import { splitHtmlByTabs, type ContentSegment } from '../../engine/tabTransposer';
 import '../../components/Cifras.css';
 
 
@@ -54,7 +56,7 @@ function isChordDiatonic(chordName: string, songKey: string): boolean {
 }
 
 export const CifraViewer: React.FC = () => {
-  const { artistSlug, songSlug } = useParams<{ artistSlug: string; songSlug: string }>();
+  const { artistSlug, '*': songSlug } = useParams<{ artistSlug: string; '*': string }>();
   const [cifra, setCifra] = useState<CifraDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [isFavoriting, setIsFavoriting] = useState(false);
@@ -62,6 +64,7 @@ export const CifraViewer: React.FC = () => {
 
   // Transpose states
   const [transposeOffset, setTransposeOffset] = useState<number>(0);
+  const [tabPosIdx, setTabPosIdx] = useState<number>(0);
   
   // Scraped original chords
   const [originalChords, setOriginalChords] = useState<string[]>([]);
@@ -260,6 +263,12 @@ export const CifraViewer: React.FC = () => {
       return `<b>${transposed}</b>`;
     });
   }, [cifra, transposeOffset]);
+
+  // Split displayHtml into html/tab segments for the tab transposer
+  const cifraSegments = useMemo<ContentSegment[]>(() => {
+    if (!cifra) return [];
+    return splitHtmlByTabs(displayHtml);
+  }, [displayHtml, cifra]);
 
   // Transposed unique chords for the carousel
   const currentChords = useMemo(() => {
@@ -681,6 +690,7 @@ export const CifraViewer: React.FC = () => {
                     if (newInst) {
                       setSelectedInstId(newInst.id);
                       setSelectedTuningId(newInst.defaultTuningId || newInst.tunings[0].id);
+                      setTabPosIdx(0);
                     }
                   }}
                   className="bevel-in bg-white px-1 py-0 text-xs outline-none cursor-pointer max-w-[100px]"
@@ -709,7 +719,7 @@ export const CifraViewer: React.FC = () => {
           <div className="flex items-center gap-3">
             <div className="flex items-center bg-[#d4d0c8] bevel-in px-1 py-1 gap-1">
               <span className="text-[11px] font-bold px-1 text-gray-700">TOM:</span>
-              <button 
+              <button
                 onClick={() => setTransposeOffset(prev => prev - 1)}
                 className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
                 title="Abaixar meio tom"
@@ -719,12 +729,33 @@ export const CifraViewer: React.FC = () => {
               <span className="font-mono text-xs font-bold w-6 text-center text-[#cc3300]">
                 {transposeOffset > 0 ? `+${transposeOffset}` : transposeOffset}
               </span>
-              <button 
+              <button
                 onClick={() => setTransposeOffset(prev => prev + 1)}
                 className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
                 title="Aumentar meio tom"
               >
                 +½
+              </button>
+            </div>
+
+            <div className="flex items-center bg-[#d4d0c8] bevel-in px-1 py-1 gap-1">
+              <span className="text-[11px] font-bold px-1 text-gray-700">POS.TAB:</span>
+              <button
+                onClick={() => setTabPosIdx(prev => (prev - 1 + POSITIONS.length) % POSITIONS.length)}
+                className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
+                title="Posição anterior"
+              >
+                ◀
+              </button>
+              <span className="font-mono text-xs font-bold min-w-[44px] text-center text-[#005500]">
+                {POSITIONS[tabPosIdx].label}
+              </span>
+              <button
+                onClick={() => setTabPosIdx(prev => (prev + 1) % POSITIONS.length)}
+                className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
+                title="Próxima posição"
+              >
+                ▶
               </button>
             </div>
             
@@ -969,11 +1000,25 @@ export const CifraViewer: React.FC = () => {
         )}
 
         {/* Cifra Content - Notepad Style */}
-        <div className="flex-1 bevel-in bg-white p-4 retro-scrollbar font-mono text-sm leading-relaxed whitespace-pre-wrap text-black">
-          <div 
-            className="cifra-viewer-content"
-            dangerouslySetInnerHTML={{ __html: displayHtml }}
-          />
+        <div className="flex-1 bevel-in bg-white p-4 retro-scrollbar font-mono text-sm leading-relaxed text-black overflow-x-hidden">
+          {cifraSegments.map((seg, i) =>
+            seg.type === 'tab' ? (
+              <TabTransposerBlock
+                key={i}
+                originalText={seg.content}
+                targetStrings={currentTuning.strings}
+                targetLabel={`${currentInst.name} — ${currentTuning.name.split(' (')[0]}`}
+                extraSemitones={transposeOffset}
+                posIdx={tabPosIdx}
+              />
+            ) : (
+              <div
+                key={i}
+                className="cifra-viewer-content whitespace-pre-wrap"
+                dangerouslySetInnerHTML={{ __html: seg.content }}
+              />
+            )
+          )}
         </div>
 
       </div>
