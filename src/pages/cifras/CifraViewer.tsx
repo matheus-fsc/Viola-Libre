@@ -65,6 +65,8 @@ export const CifraViewer: React.FC = () => {
   // Transpose states
   const [transposeOffset, setTransposeOffset] = useState<number>(0);
   const [tabPosIdx, setTabPosIdx] = useState<number>(0);
+  const [panelPosition, setPanelPosition] = useState<'left' | 'top' | 'right' | 'bottom'>('left');
+  const [showTabs, setShowTabs] = useState(true);
   
   // Scraped original chords
   const [originalChords, setOriginalChords] = useState<string[]>([]);
@@ -283,6 +285,10 @@ export const CifraViewer: React.FC = () => {
     () => currentInst.tunings.find(t => t.id === selectedTuningId) || currentInst.tunings[0],
     [currentInst, selectedTuningId]
   );
+
+  const isVertical = panelPosition === 'left' || panelPosition === 'right';
+  const PANEL_ICONS: Record<typeof panelPosition, string> = { left: '◧', top: '▀', right: '◨', bottom: '▄' };
+  const cyclePosition = () => setPanelPosition(p => ({ left: 'top', top: 'right', right: 'bottom', bottom: 'left' } as const)[p]);
 
   // Pré-computa todos os voicings (fora do .map para reutilizar no proximity sort)
   const allVoicings = useMemo(() => {
@@ -645,139 +651,147 @@ export const CifraViewer: React.FC = () => {
         </button>
       </div>
 
-      {/* Main layout container with fixed sidebar and scrolling content */}
-      <div className="flex-1 flex flex-col gap-2">
+      {/* Main layout container */}
+      <div className={`flex-1 flex gap-2 min-h-0 ${isVertical ? 'flex-row' : 'flex-col'}`}>
         
-        {/* Toolbar superior com botões de Tom e metadados */}
-        <div className="bevel-out bg-[var(--color-winxp-panel)] p-2 flex flex-wrap items-center justify-between gap-4 text-sm shrink-0">
-          
-          <div className="flex items-center gap-3">
-            <span className="text-gray-600 flex items-center gap-1 font-bold" title="Visualizações">
-              <Eye size={16} className="text-blue-600" /> {cifra.views || 1}
-            </span>
-            <span className="text-gray-600 flex items-center gap-1 font-bold" title="Favoritos">
-              <Heart size={16} className="text-red-500" /> {cifra.favorited || 0}
-            </span>
-            
-            <div className="flex items-center gap-1 ml-2">
-              <label className="font-bold text-[11px] uppercase tracking-wider text-gray-700">Dif:</label>
-              <select 
-                value={cifra.difficulty || ""}
-                onChange={(e) => handleDifficulty(e.target.value)}
-                className="bevel-in bg-white px-1 py-0 text-xs outline-none cursor-pointer"
-              >
+        {/* ── Painel adaptativo (lateral ou horizontal) ── */}
+        {isVertical ? (
+          <aside className={`bevel-out bg-[var(--color-winxp-panel)] flex flex-col gap-1.5 p-2 shrink-0 overflow-y-auto text-xs w-44 ${panelPosition === 'right' ? 'order-last' : ''}`}>
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-[10px] uppercase text-gray-500">Painel</span>
+              <button onClick={cyclePosition} className="bevel-out bg-[var(--color-winxp-panel)] px-1 py-0 text-sm leading-none border border-gray-400" title="Mover painel">{PANEL_ICONS[panelPosition]}</button>
+            </div>
+
+            <div className="flex gap-2 text-[10px] text-gray-600">
+              <span className="flex items-center gap-0.5"><Eye size={11} className="text-blue-600" /> {cifra.views || 1}</span>
+              <span className="flex items-center gap-0.5"><Heart size={11} className="text-red-500" /> {cifra.favorited || 0}</span>
+            </div>
+
+            <div className="flex flex-col gap-0.5">
+              <label className="font-bold text-[10px] uppercase text-gray-500">Dif:</label>
+              <select value={cifra.difficulty || ""} onChange={(e) => handleDifficulty(e.target.value)} className="bevel-in bg-white px-1 py-0 text-xs w-full outline-none cursor-pointer">
                 <option value="" disabled>...</option>
                 <option value="iniciante">Fácil</option>
                 <option value="intermediario">Médio</option>
                 <option value="avancado">Difícil</option>
               </select>
             </div>
-            
-            <div className="flex items-center gap-1 ml-2">
-              <label className="font-bold text-[11px] uppercase tracking-wider text-gray-700">Tom Original:</label>
-              <span className="font-bold text-xs bg-white border border-gray-400 px-1 text-[#002fa7] min-w-[20px] text-center">
-                {songKey || '?'}
-              </span>
+
+            <div className="flex items-center gap-1">
+              <span className="font-bold text-[10px] uppercase text-gray-500 shrink-0">Tom:</span>
+              <span className="font-bold text-xs bg-white border border-gray-400 px-1 text-[#002fa7] min-w-[20px] text-center">{songKey || '?'}</span>
             </div>
 
-            <div className="flex items-center gap-2 ml-4">
-              <div className="flex items-center gap-1">
-                <label className="font-bold text-[11px] uppercase tracking-wider text-gray-700">Instrumento:</label>
-                <select 
-                  value={selectedInstId}
-                  onChange={(e) => {
-                    const newInst = PRESET_INSTRUMENTS.find(i => i.id === e.target.value);
-                    if (newInst) {
-                      setSelectedInstId(newInst.id);
-                      setSelectedTuningId(newInst.defaultTuningId || newInst.tunings[0].id);
-                      setTabPosIdx(0);
-                    }
-                  }}
-                  className="bevel-in bg-white px-1 py-0 text-xs outline-none cursor-pointer max-w-[100px]"
-                >
-                  {PRESET_INSTRUMENTS.map(inst => (
-                    <option key={inst.id} value={inst.id}>{inst.name}</option>
-                  ))}
-                </select>
-              </div>
+            <div className="flex flex-col gap-0.5">
+              <label className="font-bold text-[10px] uppercase text-gray-500">Instrumento:</label>
+              <select value={selectedInstId} onChange={(e) => { const newInst = PRESET_INSTRUMENTS.find(i => i.id === e.target.value); if (newInst) { setSelectedInstId(newInst.id); setSelectedTuningId(newInst.defaultTuningId || newInst.tunings[0].id); setTabPosIdx(0); } }} className="bevel-in bg-white px-1 py-0 text-xs w-full outline-none cursor-pointer">
+                {PRESET_INSTRUMENTS.map(inst => (<option key={inst.id} value={inst.id}>{inst.name}</option>))}
+              </select>
+            </div>
 
+            <div className="flex flex-col gap-0.5">
+              <label className="font-bold text-[10px] uppercase text-gray-500">Afinação:</label>
+              <select value={selectedTuningId} onChange={(e) => setSelectedTuningId(e.target.value)} className="bevel-in bg-white px-1 py-0 text-xs w-full outline-none cursor-pointer">
+                {currentInst.tunings.map(tuning => (<option key={tuning.id} value={tuning.id}>{tuning.name.split(' (')[0]}</option>))}
+              </select>
+            </div>
+
+            <hr className="border-gray-300" />
+
+            <div className="flex flex-col gap-0.5">
+              <label className="font-bold text-[10px] uppercase text-gray-500">TOM:</label>
               <div className="flex items-center gap-1">
-                <label className="font-bold text-[11px] uppercase tracking-wider text-gray-700">Afinação:</label>
-                <select 
-                  value={selectedTuningId}
-                  onChange={(e) => setSelectedTuningId(e.target.value)}
-                  className="bevel-in bg-white px-1 py-0 text-xs outline-none cursor-pointer max-w-[100px]"
-                >
-                  {currentInst.tunings.map(tuning => (
-                    <option key={tuning.id} value={tuning.id}>{tuning.name.split(' (')[0]}</option>
-                  ))}
-                </select>
+                <button onClick={() => setTransposeOffset(p => p - 1)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white">-½</button>
+                <span className="font-mono text-xs font-bold flex-1 text-center text-[#cc3300]">{transposeOffset > 0 ? `+${transposeOffset}` : transposeOffset}</span>
+                <button onClick={() => setTransposeOffset(p => p + 1)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white">+½</button>
               </div>
             </div>
-          </div>
 
-          <div className="flex items-center gap-3">
-            <div className="flex items-center bg-[#d4d0c8] bevel-in px-1 py-1 gap-1">
-              <span className="text-[11px] font-bold px-1 text-gray-700">TOM:</span>
-              <button
-                onClick={() => setTransposeOffset(prev => prev - 1)}
-                className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
-                title="Abaixar meio tom"
-              >
-                -½
-              </button>
-              <span className="font-mono text-xs font-bold w-6 text-center text-[#cc3300]">
-                {transposeOffset > 0 ? `+${transposeOffset}` : transposeOffset}
-              </span>
-              <button
-                onClick={() => setTransposeOffset(prev => prev + 1)}
-                className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
-                title="Aumentar meio tom"
-              >
-                +½
-              </button>
+            <div className="flex flex-col gap-0.5">
+              <label className="font-bold text-[10px] uppercase text-gray-500">POS.TAB:</label>
+              <div className="flex items-center gap-1">
+                <button onClick={() => setTabPosIdx(p => (p - 1 + POSITIONS.length) % POSITIONS.length)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white">◀</button>
+                <span className="font-mono text-xs font-bold flex-1 text-center text-[#005500]">{POSITIONS[tabPosIdx].label}</span>
+                <button onClick={() => setTabPosIdx(p => (p + 1) % POSITIONS.length)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white">▶</button>
+              </div>
             </div>
 
-            <div className="flex items-center bg-[#d4d0c8] bevel-in px-1 py-1 gap-1">
-              <span className="text-[11px] font-bold px-1 text-gray-700">POS.TAB:</span>
-              <button
-                onClick={() => setTabPosIdx(prev => (prev - 1 + POSITIONS.length) % POSITIONS.length)}
-                className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
-                title="Posição anterior"
-              >
-                ◀
-              </button>
-              <span className="font-mono text-xs font-bold min-w-[44px] text-center text-[#005500]">
-                {POSITIONS[tabPosIdx].label}
-              </span>
-              <button
-                onClick={() => setTabPosIdx(prev => (prev + 1) % POSITIONS.length)}
-                className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
-                title="Próxima posição"
-              >
-                ▶
-              </button>
-            </div>
-            
-            <button
-              onClick={handleFavorite}
-              disabled={isFavoriting}
-              className="bevel-out bg-[var(--color-winxp-panel)] px-3 py-1 text-xs font-bold flex items-center gap-1 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white text-black"
-            >
-              <Heart size={14} className={`${isFavoriting ? 'opacity-50' : ''} ${cifra.favorited && cifra.favorited > 0 ? "fill-red-500 text-red-500" : "text-gray-600"}`} />
+            <hr className="border-gray-300" />
+
+            <button onClick={() => setShowTabs(v => !v)} className={`bevel-out px-2 py-1 text-xs font-bold w-full text-left border border-gray-400 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${!showTabs ? 'bg-[#316ac5] text-white' : 'bg-[var(--color-winxp-panel)] text-black hover:bg-white'}`}>
+              {showTabs ? 'Ocultar Tabs' : '▶ Mostrar Tabs'}
+            </button>
+
+            <button onClick={handleFavorite} disabled={isFavoriting} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-1 text-xs font-bold flex items-center gap-1 w-full border border-gray-400 hover:bg-white disabled:opacity-50 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white text-black">
+              <Heart size={12} className={`${isFavoriting ? 'opacity-50' : ''} ${cifra.favorited && cifra.favorited > 0 ? "fill-red-500 text-red-500" : "text-gray-600"}`} />
               <span className={isFavoriting ? 'opacity-50' : ''}>Favoritar</span>
             </button>
 
-            <button
-              onClick={() => setSeqModalOpen('save')}
-              className={`bevel-out px-3 py-1 text-xs font-bold flex items-center gap-1 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white text-black ${savedHash ? 'bg-[#d4edda] border border-green-500' : 'bg-[var(--color-winxp-panel)]'}`}
-              title="Salvar ou carregar sequência de acordes"
-            >
-              <Save size={13} className={savedHash ? 'text-green-700' : 'text-gray-600'} />
+            <button onClick={() => setSeqModalOpen('save')} className={`bevel-out px-2 py-1 text-xs font-bold flex items-center gap-1 w-full border border-gray-400 hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white text-black ${savedHash ? 'bg-[#d4edda] border-green-500' : 'bg-[var(--color-winxp-panel)]'}`}>
+              <Save size={11} className={savedHash ? 'text-green-700' : 'text-gray-600'} />
               <span>{savedHash ? 'Sequência ✓' : 'Sequência'}</span>
             </button>
+          </aside>
+        ) : (
+          <div className={`bevel-out bg-[var(--color-winxp-panel)] p-2 flex flex-wrap items-center justify-between gap-3 text-sm shrink-0 ${panelPosition === 'bottom' ? 'order-last' : ''}`}>
+            <div className="flex items-center gap-3 flex-wrap">
+              <button onClick={cyclePosition} className="bevel-out bg-[var(--color-winxp-panel)] px-1.5 py-0 text-sm font-bold border border-gray-400" title="Mover painel">{PANEL_ICONS[panelPosition]}</button>
+              <span className="text-gray-600 flex items-center gap-1 font-bold" title="Visualizações"><Eye size={16} className="text-blue-600" /> {cifra.views || 1}</span>
+              <span className="text-gray-600 flex items-center gap-1 font-bold" title="Favoritos"><Heart size={16} className="text-red-500" /> {cifra.favorited || 0}</span>
+              <div className="flex items-center gap-1">
+                <label className="font-bold text-[11px] uppercase tracking-wider text-gray-700">Dif:</label>
+                <select value={cifra.difficulty || ""} onChange={(e) => handleDifficulty(e.target.value)} className="bevel-in bg-white px-1 py-0 text-xs outline-none cursor-pointer">
+                  <option value="" disabled>...</option>
+                  <option value="iniciante">Fácil</option>
+                  <option value="intermediario">Médio</option>
+                  <option value="avancado">Difícil</option>
+                </select>
+              </div>
+              <div className="flex items-center gap-1">
+                <label className="font-bold text-[11px] uppercase tracking-wider text-gray-700">Tom:</label>
+                <span className="font-bold text-xs bg-white border border-gray-400 px-1 text-[#002fa7] min-w-[20px] text-center">{songKey || '?'}</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <label className="font-bold text-[11px] uppercase tracking-wider text-gray-700">Instrumento:</label>
+                <select value={selectedInstId} onChange={(e) => { const newInst = PRESET_INSTRUMENTS.find(i => i.id === e.target.value); if (newInst) { setSelectedInstId(newInst.id); setSelectedTuningId(newInst.defaultTuningId || newInst.tunings[0].id); setTabPosIdx(0); } }} className="bevel-in bg-white px-1 py-0 text-xs outline-none cursor-pointer max-w-[100px]">
+                  {PRESET_INSTRUMENTS.map(inst => (<option key={inst.id} value={inst.id}>{inst.name}</option>))}
+                </select>
+              </div>
+              <div className="flex items-center gap-1">
+                <label className="font-bold text-[11px] uppercase tracking-wider text-gray-700">Afinação:</label>
+                <select value={selectedTuningId} onChange={(e) => setSelectedTuningId(e.target.value)} className="bevel-in bg-white px-1 py-0 text-xs outline-none cursor-pointer max-w-[100px]">
+                  {currentInst.tunings.map(tuning => (<option key={tuning.id} value={tuning.id}>{tuning.name.split(' (')[0]}</option>))}
+                </select>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center bg-[#d4d0c8] bevel-in px-1 py-1 gap-1">
+                <span className="text-[11px] font-bold px-1 text-gray-700">TOM:</span>
+                <button onClick={() => setTransposeOffset(p => p - 1)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white" title="Abaixar meio tom">-½</button>
+                <span className="font-mono text-xs font-bold w-6 text-center text-[#cc3300]">{transposeOffset > 0 ? `+${transposeOffset}` : transposeOffset}</span>
+                <button onClick={() => setTransposeOffset(p => p + 1)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white" title="Aumentar meio tom">+½</button>
+              </div>
+              <div className="flex items-center bg-[#d4d0c8] bevel-in px-1 py-1 gap-1">
+                <span className="text-[11px] font-bold px-1 text-gray-700">POS.TAB:</span>
+                <button onClick={() => setTabPosIdx(p => (p - 1 + POSITIONS.length) % POSITIONS.length)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white">◀</button>
+                <span className="font-mono text-xs font-bold min-w-[44px] text-center text-[#005500]">{POSITIONS[tabPosIdx].label}</span>
+                <button onClick={() => setTabPosIdx(p => (p + 1) % POSITIONS.length)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white">▶</button>
+              </div>
+              <button onClick={() => setShowTabs(v => !v)} className={`bevel-out px-3 py-1 text-xs font-bold border border-gray-400 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${!showTabs ? 'bg-[#316ac5] text-white' : 'bg-[var(--color-winxp-panel)] text-[#002fa7]'}`}>{showTabs ? 'Tabs ▼' : 'Tabs ▶'}</button>
+              <button onClick={handleFavorite} disabled={isFavoriting} className="bevel-out bg-[var(--color-winxp-panel)] px-3 py-1 text-xs font-bold flex items-center gap-1 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white text-black">
+                <Heart size={14} className={`${isFavoriting ? 'opacity-50' : ''} ${cifra.favorited && cifra.favorited > 0 ? "fill-red-500 text-red-500" : "text-gray-600"}`} />
+                <span className={isFavoriting ? 'opacity-50' : ''}>Favoritar</span>
+              </button>
+              <button onClick={() => setSeqModalOpen('save')} className={`bevel-out px-3 py-1 text-xs font-bold flex items-center gap-1 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white text-black ${savedHash ? 'bg-[#d4edda] border border-green-500' : 'bg-[var(--color-winxp-panel)]'}`} title="Salvar ou carregar sequência de acordes">
+                <Save size={13} className={savedHash ? 'text-green-700' : 'text-gray-600'} />
+                <span>{savedHash ? 'Sequência ✓' : 'Sequência'}</span>
+              </button>
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* Área de conteúdo: carousel + cifra */}
+        <div className="flex-1 flex flex-col gap-2 min-w-0 min-h-0">
 
         {/* Carousel de Acordes Superior */}
         {currentChords.length > 0 && (
@@ -1000,17 +1014,19 @@ export const CifraViewer: React.FC = () => {
         )}
 
         {/* Cifra Content - Notepad Style */}
-        <div className="flex-1 bevel-in bg-white p-4 retro-scrollbar font-mono text-sm leading-relaxed text-black overflow-x-hidden">
+        <div className="flex-1 bevel-in bg-white p-4 retro-scrollbar font-mono text-sm leading-relaxed text-black overflow-x-hidden overflow-y-auto">
           {cifraSegments.map((seg, i) =>
             seg.type === 'tab' ? (
-              <TabTransposerBlock
-                key={i}
-                originalText={seg.content}
-                targetStrings={currentTuning.strings}
-                targetLabel={`${currentInst.name} — ${currentTuning.name.split(' (')[0]}`}
-                extraSemitones={transposeOffset}
-                posIdx={tabPosIdx}
-              />
+              showTabs ? (
+                <TabTransposerBlock
+                  key={i}
+                  originalText={seg.content}
+                  targetStrings={currentTuning.strings}
+                  targetLabel={`${currentInst.name} — ${currentTuning.name.split(' (')[0]}`}
+                  extraSemitones={transposeOffset}
+                  posIdx={tabPosIdx}
+                />
+              ) : null
             ) : (
               <div
                 key={i}
@@ -1020,6 +1036,8 @@ export const CifraViewer: React.FC = () => {
             )
           )}
         </div>
+
+        </div>{/* fim área de conteúdo */}
 
       </div>
     </div>
