@@ -4,6 +4,7 @@ import {
   transposeTab,
   getTuningLabelsHighToLow,
   getTuningMidiHighToLow,
+  TAB_POSITIONS,
   type ParsedTab,
 } from '../engine/tabTransposer';
 
@@ -14,13 +15,6 @@ interface Props {
   extraSemitones?: number;
   posIdx: number;            // neck position index — controlled by CifraViewer
 }
-
-export const POSITIONS = [
-  { label: 'Aberta', fret: 0  },
-  { label: '5ª pos', fret: 5  },
-  { label: '7ª pos', fret: 7  },
-  { label: '12ª pos', fret: 12 },
-];
 
 export const TabTransposerBlock: React.FC<Props> = ({
   originalText,
@@ -45,7 +39,7 @@ export const TabTransposerBlock: React.FC<Props> = ({
   const transposedText = useMemo(() => {
     if (!parsedTab || isSameInstrument) return null;
     try {
-      return transposeTab(parsedTab, targetMidi, targetLabelsHtL, extraSemitones, POSITIONS[posIdx].fret);
+      return transposeTab(parsedTab, targetMidi, targetLabelsHtL, extraSemitones, TAB_POSITIONS[posIdx].fret);
     } catch { return null; }
   }, [parsedTab, targetMidi, targetLabelsHtL, extraSemitones, posIdx, isSameInstrument]);
 
@@ -61,7 +55,7 @@ export const TabTransposerBlock: React.FC<Props> = ({
             <span className="text-[9px] text-gray-500 italic truncate max-w-[90px]" title={sourceName}>{sourceName}</span>
             <span className="text-[9px] text-gray-400">→</span>
             <span className="text-[9px] text-[#002fa7]">{targetLabel}</span>
-            <span className="text-[9px] text-gray-400 ml-1">· {POSITIONS[posIdx].label}</span>
+            <span className="text-[9px] text-gray-400 ml-1">· {TAB_POSITIONS[posIdx].label}</span>
           </>
         ) : parsedTab ? (
           <span className="text-[9px] text-gray-400 italic">{sourceName}</span>

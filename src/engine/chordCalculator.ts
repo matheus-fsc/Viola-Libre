@@ -84,10 +84,31 @@ export function transposeChordString(chordStr: string, semitones: number, prefer
   }
 }
 
+// Unicode / alias normalization — e.g. 'º' (U+00BA ordinal) → '°' (U+00B0 degree)
+const SUFFIX_ALIASES: Record<string, string> = {
+  'º': '°',     // º → °  (masculine ordinal → degree sign, both mean dim)
+  'º7': '°7',   // º7 → °7
+  'dim': '°',
+  'dim7': '°7',
+  'o': '°',
+  'o7': '°7',
+  '+': 'aug',
+  'M7': 'Maj7',
+  'maj7': 'Maj7',
+  'Δ': 'Maj7',       // Δ → Maj7
+  'Δ7': 'Maj7',
+  'ø': 'm7(b5)',     // ø → m7(b5) (half-dim)
+  'ø7': 'm7(b5)',
+  'm+': 'm(#5)',     // m+ → m(#5) (minor augmented)
+  'maug': 'm(#5)',
+  'm#5': 'm(#5)',
+};
+function normalizeSuffix(s: string): string { return SUFFIX_ALIASES[s] ?? s; }
+
 // Build a Chord object from root name, formula suffix, and optional bass name
 export function buildChord(rootName: string, suffix: string, bassName?: string): Chord {
   const root = noteNameToPitchClass(rootName);
-  const formula = CHORD_FORMULAS.find(f => f.suffix === suffix);
+  const formula = CHORD_FORMULAS.find(f => f.suffix === normalizeSuffix(suffix));
   if (!formula) {
     throw new Error(`Fórmula não encontrada para o sufixo: ${suffix}`);
   }
