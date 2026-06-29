@@ -54,7 +54,7 @@ function isChordDiatonic(chordName: string, songKey: string): boolean {
 }
 
 export const CifraViewer: React.FC = () => {
-  const { artistSlug, '*': songSlug } = useParams<{ artistSlug: string; '*': string }>();
+  const { artistSlug, songSlug } = useParams<{ artistSlug: string; songSlug: string }>();
   const [cifra, setCifra] = useState<CifraDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [isFavoriting, setIsFavoriting] = useState(false);
@@ -629,7 +629,7 @@ export const CifraViewer: React.FC = () => {
           <span className="truncate">{cifra.title} - {artistSlug}</span>
         </div>
         <button 
-          onClick={() => navigate(`/${artistSlug}`)}
+          onClick={() => navigate(`/cifras/${artistSlug}`)}
           className="bevel-out bg-[var(--color-winxp-panel)] text-black px-2 py-0 text-xs active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white shrink-0 ml-2"
         >
           Voltar

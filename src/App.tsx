@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import type { Instrument, Tuning, Voicing } from './engine/types';
 import { PRESET_INSTRUMENTS, NOTE_NAMES_SHARP, NOTE_NAMES_FLAT } from './engine/tunings';
 import { buildChord, calculateVoicings, shouldUseFlats, noteNameToPitchClass, evaluatePlayability } from './engine/chordCalculator';
@@ -123,8 +124,18 @@ function App() {
   });
   const [showCifraWindow, setShowCifraWindow] = useState<boolean>(false);
 
-  // Tab switcher state
-  const [activeTab, setActiveTab] = useState<'cifras' | 'minhascifras' | 'chords' | 'train' | 'ear' | 'favorites'>('cifras');
+  // Tab switcher — derived from URL
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
+  const activeTab = ((): 'cifras' | 'minhascifras' | 'chords' | 'train' | 'ear' | 'favorites' => {
+    if (pathname.startsWith('/cifras')) return 'cifras';
+    if (pathname === '/minhascifras') return 'minhascifras';
+    if (pathname === '/chords') return 'chords';
+    if (pathname === '/treinos') return 'train';
+    if (pathname === '/ouvido') return 'ear';
+    if (pathname === '/favoritos') return 'favorites';
+    return 'cifras';
+  })();
 
   // Taskbar collapse state
   const [isTaskbarCollapsed, setIsTaskbarCollapsed] = useState(false);
@@ -392,7 +403,7 @@ function App() {
                 _
               </button>
               <button 
-                onClick={() => setActiveTab('favorites')}
+                onClick={() => navigate('/favoritos')}
                 className={`w-[21px] h-[21px] rounded border flex items-center justify-center font-bold text-xs focus:outline-none cursor-pointer ${activeTab === 'favorites' ? 'bg-[#ff7f27] border-white text-white' : 'bg-[#0058e6] border-white hover:bg-[#3a8bfb]'}`}
                 title="Abrir Favoritos"
               >
@@ -413,7 +424,7 @@ function App() {
           {/* XP Dialog Tabs (under menu bar) */}
           <div className="flex pl-2 gap-1 bg-[#ece9d8] border-b border-[#d4d0c8] select-none pt-2 z-10 overflow-x-auto no-scrollbar whitespace-nowrap">
             <button
-              onClick={() => setActiveTab('cifras')}
+              onClick={() => navigate('/cifras')}
               className={`shrink-0 px-2 sm:px-4 py-1.5 font-mono text-[10px] sm:text-xs font-bold rounded-t border-2 border-b-0 cursor-pointer ${
                 activeTab === 'cifras'
                   ? 'bg-[#ece9d8] border-white border-t-[#0058e6] border-x-[#808080] translate-y-[2px] z-10 text-black'
@@ -423,7 +434,7 @@ function App() {
               <span>Explore Cifras</span>
             </button>
             <button
-              onClick={() => setActiveTab('minhascifras')}
+              onClick={() => navigate('/minhascifras')}
               className={`shrink-0 px-2 sm:px-4 py-1.5 font-mono text-[10px] sm:text-xs font-bold rounded-t border-2 border-b-0 cursor-pointer ${
                 activeTab === 'minhascifras'
                   ? 'bg-[#ece9d8] border-white border-t-[#0058e6] border-x-[#808080] translate-y-[2px] z-10 text-black'
@@ -434,9 +445,9 @@ function App() {
               <span className="inline sm:hidden">Minhas</span>
             </button>
             <button
-              onClick={() => setActiveTab('chords')}
+              onClick={() => navigate('/chords')}
               className={`shrink-0 px-2 sm:px-4 py-1.5 font-mono text-[10px] sm:text-xs font-bold rounded-t border-2 border-b-0 cursor-pointer ${
-                activeTab === 'chords' 
+                activeTab === 'chords'
                   ? 'bg-[#ece9d8] border-white border-t-[#0058e6] border-x-[#808080] translate-y-[2px] z-10 text-black' 
                   : 'bg-[#d4d0c8] border-[#ece9d8] border-r-[#808080] border-bottom-[#808080] text-gray-700 hover:bg-white/50'
               }`}
@@ -444,9 +455,9 @@ function App() {
               <span>Dicionário de Acordes</span>
             </button>
             <button 
-              onClick={() => setActiveTab('train')}
+              onClick={() => navigate('/treinos')}
               className={`shrink-0 px-2 sm:px-4 py-1.5 font-mono text-[10px] sm:text-xs font-bold rounded-t border-2 border-b-0 cursor-pointer ${
-                activeTab === 'train' 
+                activeTab === 'train'
                   ? 'bg-[#ece9d8] border-white border-t-[#0058e6] border-x-[#808080] translate-y-[2px] z-10 text-black' 
                   : 'bg-[#d4d0c8] border-[#ece9d8] border-r-[#808080] border-bottom-[#808080] text-gray-700 hover:bg-white/50'
               }`}
@@ -455,9 +466,9 @@ function App() {
               <span className="inline sm:hidden">Treinos</span>
             </button>
             <button 
-              onClick={() => setActiveTab('ear')}
+              onClick={() => navigate('/ouvido')}
               className={`shrink-0 px-2 sm:px-4 py-1.5 font-mono text-[10px] sm:text-xs font-bold rounded-t border-2 border-b-0 cursor-pointer ${
-                activeTab === 'ear' 
+                activeTab === 'ear'
                   ? 'bg-[#ece9d8] border-white border-t-[#0058e6] border-x-[#808080] translate-y-[2px] z-10 text-black' 
                   : 'bg-[#d4d0c8] border-[#ece9d8] border-r-[#808080] border-bottom-[#808080] text-gray-700 hover:bg-white/50'
               }`}
@@ -466,9 +477,9 @@ function App() {
               <span className="inline sm:hidden">Ouvido</span>
             </button>
             <button 
-              onClick={() => setActiveTab('favorites')}
+              onClick={() => navigate('/favoritos')}
               className={`shrink-0 px-2 sm:px-4 py-1.5 font-mono text-[10px] sm:text-xs font-bold rounded-t border-2 border-b-0 cursor-pointer ${
-                activeTab === 'favorites' 
+                activeTab === 'favorites'
                   ? 'bg-[#ece9d8] border-white border-t-[#0058e6] border-x-[#808080] translate-y-[2px] z-10 text-black' 
                   : 'bg-[#d4d0c8] border-[#ece9d8] border-r-[#808080] border-bottom-[#808080] text-gray-700 hover:bg-white/50'
               }`}
@@ -782,7 +793,7 @@ function App() {
                                 <button
                                   onClick={() => {
                                     loadFavorite(fav);
-                                    setActiveTab('chords');
+                                    navigate('/chords');
                                   }}
                                   className="px-3 py-1 bg-[#ece9d8] border border-white border-r-[#808080] border-bottom-[#808080] active:border-t-[#808080] active:border-l-[#808080] font-bold text-xs mr-2 hover:bg-white cursor-pointer"
                                   title="Carregar no Localizador de Acordes"
@@ -1025,7 +1036,7 @@ function App() {
             </button>
 
             <button 
-              onClick={() => setActiveTab('cifras')}
+              onClick={() => navigate('/cifras')}
               className={`h-[28px] px-3 border text-xs font-mono font-bold rounded flex items-center gap-1.5 select-none cursor-pointer ${
                 activeTab === 'cifras'
                   ? 'bg-[#3a8bfb] text-white border-[#002fa7] border-t-white border-l-white shadow-[inset_1px_1px_0_#ffffff50]'
@@ -1036,7 +1047,7 @@ function App() {
             </button>
 
             <button 
-              onClick={() => setActiveTab('chords')}
+              onClick={() => navigate('/chords')}
               className={`h-[28px] px-3 border text-xs font-mono font-bold rounded flex items-center gap-1.5 select-none cursor-pointer ${
                 activeTab === 'chords'
                   ? 'bg-[#3a8bfb] text-white border-[#002fa7] border-t-white border-l-white shadow-[inset_1px_1px_0_#ffffff50]'
@@ -1047,7 +1058,7 @@ function App() {
             </button>
             
             <button 
-              onClick={() => setActiveTab('favorites')}
+              onClick={() => navigate('/favoritos')}
               className={`h-[28px] px-3 border text-xs font-mono font-bold rounded flex items-center gap-1.5 select-none cursor-pointer ${
                 activeTab === 'favorites'
                   ? 'bg-[#3a8bfb] text-white border-[#002fa7] border-t-white border-l-white shadow-[inset_1px_1px_0_#ffffff50]'

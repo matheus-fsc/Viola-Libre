@@ -44,7 +44,7 @@ export const SongList: React.FC = () => {
           Músicas de {artistName}
         </div>
         <button
-          onClick={() => navigate('/')}
+          onClick={() => navigate('/cifras')}
           className="bevel-out bg-[var(--color-winxp-panel)] text-black px-2 py-0 text-xs active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
         >
           Voltar
@@ -61,7 +61,7 @@ export const SongList: React.FC = () => {
             {(Array.isArray(songs) ? songs : []).slice(0, visibleCount).map(song => (
               <div
                 key={song.id}
-                onClick={() => navigate(`/${artistSlug}/${song.slug}`)}
+                onClick={() => navigate(`/cifras/${artistSlug}/${song.slug}`)}
                 className="flex items-center p-2 hover:bg-[#316ac5] hover:text-white cursor-pointer select-none group border border-transparent hover:border-dotted hover:border-white transition-none"
               >
                 <div className="mr-3 text-gray-500 group-hover:text-white">
