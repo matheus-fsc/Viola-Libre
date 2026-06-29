@@ -308,11 +308,18 @@ export function findBestPosition(
 
   if (candidates.length === 0) return null;
 
-  // Sort: prefer open strings (fret 0), then closest to hand position, then lower fret
+  // Sort: prefer open strings, then minimize weighted distance.
+  // Backward shifts (fret significantly below handPos) are penalized so the
+  // algorithm prefers staying in the current hand-position window even if it
+  // means using a different string at a slightly higher fret.
   candidates.sort((a, b) => {
     if (a.fret === 0 && b.fret !== 0) return -1;
     if (b.fret === 0 && a.fret !== 0) return 1;
-    if (Math.abs(a.dist - b.dist) > 1) return a.dist - b.dist;
+    // A fret that requires moving the hand back 2+ positions gets a penalty.
+    const backPenalty = (fret: number) => (fret > 0 && fret < handPos - 1) ? 3 : 0;
+    const aScore = a.dist + backPenalty(a.fret);
+    const bScore = b.dist + backPenalty(b.fret);
+    if (aScore !== bScore) return aScore - bScore;
     return a.fret - b.fret;
   });
 
