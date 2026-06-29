@@ -141,7 +141,7 @@ export const incrementView = async (artistSlug: string, songSlug: string): Promi
   const safeSongSlug = songSlug.startsWith('/') ? songSlug.slice(1) : songSlug;
   await api.post(`/api/cifra/${artistSlug}/${safeSongSlug}/view`, {}, {
     headers: {
-      'X-API-Key': import.meta.env.VITE_API_KEY || 'viola_live_nBcrg1wcNlUPMdOt9H83kaEK8BSzn1LB9K6UuJ-Nc1U'
+      'X-API-Key': import.meta.env.VITE_API_KEY ?? ''
     }
   });
 };
@@ -180,7 +180,7 @@ export const favoriteCifra = async (artistSlug: string, songSlug: string): Promi
 
   await api.post(`/api/cifra/${artistSlug}/${safeSongSlug}/favorite`, { user_hash: hash }, {
     headers: {
-      'X-API-Key': import.meta.env.VITE_API_KEY || 'viola_live_nBcrg1wcNlUPMdOt9H83kaEK8BSzn1LB9K6UuJ-Nc1U'
+      'X-API-Key': import.meta.env.VITE_API_KEY ?? ''
     }
   });
 };
@@ -189,7 +189,7 @@ export const updateDifficulty = async (artistSlug: string, songSlug: string, dif
   const safeSongSlug = songSlug.startsWith('/') ? songSlug.slice(1) : songSlug;
   await api.post(`/api/cifra/${artistSlug}/${safeSongSlug}/difficulty`, { difficulty }, {
     headers: {
-      'X-API-Key': import.meta.env.VITE_API_KEY || 'viola_live_nBcrg1wcNlUPMdOt9H83kaEK8BSzn1LB9K6UuJ-Nc1U'
+      'X-API-Key': import.meta.env.VITE_API_KEY ?? ''
     }
   });
 };
