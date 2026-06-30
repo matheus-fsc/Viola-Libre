@@ -31,6 +31,8 @@ export interface CifraDetail {
   favorited: number;
   difficulty: string | null;
   version_name: string;
+  bpm?: number | null;
+  duration?: number | null;
 }
 
 const cache = {
