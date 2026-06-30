@@ -96,8 +96,8 @@ export const SongList: React.FC = () => {
                     <div className="text-sm font-bold">{song.title}</div>
                   </div>
                   {nVersions > 1 && (
-                    <span className="text-xs bg-gray-200 text-gray-700 px-1 border border-gray-400 flex items-center gap-1 group-hover:bg-[#1a3b6e] group-hover:text-white group-hover:border-transparent" title={`${nVersions} versões disponíveis`}>
-                      <Layers size={11} /> {nVersions} versões
+                    <span className="text-xs bg-amber-100 text-amber-800 px-1.5 py-0.5 border border-amber-400 rounded-sm flex items-center gap-1 font-bold group-hover:bg-[#1a3b6e] group-hover:text-white group-hover:border-transparent" title={`${nVersions} variações disponíveis`}>
+                      <Layers size={12} /> {nVersions} variações
                     </span>
                   )}
                 </div>

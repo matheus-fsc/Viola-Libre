@@ -2,16 +2,18 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import type { Instrument, Tuning, Voicing } from './engine/types';
 import { PRESET_INSTRUMENTS, NOTE_NAMES_SHARP, NOTE_NAMES_FLAT } from './engine/tunings';
-import { buildChord, calculateVoicings, shouldUseFlats, noteNameToPitchClass, evaluatePlayability } from './engine/chordCalculator';
+import { buildChord, buildVoicingFromFrets, calculateVoicings, shouldUseFlats, noteNameToPitchClass, evaluatePlayability } from './engine/chordCalculator';
 import { InstrumentSelector } from './components/InstrumentSelector';
 import { ChordFinder } from './components/ChordFinder';
 import { FretboardDiagram, IconNotepad, IconCopy, IconTrash } from './components/FretboardDiagram';
+import { ChordEditorModal } from './components/ChordEditorModal';
 import { InteractiveFretboard } from './components/InteractiveFretboard';
 import { ScaleTrainer } from './components/ScaleTrainer';
 import { TheoryGuide } from './components/TheoryGuide';
 import { EarTranscription } from './components/EarTranscription';
 import { ViolaDuets } from './components/ViolaDuets';
 import { StarIcon } from './components/Icons';
+import { EditorLoginModal } from './components/EditorLoginModal';
 import { CifrasApp } from './pages/cifras/CifrasApp';
 import { MinhasCifras } from './pages/minhasCifras/MinhasCifras';
 
@@ -55,6 +57,7 @@ function App() {
   const [minFretFilter, setMinFretFilter] = useState<number>(0);
   const [interiorMuteFilter, setInteriorMuteFilter] = useState<'all' | 'hide'>('all');
   const [visibleVariationsLimit, setVisibleVariationsLimit] = useState<number>(20);
+  const [editorFrets, setEditorFrets] = useState<number[] | null>(null);
 
   // Derive Voicings reactively when tuning, instrument, root, suffix or bass changes (pure useMemo, no state/useEffect needed)
   const activeVoicings = useMemo(() => {
@@ -67,12 +70,12 @@ function App() {
         chord.customNotes = customNotes;
         chord.notes = Array.from(new Set([...chord.notes, ...customNotes]));
       }
-      return calculateVoicings(selectedTuning, chord);
+      return calculateVoicings(selectedTuning, chord, 12, { violaCebolao: selectedInst.id === 'viola' });
     } catch (err) {
       console.error("Erro ao calcular posições de acordes:", err);
       return [];
     }
-  }, [selectedTuning, rootName, suffix, bassName, customNotes]);
+  }, [selectedTuning, selectedInst, rootName, suffix, bassName, customNotes]);
 
   // Apply search filters dynamically to the generated voicings
   const filteredVoicings = useMemo(() => {
@@ -123,6 +126,10 @@ function App() {
     return [];
   });
   const [showCifraWindow, setShowCifraWindow] = useState<boolean>(false);
+
+  // Editor Login State
+  const [showEditorLogin, setShowEditorLogin] = useState<boolean>(false);
+  const [editorToken, setEditorToken] = useState<string>(() => localStorage.getItem('vl_editor_token') || '');
 
   // Tab switcher — derived from URL
   const { pathname } = useLocation();
@@ -643,6 +650,7 @@ function App() {
                                   isInCifra={isInCifra}
                                   onToggleCifra={() => toggleCifraVoicing(voicing)}
                                   useFlats={useFlats}
+                                  onEditClick={() => setEditorFrets(voicing.frets)}
                                 />
                                 <div className="absolute -top-1.5 -left-1.5 text-[10px] font-bold px-1.5 py-0.5 bg-[#228b22] text-white border border-[#1a6b1a] rounded-sm font-mono shadow-md z-10">
                                   #{index + 1}
@@ -1083,6 +1091,14 @@ function App() {
 
           {/* System Tray (Clock and icons) */}
           <div className="h-[30px] bg-[#0997f7] border-l-2 border-[#1a6b1a] flex items-center px-3 gap-2 text-white font-mono text-xs shadow-[inset_1px_1px_1px_#ffffff30] rounded-l-sm">
+            <button 
+              onClick={() => setShowEditorLogin(true)}
+              className="flex items-center justify-center cursor-pointer hover:bg-white/20 px-1 rounded transition-colors"
+              title="Acesso de Editor"
+            >
+              <span className={editorToken ? "text-[#ddffdd]" : "opacity-70"}>🔑 Editor</span>
+            </button>
+            <div className="w-[1.5px] h-4 bg-white/30 mx-1"></div>
             <span className="cursor-pointer" title="Rede Ativa (Livre)">NET</span>
             <span className="cursor-pointer" title="Áudio Ativo (Afinado)">VOL</span>
             <div className="w-[1.5px] h-4 bg-white/30 mx-1"></div>
@@ -1090,6 +1106,33 @@ function App() {
           </div>
         </div>
       </footer>
+
+      {editorFrets && (
+        <ChordEditorModal
+          chordName={chordDisplayName}
+          tuning={selectedTuning}
+          instrument={selectedInst}
+          initialFrets={editorFrets}
+          useFlats={useFlats}
+          onApply={(frets) => toggleFavorite(buildVoicingFromFrets(frets, selectedTuning, useFlats))}
+          onClose={() => setEditorFrets(null)}
+        />
+      )}
+
+      {showEditorLogin && (
+        <EditorLoginModal
+          currentToken={editorToken}
+          onClose={() => setShowEditorLogin(false)}
+          onLoginSuccess={(token) => {
+            setEditorToken(token);
+            if (token) {
+              localStorage.setItem('vl_editor_token', token);
+            } else {
+              localStorage.removeItem('vl_editor_token');
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

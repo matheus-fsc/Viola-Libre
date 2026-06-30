@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { FileText, Eye, Heart, Pin, Save } from 'lucide-react';
 import {
@@ -9,10 +9,11 @@ import {
   type SequenciaData, type RecentSequencia,
 } from '../../services/api';
 import type { Voicing } from '../../engine/types';
-import { buildChord, calculateVoicings, noteNameToPitchClass, parseChordString, transposeChordString } from '../../engine/chordCalculator';
+import { buildChord, buildVoicingFromFrets, calculateVoicings, noteNameToPitchClass, parseChordString, transposeChordString } from '../../engine/chordCalculator';
 import { PRESET_INSTRUMENTS } from '../../engine/tunings';
 import { AudioEngine } from '../../engine/AudioEngine';
 import { FretboardDiagram } from '../../components/FretboardDiagram';
+import { ChordEditorModal } from '../../components/ChordEditorModal';
 import { TabTransposerBlock } from '../../components/TabTransposerBlock';
 import { splitHtmlByTabs, TAB_POSITIONS, type ContentSegment } from '../../engine/tabTransposer';
 import '../../components/Cifras.css';
@@ -25,6 +26,19 @@ interface VoicingFilter {
   prioritizeEasy: boolean;
 }
 const DEFAULT_FILTER: VoicingFilter = { proximity: false, maxNotes: false, muteFilter: 'any', prioritizeEasy: false };
+
+// Represents one labelled musical section detected from [Rótulo] markers
+interface SectionEntry {
+  label: string;
+  isInstrumental: boolean;
+  repeat: number;
+  startTime: number;
+  endTime: number;
+  startY: number;
+  endY: number;
+}
+
+const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
 
 function isChordDiatonic(chordName: string, songKey: string): boolean {
   if (!songKey || !chordName) return false;
@@ -84,6 +98,9 @@ export const CifraViewer: React.FC = () => {
   const [filterPopupOpen, setFilterPopupOpen] = useState(false);
   const [lockedVariations, setLockedVariations] = useState<Record<string, number>>({});
   const [excludedFromFilter, setExcludedFromFilter] = useState<Record<string, true>>({});
+  // User-edited custom chord shapes (override the generated voicing), keyed by chord name.
+  const [customVoicings, setCustomVoicings] = useState<Record<string, number[]>>({});
+  const [editorChord, setEditorChord] = useState<{ name: string; frets: number[] } | null>(null);
 
   // Sequence save/load states
   const [seqModalOpen, setSeqModalOpen] = useState<'save' | 'load' | null>(null);
@@ -98,6 +115,39 @@ export const CifraViewer: React.FC = () => {
   // Instrument and Tuning states
   const [selectedInstId, setSelectedInstId] = useState<string>(PRESET_INSTRUMENTS[0].id);
   const [selectedTuningId, setSelectedTuningId] = useState<string>(PRESET_INSTRUMENTS[0].defaultTuningId || PRESET_INSTRUMENTS[0].tunings[0].id);
+
+  // BPM / auto-scroll / loop
+  const [localBpm, setLocalBpm] = useState<number | null>(null);
+  const [autoScroll, setAutoScroll] = useState(false);
+  const [scrollMult, setScrollMult] = useState(1);
+  const [loopA, setLoopA] = useState<number | null>(null);
+  const [loopB, setLoopB] = useState<number | null>(null);
+  const [maxScroll, setMaxScroll] = useState(0);
+  const [scrollFrac, setScrollFrac] = useState(0);
+  const [lyricsPopup, setLyricsPopup] = useState<{ chord: string; x: number; y: number } | null>(null);
+  const [currentSection, setCurrentSection] = useState<string | null>(null);
+
+  // Refs
+  const contentRef = useRef<HTMLDivElement>(null);
+  const rafRef = useRef<number | null>(null);
+  const elapsedRef = useRef(0);
+  const prevTimeRef = useRef<number | null>(null);
+  const tapTimesRef = useRef<number[]>([]);
+  const tapResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const chordMapRef = useRef<Array<{ chordY: number; time: number }>>([]);
+  const sectionTimelineRef = useRef<SectionEntry[]>([]);
+  const prevSectionRef = useRef<string | null>(null);
+  const lyricsPopupRef = useRef<HTMLDivElement>(null);
+  const popupCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Mirror mutable values for rAF closure (updated each render)
+  const scrollMultRef = useRef(scrollMult);
+  const loopARef = useRef(loopA);
+  const loopBRef = useRef(loopB);
+  const cifraForRaf = useRef(cifra);
+  scrollMultRef.current = scrollMult;
+  loopARef.current = loopA;
+  loopBRef.current = loopB;
+  cifraForRaf.current = cifra;
 
   useEffect(() => {
     const engine = AudioEngine.getInstance();
@@ -129,9 +179,14 @@ export const CifraViewer: React.FC = () => {
         const matches: string[] = [];
         let match;
         while ((match = regex.exec(data.content_html)) !== null) {
-          const chord = match[1].trim();
-          if (chord && !matches.includes(chord)) {
-            matches.push(chord);
+          // Um único <b> pode conter vários acordes separados por espaço
+          // (ex.: "<b>G#m7(5-)  A#7</b>"). Separa cada acorde para não grudar dois num só.
+          const raw = match[1].replace(/&nbsp;/g, ' ').replace(/<[^>]*>/g, ' ').trim();
+          if (!raw) continue;
+          for (const chord of raw.split(/\s+/)) {
+            if (chord && !matches.includes(chord)) {
+              matches.push(chord);
+            }
           }
         }
         setOriginalChords(matches);
@@ -169,6 +224,304 @@ export const CifraViewer: React.FC = () => {
       setIsFavoriting(false);
     }
   };
+
+  // Desabilita restauração de scroll do browser — após Ctrl+R o scroll voltaria
+  // para a posição anterior, desincronizando o auto-scroll com o topo da cifra.
+  useEffect(() => {
+    if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+    return () => { if ('scrollRestoration' in history) history.scrollRestoration = 'auto'; };
+  }, []);
+
+  // BPM tap: calcula BPM pela média dos intervalos entre toques
+  const handleTap = () => {
+    const now = performance.now();
+    const taps = tapTimesRef.current;
+    taps.push(now);
+    if (taps.length > 8) taps.shift();
+    if (tapResetRef.current) clearTimeout(tapResetRef.current);
+    tapResetRef.current = setTimeout(() => { tapTimesRef.current = []; }, 2500);
+    if (taps.length >= 2) {
+      let sum = 0;
+      for (let i = 1; i < taps.length; i++) sum += taps[i] - taps[i - 1];
+      setLocalBpm(Math.round(60000 / (sum / (taps.length - 1))));
+    }
+  };
+
+  // Ativar auto-scroll: volta pro topo para sincronizar com o início da música
+  const handleToggleAutoScroll = () => {
+    if (!autoScroll) window.scrollTo(0, 0);
+    setAutoScroll(p => !p);
+  };
+
+  // Auto-scroll: interpola posição pelo mapa de acordes (velocidade não-uniforme)
+  // ou usa velocidade constante como fallback quando o mapa está vazio.
+  useEffect(() => {
+    if (!autoScroll) {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+      prevTimeRef.current = null;
+      setCurrentSection(null);
+      prevSectionRef.current = null;
+      return;
+    }
+    elapsedRef.current = 0;
+    const step = (ts: number) => {
+      if (prevTimeRef.current === null) prevTimeRef.current = ts;
+      const dt = Math.min(ts - prevTimeRef.current, 100);
+      prevTimeRef.current = ts;
+      const maxSc = document.documentElement.scrollHeight - window.innerHeight;
+      if (maxSc <= 0) { rafRef.current = requestAnimationFrame(step); return; }
+      const mult = scrollMultRef.current;
+      elapsedRef.current += (dt / 1000) * mult;
+      const map = chordMapRef.current;
+      let targetY: number;
+      if (map.length >= 2) {
+        const t = elapsedRef.current;
+        const last = map[map.length - 1];
+        if (t >= last.time) {
+          targetY = maxSc;
+        } else {
+          let lo = 0, hi = map.length - 1;
+          while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (map[mid].time <= t) lo = mid; else hi = mid; }
+          const { chordY: y0, time: t0 } = map[lo];
+          const { chordY: y1, time: t1 } = map[hi];
+          const frac = t1 > t0 ? (t - t0) / (t1 - t0) : 0;
+          // Posiciona o acorde na linha de leitura (30vh do topo)
+          targetY = Math.max(0, y0 + (y1 - y0) * frac - window.innerHeight * 0.30);
+        }
+      } else {
+        // Fallback: velocidade constante por duração ou 60px/s
+        const dur = cifraForRaf.current?.duration ?? null;
+        const pxPerSec = dur ? Math.max(40, maxSc / dur) : 60;
+        targetY = window.scrollY + pxPerSec * (dt / 1000) * mult;
+      }
+      const la = loopARef.current;
+      const lb = loopBRef.current;
+      if (la !== null || lb !== null) {
+        const loopEnd = lb ?? maxSc;
+        if (targetY >= loopEnd) {
+          targetY = la ?? 0;
+          // Sincroniza elapsedRef com a posição A para continuar o mapa coerentemente
+          const startChordY = targetY + window.innerHeight * 0.30;
+          const idx = map.findIndex(p => p.chordY > startChordY);
+          elapsedRef.current = idx > 0 ? map[idx - 1].time : 0;
+        }
+      } else if (targetY >= maxSc) {
+        window.scrollTo(0, maxSc);
+        setAutoScroll(false);
+        return;
+      }
+      window.scrollTo(0, Math.max(0, Math.min(targetY, maxSc)));
+      // Section detection — only triggers a re-render when section changes
+      const tl = sectionTimelineRef.current;
+      if (tl.length > 0) {
+        let secLabel: string | null = null;
+        const t = elapsedRef.current;
+        for (let i = tl.length - 1; i >= 0; i--) {
+          if (t >= tl[i].startTime) { secLabel = tl[i].label; break; }
+        }
+        if (secLabel !== prevSectionRef.current) {
+          prevSectionRef.current = secLabel;
+          setCurrentSection(secLabel);
+        }
+      }
+      rafRef.current = requestAnimationFrame(step);
+    };
+    rafRef.current = requestAnimationFrame(step);
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+  }, [autoScroll]);
+
+  // Scroll position tracker via window scroll
+  useEffect(() => {
+    const updateMax = () => {
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      setMaxScroll(max);
+    };
+    const onScroll = () => {
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      if (max > 0) setScrollFrac(window.scrollY / max);
+    };
+    updateMax();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', updateMax);
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', updateMax);
+    };
+  }, [cifra]);
+
+  // Constrói o mapa de timing com dois critérios:
+  // 1. Peso proporcional ao nº de acordes por linha (grupo denso = mais tempo)
+  // 2. Seções instrumentais detectadas via labels [Interlude], [Solo], [Ponte], etc.
+  //    recebem multiplicador 2× — o scroll desacelera mesmo quando há poucos acordes.
+  useEffect(() => {
+    if (!cifra) { chordMapRef.current = []; return; }
+    const frame = requestAnimationFrame(() => {
+      const el = contentRef.current;
+      if (!el) { chordMapRef.current = []; return; }
+      const bEls = Array.from(el.querySelectorAll('.cifra-viewer-content b')) as HTMLElement[];
+      if (bEls.length === 0) { chordMapRef.current = []; return; }
+      // Posição Y absoluta na página (window.scrollY=0 após reset no carregamento)
+      const rawYs = bEls.map(b => b.getBoundingClientRect().top + window.scrollY);
+      // Agrupa acordes por linha (≤ 24px = mesma linha) e conta quantos por grupo
+      const groups: { y: number; count: number }[] = [];
+      for (const y of rawYs) {
+        const last = groups[groups.length - 1];
+        if (last && y - last.y <= 24) last.count++;
+        else groups.push({ y, count: 1 });
+      }
+      const n = groups.length;
+      if (n === 0) { chordMapRef.current = []; return; }
+
+      const INSTR_RE = /\b(interlude|interlúdio|interludio|solo|ponte|bridge|instrumental|intro|introdução|introducao)\b/i;
+      const REPEAT_RE = /(\d+)\s*[xX]|[xX]\s*(\d+)/;
+      const labelRe = /\[([^\]]+)\]/g;
+      const sectionMarkers: { charPos: number; label: string; instrumental: boolean; repeat: number }[] = [];
+      let lm: RegExpExecArray | null;
+      while ((lm = labelRe.exec(cifra.content_html)) !== null) {
+        const labelText = lm[1];
+        const isInstrumental = INSTR_RE.test(labelText);
+        let repeat = 1;
+        const mRep = REPEAT_RE.exec(labelText);
+        if (mRep) {
+          repeat = parseInt(mRep[1] ?? mRep[2], 10);
+        } else {
+          const afterEnd = lm.index + lm[0].length;
+          const nlIdx = cifra.content_html.indexOf('\n', afterEnd);
+          const afterText = cifra.content_html.slice(afterEnd, nlIdx === -1 ? afterEnd + 25 : Math.min(nlIdx, afterEnd + 25));
+          const mAfter = REPEAT_RE.exec(afterText);
+          if (mAfter) {
+            repeat = parseInt(mAfter[1] ?? mAfter[2], 10);
+          } else if (/repeti[rt]/i.test(afterText)) {
+            const mNum = /(\d+)/.exec(afterText);
+            repeat = mNum ? parseInt(mNum[1], 10) : 2;
+          }
+        }
+        sectionMarkers.push({ charPos: lm.index, label: labelText, instrumental: isInstrumental, repeat: Math.max(1, Math.min(repeat, 8)) });
+      }
+      // Posição char de cada <b> no HTML bruto (mesma ordem que no DOM)
+      const chordCharPos: number[] = [];
+      const bRe = /<b>/gi;
+      let bm: RegExpExecArray | null;
+      while ((bm = bRe.exec(cifra.content_html)) !== null) chordCharPos.push(bm.index);
+
+      const INSTR_MULT = 2.0;
+      let domChordIdx = 0;
+      const weights: number[] = [];
+      for (const g of groups) {
+        const firstCharPos = chordCharPos[domChordIdx] ?? 0;
+        let instrumental = false;
+        let repeat = 1;
+        for (const sec of sectionMarkers) {
+          if (sec.charPos <= firstCharPos) { instrumental = sec.instrumental; repeat = sec.repeat; }
+          else break;
+        }
+        weights.push(g.count * (instrumental ? INSTR_MULT : 1.0) * repeat);
+        domChordIdx += g.count;
+      }
+
+      const totalWeight = weights.reduce((a, b) => a + b, 0);
+      const dur = cifra.duration ?? null;
+      const bpm = localBpm ?? cifra.bpm ?? 120;
+      const totalTime = dur ?? (60 / bpm) * 4 * bEls.length;
+      const map: Array<{ chordY: number; time: number }> = [];
+      let cumWeight = 0;
+      for (let i = 0; i < n; i++) {
+        map.push({ chordY: groups[i].y, time: (cumWeight / totalWeight) * totalTime });
+        cumWeight += weights[i];
+      }
+      map.push({ chordY: groups[n - 1].y + window.innerHeight, time: totalTime });
+      chordMapRef.current = map;
+
+      // Build section timeline: maps each [Label] to a time range and Y range.
+      // Used by the rAF loop to identify which musical section is currently playing.
+      // charPos of each group's first chord (to match against section marker positions)
+      const groupFirstCharPos: number[] = [];
+      let ci2 = 0;
+      for (const g of groups) {
+        groupFirstCharPos.push(chordCharPos[ci2] ?? 0);
+        ci2 += g.count;
+      }
+      const timeline: SectionEntry[] = [];
+      for (let si = 0; si < sectionMarkers.length; si++) {
+        const marker = sectionMarkers[si];
+        const firstGroupIdx = groupFirstCharPos.findIndex(cp => cp >= marker.charPos);
+        if (firstGroupIdx < 0) continue;
+        const startTime = map[firstGroupIdx].time;
+        const startY = groups[firstGroupIdx].y;
+        const nextMarker = sectionMarkers[si + 1];
+        let endTime = totalTime;
+        let endY = groups[n - 1].y + window.innerHeight;
+        if (nextMarker) {
+          const ng = groupFirstCharPos.findIndex(cp => cp >= nextMarker.charPos);
+          if (ng >= 0) { endTime = map[ng].time; endY = groups[ng].y; }
+        }
+        timeline.push({ label: marker.label, isInstrumental: marker.instrumental, repeat: marker.repeat, startTime, endTime, startY, endY });
+      }
+      sectionTimelineRef.current = timeline;
+
+      // ── Diagnóstico de timing ──────────────────────────────────────────────
+      console.group(`[AutoScroll] ${cifra.title}`);
+      console.log('Fonte totalTime :', dur != null ? `duration da API (${dur}s)` : `fallback BPM (bpm=${bpm}, tags=<b>×${bEls.length}) → ${totalTime.toFixed(1)}s`);
+      console.log('totalTime       :', `${totalTime.toFixed(1)}s  (${(totalTime/60).toFixed(2)} min)`);
+      console.log('Grupos de linhas:', n, '  Acordes totais (<b>):', bEls.length);
+      console.log('Seções detectadas:', sectionMarkers.map(s => ({
+        pos: s.charPos, label: s.label, instrumental: s.instrumental, repeat: s.repeat,
+      })));
+      console.log('Timeline de seções:', timeline.map(s => ({
+        label: s.label, instr: s.isInstrumental, repeat: s.repeat,
+        start: `${s.startTime.toFixed(1)}s`, end: `${s.endTime.toFixed(1)}s`,
+        startY: s.startY.toFixed(0), endY: s.endY.toFixed(0),
+      })));
+      // Top-5 grupos com mais peso
+      const ranked = weights
+        .map((w, i) => ({ i, w, count: groups[i].count, time: map[i].time.toFixed(1) }))
+        .sort((a, b) => b.w - a.w)
+        .slice(0, 5);
+      console.log('Top-5 grupos por peso:', ranked);
+      // Distribuição por quarto da música
+      const q = [0, 0.25, 0.5, 0.75, 1].map(frac => {
+        const t = frac * totalTime;
+        const entry = map.find(p => p.time >= t) ?? map[map.length - 1];
+        return { pct: `${(frac*100).toFixed(0)}%`, t: `${t.toFixed(1)}s`, y: entry.chordY.toFixed(0) };
+      });
+      console.table(q);
+      console.groupEnd();
+      // ── fim diagnóstico ───────────────────────────────────────────────────
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [cifra, localBpm]);
+
+  // Reset BPM/scroll/loop ao trocar de música
+  useEffect(() => {
+    setLocalBpm(null);
+    setAutoScroll(false);
+    setLoopA(null);
+    setLoopB(null);
+    setCurrentSection(null);
+    prevSectionRef.current = null;
+    sectionTimelineRef.current = [];
+    tapTimesRef.current = [];
+    window.scrollTo(0, 0);
+  }, [artistSlug, songSlug]);
+
+  // Fecha o mini-popup ao clicar fora dele (capture phase, sem roubar foco) ou ao rolar
+  useEffect(() => {
+    if (!lyricsPopup) return;
+    const close = (e: MouseEvent | TouchEvent) => {
+      if (lyricsPopupRef.current?.contains(e.target as Node)) return;
+      setLyricsPopup(null);
+    };
+    const closeScroll = () => setLyricsPopup(null);
+    document.addEventListener('click', close, true);
+    document.addEventListener('touchstart', close, { capture: true, passive: true } as AddEventListenerOptions);
+    window.addEventListener('scroll', closeScroll, { passive: true });
+    return () => {
+      document.removeEventListener('click', close, true);
+      document.removeEventListener('touchstart', close, true);
+      window.removeEventListener('scroll', closeScroll);
+    };
+  }, [lyricsPopup]);
 
   const buildSeqData = (): SequenciaData => ({
     artistSlug: artistSlug || '',
@@ -328,15 +681,17 @@ export const CifraViewer: React.FC = () => {
 
   // Pré-computa todos os voicings (fora do .map para reutilizar no proximity sort)
   const allVoicings = useMemo(() => {
+    // Notação brasileira: Bb6m → Bbm6, A7m → Am7, etc.
+    const normSuffix = (n: string) => n.replace(/^([A-G][b#]?)(\d+)(m)$/, '$1$3$2');
     return currentChords.map(chordName => {
-      const { root, suffix, bass } = parseChordString(chordName);
+      const { root, suffix, bass } = parseChordString(normSuffix(chordName));
       if (!root) return [] as Voicing[];
       try {
         const chordObj = buildChord(root, suffix, bass || undefined);
-        return calculateVoicings(currentTuning, chordObj);
+        return calculateVoicings(currentTuning, chordObj, 12, { violaCebolao: selectedInstId === 'viola' });
       } catch { return [] as Voicing[]; }
     });
-  }, [currentChords, currentTuning]);
+  }, [currentChords, currentTuning, selectedInstId]);
 
   const displayedVoicings = useMemo(() => {
     const { proximity, maxNotes, muteFilter, prioritizeEasy } = voicingFilter;
@@ -454,6 +809,90 @@ export const CifraViewer: React.FC = () => {
   }, [voicingFilter, allVoicings, variationIndices, currentChords, lockedVariations, excludedFromFilter]);
 
   const isFilterActive = voicingFilter.proximity || voicingFilter.maxNotes || voicingFilter.muteFilter !== 'any' || voicingFilter.prioritizeEasy;
+
+  const lyricsVoicings: Voicing[] = lyricsPopup ? (() => {
+    const cidx = currentChords.indexOf(lyricsPopup.chord);
+    if (cidx >= 0) return displayedVoicings[cidx] ?? [];
+    try {
+      const { root, suffix, bass } = parseChordString(lyricsPopup.chord);
+      if (!root) return [];
+      return calculateVoicings(currentTuning, buildChord(root, suffix, bass || undefined), 12, { violaCebolao: selectedInstId === 'viola' });
+    } catch { return []; }
+  })() : [];
+  const lyricsVidx = lyricsPopup
+    ? (variationIndices[lyricsPopup.chord] ?? 0) % Math.max(lyricsVoicings.length, 1)
+    : 0;
+  const lyricsVoicing = lyricsVoicings[lyricsVidx] ?? null;
+
+  const playLyricsChordSound = (voicing: Voicing) => {
+    const engine = AudioEngine.getInstance();
+    engine.ensureContext().then(() => {
+      let delay = 0;
+      for (let i = 0; i < currentTuning.strings.length; i++) {
+        if (voicing.frets[i] === -1) continue;
+        engine.playMidi(currentTuning.strings[i] + voicing.frets[i], 2.0, delay);
+        delay += 0.035;
+      }
+    }).catch(console.error);
+  };
+
+  const cancelPopupClose = () => {
+    if (popupCloseTimer.current) { clearTimeout(popupCloseTimer.current); popupCloseTimer.current = null; }
+  };
+  const schedulePopupClose = () => {
+    cancelPopupClose();
+    popupCloseTimer.current = setTimeout(() => setLyricsPopup(null), 180);
+  };
+
+  const showPopupForTarget = (target: HTMLElement) => {
+    if (target.tagName !== 'B') return false;
+    const chordName = target.textContent?.trim() ?? '';
+    if (!chordName) return false;
+    cancelPopupClose();
+    if (chordName !== lyricsPopup?.chord) {
+      const rect = target.getBoundingClientRect();
+      setLyricsPopup({ chord: chordName, x: rect.left + rect.width / 2, y: rect.top });
+    }
+    return true;
+  };
+
+  const handleLyricsMouseOver = (e: React.MouseEvent) => {
+    const hit = showPopupForTarget(e.target as HTMLElement);
+    if (!hit && lyricsPopup) schedulePopupClose();
+  };
+
+  // Som no pointerdown: dispara antes dos listeners de capture/click
+  // que fecham o popup, garantindo que lyricsVoicing ainda é válido
+  const handleLyricsPointerDown = (e: React.PointerEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.tagName !== 'B') return;
+    cancelPopupClose();
+    // Caso 1: popup já mostrado por hover → usa lyricsVoicing direto
+    if (lyricsVoicing) { playLyricsChordSound(lyricsVoicing); return; }
+    // Caso 2: clique sem hover prévio → calcula voicing do nome
+    const chordName = target.textContent?.trim() ?? '';
+    const cidx = currentChords.indexOf(chordName);
+    const vArr = cidx >= 0 ? (displayedVoicings[cidx] ?? []) : [];
+    const vidx = (variationIndices[chordName] ?? 0) % Math.max(vArr.length, 1);
+    if (vArr[vidx]) playLyricsChordSound(vArr[vidx]);
+  };
+
+  // Click ainda atualiza a posição do popup (sem som — som já ocorreu no pointerdown)
+  const handleLyricsChordClick = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.tagName !== 'B') return;
+    const chordName = target.textContent?.trim() ?? '';
+    if (!chordName) return;
+    cancelPopupClose();
+    const rect = target.getBoundingClientRect();
+    setLyricsPopup({ chord: chordName, x: rect.left + rect.width / 2, y: rect.top });
+  };
+
+  const effectiveBpm = localBpm ?? (cifra?.bpm ?? null);
+  const bpmModified = localBpm !== null && localBpm !== cifra?.bpm;
+  const durationStr = cifra?.duration != null
+    ? `${Math.floor(cifra.duration / 60)}:${String(cifra.duration % 60).padStart(2, '0')}`
+    : null;
 
   if (loading) {
     return (
@@ -751,6 +1190,56 @@ export const CifraViewer: React.FC = () => {
 
             <hr className="border-gray-300" />
 
+            {/* BPM */}
+            <div className="flex flex-col gap-0.5">
+              <label className="font-bold text-[10px] uppercase text-gray-500 flex items-center justify-between">
+                <span>BPM {bpmModified && <span className="text-[#cc3300]">*</span>}</span>
+                {cifra.bpm != null && <span className="font-normal text-gray-400 text-[9px]">API: {cifra.bpm}</span>}
+              </label>
+              <div className="flex items-center gap-1">
+                <button onClick={() => setLocalBpm(p => Math.max(20, (p ?? effectiveBpm ?? 100) - 1))} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white">−</button>
+                <span className={`font-mono text-xs font-bold flex-1 text-center ${bpmModified ? 'text-[#cc3300]' : 'text-[#005500]'}`}>{effectiveBpm ?? '—'}</span>
+                <button onClick={() => setLocalBpm(p => Math.min(300, (p ?? effectiveBpm ?? 100) + 1))} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white">+</button>
+              </div>
+              <div className="flex gap-1">
+                <button onPointerDown={handleTap} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-1 text-xs font-bold flex-1 border border-gray-400 hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white select-none">Tap</button>
+                {bpmModified && (
+                  <button onClick={() => setLocalBpm(null)} className="bevel-out bg-[var(--color-winxp-panel)] px-1.5 py-0.5 text-xs border border-gray-400 hover:bg-white" title="Restaurar BPM da API">↺</button>
+                )}
+              </div>
+              {durationStr && <span className="text-[9px] text-gray-400 text-center">⏱ {durationStr}</span>}
+              <button disabled className="bevel-out bg-[#f0f0f0] px-2 py-0.5 text-[9px] w-full border border-gray-300 text-gray-400 cursor-not-allowed" title="Em breve: contribua com BPM e duração para a comunidade">↑ Enviar BPM</button>
+            </div>
+
+            {/* Auto-scroll */}
+            <div className="flex flex-col gap-0.5">
+              <label className="font-bold text-[10px] uppercase text-gray-500">Rolar Auto:</label>
+              <button onClick={handleToggleAutoScroll} className={`bevel-out px-2 py-1 text-xs font-bold w-full border border-gray-400 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${autoScroll ? 'bg-[#316ac5] text-white' : 'bg-[var(--color-winxp-panel)] text-black hover:bg-white'}`}>
+                {autoScroll ? '⏸ Parar' : '▶ Rolar'}
+              </button>
+              <div className="flex gap-1">
+                {([0.5, 1, 2] as const).map(m => (
+                  <button key={m} onClick={() => setScrollMult(m)} className={`flex-1 text-[10px] font-bold py-0.5 border leading-tight ${scrollMult === m ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#ece9d8] border-gray-400 hover:bg-white'}`}>{m}×</button>
+                ))}
+              </div>
+            </div>
+
+            {/* Loop A→B */}
+            <div className="flex flex-col gap-0.5">
+              <div className="flex items-center justify-between">
+                <label className="font-bold text-[10px] uppercase text-gray-500">Loop:</label>
+                {(loopA !== null || loopB !== null) && (
+                  <button onClick={() => { setLoopA(null); setLoopB(null); }} className="text-[9px] font-bold border border-gray-400 px-1 bg-[#ece9d8] hover:bg-white text-[#cc3300]">✕</button>
+                )}
+              </div>
+              <div className="flex gap-1">
+                <button onClick={() => setLoopA(window.scrollY)} className={`flex-1 text-[10px] font-bold py-0.5 border leading-tight ${loopA !== null ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#ece9d8] border-gray-400 hover:bg-white'}`} title="Marcar ponto A na posição atual">{loopA !== null ? 'A ✓' : '[A]'}</button>
+                <button onClick={() => setLoopB(window.scrollY)} className={`flex-1 text-[10px] font-bold py-0.5 border leading-tight ${loopB !== null ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#ece9d8] border-gray-400 hover:bg-white'}`} title="Marcar ponto B na posição atual">{loopB !== null ? 'B ✓' : '[B]'}</button>
+              </div>
+            </div>
+
+            <hr className="border-gray-300" />
+
             <button onClick={() => setShowTabs(v => !v)} className={`bevel-out px-2 py-1 text-xs font-bold w-full text-left border border-gray-400 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${!showTabs ? 'bg-[#316ac5] text-white' : 'bg-[var(--color-winxp-panel)] text-black hover:bg-white'}`}>
               {showTabs ? 'Ocultar Tabs' : '▶ Mostrar Tabs'}
             </button>
@@ -816,6 +1305,25 @@ export const CifraViewer: React.FC = () => {
                 <Save size={13} className={savedHash ? 'text-green-700' : 'text-gray-600'} />
                 <span>{savedHash ? 'Sequência ✓' : 'Sequência'}</span>
               </button>
+              <div className="flex items-center bg-[#d4d0c8] bevel-in px-1 py-1 gap-1">
+                <span className="text-[11px] font-bold px-1 text-gray-700">BPM:</span>
+                <button onClick={() => setLocalBpm(p => Math.max(20, (p ?? effectiveBpm ?? 100) - 1))} className="bevel-out bg-[var(--color-winxp-panel)] px-1.5 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white">−</button>
+                <span className={`font-mono text-xs font-bold w-9 text-center ${bpmModified ? 'text-[#cc3300]' : 'text-[#005500]'}`}>{effectiveBpm != null ? `${effectiveBpm}${bpmModified ? '*' : ''}` : '—'}</span>
+                <button onClick={() => setLocalBpm(p => Math.min(300, (p ?? effectiveBpm ?? 100) + 1))} className="bevel-out bg-[var(--color-winxp-panel)] px-1.5 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white">+</button>
+                <button onPointerDown={handleTap} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold border border-gray-400 hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white select-none">Tap</button>
+                {bpmModified && <button onClick={() => setLocalBpm(null)} className="bevel-out bg-[var(--color-winxp-panel)] px-1 py-0.5 text-xs border border-gray-400 hover:bg-white" title="Restaurar BPM da API">↺</button>}
+              </div>
+              <button onClick={handleToggleAutoScroll} className={`bevel-out px-3 py-1 text-xs font-bold border border-gray-400 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${autoScroll ? 'bg-[#316ac5] text-white' : 'bg-[var(--color-winxp-panel)] text-[#002fa7]'}`}>
+                {autoScroll ? '⏸' : '▶'} Rolar
+              </button>
+              {([0.5, 1, 2] as const).map(m => (
+                <button key={m} onClick={() => setScrollMult(m)} className={`text-[10px] font-bold px-1.5 py-1 border leading-tight ${scrollMult === m ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#ece9d8] border-gray-400 hover:bg-white'}`}>{m}×</button>
+              ))}
+              <button onClick={() => setLoopA(window.scrollY)} className={`px-2 py-1 text-xs font-bold border leading-tight active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${loopA !== null ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[var(--color-winxp-panel)] border-gray-400 hover:bg-white'}`} title="Marcar ponto A do loop">A</button>
+              <button onClick={() => setLoopB(window.scrollY)} className={`px-2 py-1 text-xs font-bold border leading-tight active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${loopB !== null ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[var(--color-winxp-panel)] border-gray-400 hover:bg-white'}`} title="Marcar ponto B do loop">B</button>
+              {(loopA !== null || loopB !== null) && (
+                <button onClick={() => { setLoopA(null); setLoopB(null); }} className="px-2 py-1 text-xs font-bold border border-gray-400 bg-[#ece9d8] text-[#cc3300] hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white">✕ Loop</button>
+              )}
             </div>
           </div>
         )}
@@ -919,17 +1427,31 @@ export const CifraViewer: React.FC = () => {
                   ? (lockedVariations[chordName] ?? 0) % Math.max(voicings.length, 1)
                   : rawIdx % Math.max(voicings.length, 1);
 
-                const bestVoicing = voicings.length > 0 ? voicings[effectiveIdx] : null;
+                const generatedVoicing = voicings.length > 0 ? voicings[effectiveIdx] : null;
+                // A user-edited shape (from the chord editor) overrides the generated one.
+                const customFrets = customVoicings[chordName];
+                const bestVoicing = customFrets
+                  ? buildVoicingFromFrets(customFrets, currentTuning, false)
+                  : generatedVoicing;
+
+                const clearCustom = () => setCustomVoicings(prev => {
+                  if (!(chordName in prev)) return prev;
+                  const next = { ...prev };
+                  delete next[chordName];
+                  return next;
+                });
 
                 const handleNextVar = (e: React.MouseEvent) => {
                   e.stopPropagation();
                   if (isChordLocked) return;
+                  clearCustom(); // arrows return to the generated variations
                   setVariationIndices(prev => ({ ...prev, [chordName]: rawIdx + 1 }));
                 };
 
                 const handlePrevVar = (e: React.MouseEvent) => {
                   e.stopPropagation();
                   if (isChordLocked) return;
+                  clearCustom();
                   setVariationIndices(prev => ({
                     ...prev,
                     [chordName]: rawIdx === 0 ? voicings.length - 1 : rawIdx - 1,
@@ -946,11 +1468,11 @@ export const CifraViewer: React.FC = () => {
                     const next = { ...prev };
                     if (isChordLocked) {
                       delete next[chordName];
-                    } else if (bestVoicing) {
+                    } else if (generatedVoicing) {
                       // effectiveIdx is an index in displayedVoicings (sorted/filtered).
                       // After locking the chord becomes a passthrough using allVoicings (original order).
                       // We must store the index in allVoicings, not in the sorted array.
-                      const allIdx = allVoicings[idx].indexOf(bestVoicing);
+                      const allIdx = allVoicings[idx].indexOf(generatedVoicing);
                       next[chordName] = allIdx >= 0 ? allIdx : 0;
                     }
                     return next;
@@ -985,9 +1507,10 @@ export const CifraViewer: React.FC = () => {
                         variationLocked={isChordLocked}
                         onInfoClick={() => setInfoPopupChord(chordName)}
                         infoActive={infoPopupChord === chordName}
+                        onEditClick={() => bestVoicing && setEditorChord({ name: chordName, frets: bestVoicing.frets })}
                       />
                     ) : (
-                      <div className="py-2 text-center text-[#cc3300] text-[10px] font-bold">
+                      <div className="py-2 text-center text-[#cc3300] text-[10px] font-bold max-w-[90px] break-words leading-tight">
                         {chordName}
                       </div>
                     )}
@@ -1026,32 +1549,208 @@ export const CifraViewer: React.FC = () => {
         )}
 
         {/* Cifra Content - Notepad Style */}
-        <div className="flex-1 bevel-in bg-white p-4 retro-scrollbar font-mono text-sm leading-relaxed text-black overflow-x-hidden overflow-y-auto">
-          {cifraSegments.map((seg, i) =>
-            seg.type === 'tab' ? (
-              showTabs ? (
-                <TabTransposerBlock
+        <div className="flex-1 min-h-0 flex gap-0.5 overflow-hidden">
+          <div ref={contentRef} onPointerDown={handleLyricsPointerDown} onClick={handleLyricsChordClick} onMouseOver={handleLyricsMouseOver} onMouseLeave={schedulePopupClose} className="flex-1 min-h-0 bevel-in bg-white p-4 retro-scrollbar font-mono text-sm leading-relaxed text-black overflow-x-hidden overflow-y-auto">
+            {cifraSegments.map((seg, i) =>
+              seg.type === 'tab' ? (
+                showTabs ? (
+                  <TabTransposerBlock
+                    key={i}
+                    originalText={seg.content}
+                    targetStrings={currentTuning.strings}
+                    targetLabel={`${currentInst.name} — ${currentTuning.name.split(' (')[0]}`}
+                    extraSemitones={transposeOffset}
+                    posIdx={tabPosIdx}
+                  />
+                ) : null
+              ) : (
+                <div
                   key={i}
-                  originalText={seg.content}
-                  targetStrings={currentTuning.strings}
-                  targetLabel={`${currentInst.name} — ${currentTuning.name.split(' (')[0]}`}
-                  extraSemitones={transposeOffset}
-                  posIdx={tabPosIdx}
+                  className="cifra-viewer-content whitespace-pre-wrap"
+                  dangerouslySetInnerHTML={{ __html: seg.content }}
                 />
-              ) : null
-            ) : (
+              )
+            )}
+          </div>
+          {/* Loop strip — mostra região A→B e posição atual */}
+          {(loopA !== null || loopB !== null) && maxScroll > 0 && (
+            <div className="w-3 shrink-0 bg-[#d4d0c8] bevel-in relative">
               <div
-                key={i}
-                className="cifra-viewer-content whitespace-pre-wrap"
-                dangerouslySetInnerHTML={{ __html: seg.content }}
+                className="absolute left-0 right-0 bg-[#316ac5] opacity-75 min-h-[2px]"
+                style={{
+                  top: `${((loopA ?? 0) / maxScroll) * 100}%`,
+                  height: `${Math.max(2, (((loopB ?? maxScroll) - (loopA ?? 0)) / maxScroll) * 100)}%`,
+                }}
               />
-            )
+              <div
+                className="absolute left-0 right-0 h-0.5 bg-[#cc3300]"
+                style={{ top: `${scrollFrac * 100}%` }}
+              />
+            </div>
           )}
         </div>
 
         </div>{/* fim área de conteúdo */}
 
       </div>
+
+      {/* Mini chord popup — aparece acima do acorde clicado na cifra */}
+      {lyricsPopup && (() => {
+        const POP_W = 104;
+        const POP_H = 148;
+        const vx = Math.max(4, Math.min(lyricsPopup.x - POP_W / 2, window.innerWidth - POP_W - 4));
+        const above = lyricsPopup.y - POP_H - 8;
+        const vy = above >= 4 ? above : lyricsPopup.y + 20;
+
+        const svgW = 92, svgH = 88;
+        const lPad = 12, rPad = 3, tPad = 13, bPad = 3;
+        const boardW = svgW - lPad - rPad;
+        const boardH = svgH - tPad - bPad;
+        const numStr = currentTuning.strings.length;
+        const sSp = numStr > 1 ? boardW / (numStr - 1) : boardW;
+        const numFrets = 5;
+        const fSp = boardH / numFrets;
+        const frets = lyricsVoicing?.frets ?? [];
+        const activeFrets = frets.filter(f => f > 0);
+        const minFret = activeFrets.length > 0 ? Math.min(...activeFrets) : 1;
+        const startFret = minFret > 1 ? minFret : 1;
+        const sX = (i: number) => lPad + i * sSp;
+        const dotFY = (f: number) => tPad + (f - startFret + 0.5) * fSp;
+
+        const noteNames = lyricsVoicing
+          ? frets.map((f, i) => {
+              if (f === -1) return null;
+              const midi = currentTuning.strings[i] + f;
+              return NOTE_NAMES[(midi % 12 + 12) % 12];
+            }).filter(Boolean)
+          : [];
+        const uniqueNotes = [...new Set(noteNames)].join(' ');
+
+        return (
+          <div
+            ref={lyricsPopupRef}
+            className="fixed z-50 bevel-out bg-[#ece9d8] shadow-xl select-none"
+            style={{ left: vx, top: vy, width: POP_W }}
+            onMouseEnter={cancelPopupClose}
+            onMouseLeave={schedulePopupClose}
+          >
+            <div className="pt-1.5 pb-0 flex justify-center">
+              {lyricsVoicing ? (
+                <svg width={svgW} height={svgH}>
+                  {startFret === 1 && (
+                    <rect x={lPad} y={tPad - 3} width={boardW} height={3} fill="#333" />
+                  )}
+                  {startFret > 1 && (
+                    <text x={lPad - 2} y={tPad + fSp * 0.5} textAnchor="end" fontSize={7} fill="#555" dominantBaseline="middle">{startFret}</text>
+                  )}
+                  {Array.from({ length: numFrets }, (_, k) => (
+                    <line key={k} x1={lPad} y1={tPad + (k + 1) * fSp} x2={lPad + boardW} y2={tPad + (k + 1) * fSp} stroke="#bbb" strokeWidth={0.6} />
+                  ))}
+                  {Array.from({ length: numStr }, (_, i) => (
+                    <line key={i} x1={sX(i)} y1={tPad} x2={sX(i)} y2={tPad + boardH} stroke="#777" strokeWidth={0.6} />
+                  ))}
+                  {frets.map((f, i) =>
+                    f === 0 ? (
+                      <circle key={i} cx={sX(i)} cy={tPad - 6} r={3.5} fill="none" stroke="#333" strokeWidth={0.9} />
+                    ) : f === -1 ? (
+                      <text key={i} x={sX(i)} y={tPad - 6} textAnchor="middle" fontSize={7} fill="#cc3300" dominantBaseline="middle">✕</text>
+                    ) : null
+                  )}
+                  {frets.map((f, i) =>
+                    f > 0 && f >= startFret && f < startFret + numFrets ? (
+                      <circle key={i} cx={sX(i)} cy={dotFY(f)} r={Math.min(sSp * 0.37, 6)} fill="#002fa7" />
+                    ) : null
+                  )}
+                </svg>
+              ) : (
+                <div className="h-[88px] flex items-center justify-center text-[10px] text-gray-400">—</div>
+              )}
+            </div>
+            {uniqueNotes && (
+              <div className="px-1.5 pb-0.5">
+                <span className="text-[8px] text-gray-500 text-center font-mono leading-tight block">{uniqueNotes}</span>
+              </div>
+            )}
+            {lyricsVoicings.length > 1 && (
+              <div className="flex items-center justify-between px-1 pb-1 gap-0.5">
+                <button
+                  onClick={() => {
+                    const total = lyricsVoicings.length;
+                    const newIdx = (lyricsVidx - 1 + total) % total;
+                    setVariationIndices(prev => ({ ...prev, [lyricsPopup.chord]: newIdx }));
+                    playLyricsChordSound(lyricsVoicings[newIdx]);
+                  }}
+                  className="bevel-out bg-[var(--color-winxp-panel)] px-1.5 py-0.5 text-[10px] font-bold border border-gray-400 hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
+                >◀</button>
+                <span className="text-[9px] font-bold text-gray-600">{lyricsVidx + 1}/{lyricsVoicings.length}</span>
+                <button
+                  onClick={() => {
+                    const total = lyricsVoicings.length;
+                    const newIdx = (lyricsVidx + 1) % total;
+                    setVariationIndices(prev => ({ ...prev, [lyricsPopup.chord]: newIdx }));
+                    playLyricsChordSound(lyricsVoicings[newIdx]);
+                  }}
+                  className="bevel-out bg-[var(--color-winxp-panel)] px-1.5 py-0.5 text-[10px] font-bold border border-gray-400 hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
+                >▶</button>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* Floating auto-scroll control — canto inferior direito, sempre visível */}
+      <div className="fixed bottom-4 right-4 z-50 bevel-out bg-[var(--color-winxp-panel)] border border-gray-500 shadow-xl px-2 py-1.5 flex items-center gap-2 text-xs select-none">
+        <button
+          onClick={handleToggleAutoScroll}
+          className={`bevel-out px-3 py-1 font-bold border border-gray-400 min-w-[90px] text-center active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${autoScroll ? 'bg-[#316ac5] text-white' : 'bg-[var(--color-winxp-panel)] text-[#002fa7] hover:bg-white'}`}
+        >
+          {autoScroll ? '⏸ Pausar' : '▶ Auto-Rolar'}
+        </button>
+        <div className="flex gap-0.5">
+          {([0.5, 1, 2] as const).map(m => (
+            <button
+              key={m}
+              onClick={() => setScrollMult(m)}
+              className={`text-[10px] font-bold px-1.5 py-0.5 border leading-tight ${scrollMult === m ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#ece9d8] border-gray-400 hover:bg-white'}`}
+            >
+              {m}×
+            </button>
+          ))}
+        </div>
+        {effectiveBpm != null && (
+          <span className="font-mono text-[10px] font-bold text-[#005500] border-l border-gray-400 pl-1.5">♩ {effectiveBpm}</span>
+        )}
+        {(loopA !== null && loopB !== null) && (
+          <span className="text-[10px] font-bold text-[#316ac5] border-l border-gray-400 pl-1.5">⟳ Loop</span>
+        )}
+        {currentSection && autoScroll && (
+          <span
+            className="text-[10px] font-bold text-[#660033] border-l border-gray-400 pl-1.5 max-w-[110px] truncate"
+            title={currentSection}
+          >
+            {currentSection}
+          </span>
+        )}
+      </div>
+
+      {/* Linha de leitura — guia visual a 30% da viewport enquanto auto-scroll está ativo */}
+      {autoScroll && (
+        <div
+          className="fixed left-0 right-0 pointer-events-none z-40 border-t-2 border-[#316ac5] opacity-30"
+          style={{ top: '30vh' }}
+        />
+      )}
+
+      {editorChord && (
+        <ChordEditorModal
+          chordName={editorChord.name}
+          tuning={currentTuning}
+          instrument={currentInst}
+          initialFrets={editorChord.frets}
+          onApply={(frets) => setCustomVoicings(prev => ({ ...prev, [editorChord.name]: frets }))}
+          onClose={() => setEditorChord(null)}
+        />
+      )}
     </div>
   );
 };
