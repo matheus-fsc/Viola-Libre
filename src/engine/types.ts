@@ -47,6 +47,8 @@ export interface Voicing {
   score: number;         // Calculated playability score
   playabilityIssues: string[];
   hasInteriorMute?: boolean;
+  bassIsRoot?: boolean;     // true when the lowest played note is the chord root (tônica / 1º grau)
+  difficultyScore?: number; // physical difficulty metric (lower = easier), see difficultyFromPlayability
 }
 
 export interface ReverseChordMatch {
