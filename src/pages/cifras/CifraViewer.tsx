@@ -81,6 +81,7 @@ export const CifraViewer: React.FC = () => {
   const [favoriteChords, setFavoriteChords] = useState<Record<string, boolean>>({});
   const [infoPopupChord, setInfoPopupChord] = useState<string | null>(null);
   const [voicingFilter, setVoicingFilter] = useState<VoicingFilter>(DEFAULT_FILTER);
+  const [filterPopupOpen, setFilterPopupOpen] = useState(false);
   const [lockedVariations, setLockedVariations] = useState<Record<string, number>>({});
   const [excludedFromFilter, setExcludedFromFilter] = useState<Record<string, true>>({});
 
@@ -451,6 +452,8 @@ export const CifraViewer: React.FC = () => {
       return [...filterEasy(raw)].sort(compareStatic);
     });
   }, [voicingFilter, allVoicings, variationIndices, currentChords, lockedVariations, excludedFromFilter]);
+
+  const isFilterActive = voicingFilter.proximity || voicingFilter.maxNotes || voicingFilter.muteFilter !== 'any' || voicingFilter.prioritizeEasy;
 
   if (loading) {
     return (
@@ -827,6 +830,82 @@ export const CifraViewer: React.FC = () => {
               <span className="text-xs font-bold text-[#002fa7] flex items-center gap-1">
                 Acordes ({currentChords.length}) - {currentTuning.name}
               </span>
+              <div className="flex gap-1 items-center relative">
+                {isFilterActive && (
+                  <button
+                    onClick={() => { setVoicingFilter(DEFAULT_FILTER); setVariationIndices({}); setLockedVariations({}); setExcludedFromFilter({}); }}
+                    className="text-[10px] font-bold border border-gray-400 px-2 py-0.5 bg-[#ece9d8] hover:bg-white text-[#cc3300]"
+                    title="Restaurar todos os filtros ao padrão"
+                  >
+                    Restaurar
+                  </button>
+                )}
+                <button
+                  onClick={() => setFilterPopupOpen(p => !p)}
+                  className={`text-[10px] font-bold border px-2 py-0.5 ${isFilterActive ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#ece9d8] text-black border-gray-400 hover:bg-white'}`}
+                  title="Filtrar variações de acordes"
+                >
+                  {isFilterActive ? 'Filtros ▼' : 'Filtros ▽'}
+                </button>
+                {filterPopupOpen && (
+                  <div className="fixed inset-0 z-30" onClick={() => setFilterPopupOpen(false)} />
+                )}
+                {filterPopupOpen && (
+                  <div className="absolute right-0 top-full mt-1 z-40 bg-[#ece9d8] bevel-out shadow-lg w-60 text-xs select-none">
+                    <div className="winxp-gradient-blue text-white px-2 py-0.5 flex items-center justify-between font-bold">
+                      <span>Filtrar Variações</span>
+                      <button
+                        onClick={() => setFilterPopupOpen(false)}
+                        className="bg-red-600 border border-white border-r-gray-600 border-b-gray-600 px-1.5 text-white font-bold leading-tight"
+                      >
+                        ×
+                      </button>
+                    </div>
+                    <div className="p-2">
+                      <p className="font-bold text-gray-600 uppercase tracking-wider text-[9px] mb-1">Ordenação (combinável)</p>
+                      <label className="flex items-center gap-2 py-0.5 px-1 cursor-pointer hover:bg-white">
+                        <input type="checkbox" checked={voicingFilter.proximity} className="accent-[#316ac5]"
+                          onChange={e => { setVoicingFilter(f => ({ ...f, proximity: e.target.checked })); setVariationIndices({}); }} />
+                        ★ Acordes próximos
+                      </label>
+                      <label className="flex items-center gap-2 py-0.5 px-1 cursor-pointer hover:bg-white">
+                        <input type="checkbox" checked={voicingFilter.maxNotes} className="accent-[#316ac5]"
+                          onChange={e => { setVoicingFilter(f => ({ ...f, maxNotes: e.target.checked })); setVariationIndices({}); }} />
+                        ♪ Mais notas soando
+                      </label>
+                      <p className="font-bold text-gray-600 uppercase tracking-wider text-[9px] mt-2 mb-1">Abafamento Interno</p>
+                      {([
+                        ['any',       'Qualquer'],
+                        ['with_mute', '≈ Com abafamento'],
+                        ['no_mute',   '○ Sem abafamento'],
+                      ] as const).map(([val, label]) => (
+                        <label key={val} className="flex items-center gap-2 py-0.5 px-1 cursor-pointer hover:bg-white">
+                          <input type="radio" name="muteFilter" className="accent-[#316ac5]"
+                            checked={voicingFilter.muteFilter === val}
+                            onChange={() => { setVoicingFilter(f => ({ ...f, muteFilter: val })); setVariationIndices({}); }} />
+                          {label}
+                        </label>
+                      ))}
+                      <div className="border-t border-gray-400 mt-2 pt-2">
+                        <label className="flex items-center gap-2 py-0.5 px-1 cursor-pointer hover:bg-white">
+                          <input type="checkbox" checked={voicingFilter.prioritizeEasy} className="accent-[#316ac5]"
+                            onChange={e => { setVoicingFilter(f => ({ ...f, prioritizeEasy: e.target.checked })); setVariationIndices({}); }} />
+                          Priorizar acordes fáceis
+                        </label>
+                        <p className="text-gray-400 px-1 text-[9px] leading-tight mt-0.5">Exibe só acordes sem barra, sem abafamento interno e até traste 5</p>
+                      </div>
+                      <div className="border-t border-gray-400 mt-2 pt-2 flex justify-end">
+                        <button
+                          onClick={() => { setVoicingFilter(DEFAULT_FILTER); setVariationIndices({}); setLockedVariations({}); setExcludedFromFilter({}); }}
+                          className="bevel-out bg-[#ece9d8] border border-gray-400 px-2 py-0.5 hover:bg-white font-bold text-[10px]"
+                        >
+                          Restaurar padrão
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
             
             <div className="flex gap-2 overflow-x-auto retro-scrollbar py-2 items-center">
