@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Voicing, Tuning } from '../engine/types';
-import { midiToNoteName } from '../engine/chordCalculator';
+import { midiToNoteName, getVoicingDifficulty } from '../engine/chordCalculator';
 import { AudioEngine } from '../engine/AudioEngine';
 import { StarIcon } from './Icons';
 
@@ -72,6 +72,13 @@ export const IconInfo: React.FC<{ className?: string }> = ({ className = "w-4 h-
   </svg>
 );
 
+export const IconEdit: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => (
+  <svg className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+    <path d="M11.5 1.5l3 3-8 8-3.5.5.5-3.5 8-8z" fill="#ffd24d" stroke="#9a6b00" strokeWidth="1" strokeLinejoin="round"/>
+    <path d="M10 3l3 3" stroke="#9a6b00" strokeWidth="1"/>
+  </svg>
+);
+
 interface FretboardDiagramProps {
   voicing: Voicing;
   tuning: Tuning;
@@ -89,6 +96,7 @@ interface FretboardDiagramProps {
   variationLocked?: boolean;
   onInfoClick?: (e: React.MouseEvent) => void;
   infoActive?: boolean;
+  onEditClick?: (e: React.MouseEvent) => void;
 }
 
 export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
@@ -107,7 +115,8 @@ export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
   onPrevVariation,
   variationLocked = false,
   onInfoClick,
-  infoActive = false
+  infoActive = false,
+  onEditClick
 }) => {
   const { frets, notes, barre } = voicing;
   const numStrings = tuning.strings.length;
@@ -189,6 +198,15 @@ export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
               title="Informações de Teoria (Tom)"
             >
               <IconInfo className="w-4 h-4" />
+            </button>
+          )}
+          {onEditClick && (
+            <button
+              onClick={onEditClick}
+              className="cursor-pointer focus:outline-none hover:scale-110 transition-transform flex items-center justify-center"
+              title="Modificar acorde no braço"
+            >
+              <IconEdit className="w-4 h-4" />
             </button>
           )}
           {onToggleCifra && (
@@ -392,7 +410,7 @@ export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
       <div className="w-full text-center mt-2 border-t border-[#d4d0c8] pt-1">
         <div className="text-[10px] font-mono text-gray-600 flex justify-between items-center">
           <span>Dificuldade:</span>
-          <span className="font-bold text-black">{120 - voicing.score > 80 ? "Difícil" : 120 - voicing.score > 40 ? "Média" : "Fácil"}</span>
+          <span className="font-bold text-black">{getVoicingDifficulty(frets).label}</span>
         </div>
         {voicing.hasInteriorMute && (
           <div className="text-[9px] font-bold text-[#cc3300] font-mono mt-1 bg-[#ffcccc]/70 border border-[#cc3300] rounded px-1 py-0.5 text-center shadow-sm select-none flex items-center justify-center gap-1">
