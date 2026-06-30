@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { FileText, Eye, Heart, Pin, Save } from 'lucide-react';
 import {
-  getCifra, incrementView, favoriteCifra, updateDifficulty, type CifraDetail,
+  getCifra, incrementView, favoriteCifra, type CifraDetail,
   saveSequencia, loadSequencia, updateSequencia, deleteSequencia,
   addRecentSequencia, removeRecentSequencia, getRecentSequencias,
   getSongs, type Song,
@@ -75,16 +75,12 @@ export const CifraViewer: React.FC = () => {
   // Versões da mesma música (mesmo título, slugs diferentes)
   const [songVersions, setSongVersions] = useState<Song[]>([]);
   
-  // Carousel expanded state
-  const [isCarouselExpanded, setIsCarouselExpanded] = useState<boolean>(false);
-
   // New features
   const [songKey, setSongKey] = useState<string>('');
   const [variationIndices, setVariationIndices] = useState<Record<string, number>>({});
   const [favoriteChords, setFavoriteChords] = useState<Record<string, boolean>>({});
   const [infoPopupChord, setInfoPopupChord] = useState<string | null>(null);
   const [voicingFilter, setVoicingFilter] = useState<VoicingFilter>(DEFAULT_FILTER);
-  const [filterPopupOpen, setFilterPopupOpen] = useState(false);
   const [lockedVariations, setLockedVariations] = useState<Record<string, number>>({});
   const [excludedFromFilter, setExcludedFromFilter] = useState<Record<string, true>>({});
 
@@ -170,16 +166,6 @@ export const CifraViewer: React.FC = () => {
       console.error(e);
     } finally {
       setIsFavoriting(false);
-    }
-  };
-
-  const handleDifficulty = async (level: string) => {
-    if (!artistSlug || !songSlug || !cifra) return;
-    try {
-      await updateDifficulty(artistSlug, songSlug, level);
-      setCifra({ ...cifra, difficulty: level });
-    } catch (e) {
-      console.error(e);
     }
   };
 
@@ -282,7 +268,26 @@ export const CifraViewer: React.FC = () => {
   // Split displayHtml into html/tab segments for the tab transposer
   const cifraSegments = useMemo<ContentSegment[]>(() => {
     if (!cifra) return [];
-    return splitHtmlByTabs(displayHtml);
+    const raw = splitHtmlByTabs(displayHtml);
+    // Mescla tabs consecutivas (separadas apenas por html em branco) num único
+    // bloco — assim uma tab quebrada em 2 partes vira 1 bloco (1 cabeçalho, compacto).
+    const isBlankHtml = (s: string) => s.replace(/<[^>]*>/g, '').trim() === '';
+    const merged: ContentSegment[] = [];
+    for (const seg of raw) {
+      const last = merged[merged.length - 1];
+      const prev = merged[merged.length - 2];
+      if (seg.type === 'tab' && last?.type === 'tab') {
+        last.content += '\n\n' + seg.content;
+        continue;
+      }
+      if (seg.type === 'tab' && last?.type === 'html' && isBlankHtml(last.content) && prev?.type === 'tab') {
+        merged.pop();
+        merged[merged.length - 1].content += '\n\n' + seg.content;
+        continue;
+      }
+      merged.push({ ...seg });
+    }
+    return merged;
   }, [displayHtml, cifra]);
 
   // Transposed unique chords for the carousel
@@ -305,10 +310,17 @@ export const CifraViewer: React.FC = () => {
 
   // Versão atualmente exibida (slug normalizado para comparar com o param da rota)
   const normSlug = (s?: string) => (s || '').replace(/^\//, '');
+  // Opções do seletor: as versões carregadas ou, na ausência delas, a versão atual.
+  // Sempre tem ao menos 1 entrada para que o controle apareça mesmo sem variações.
+  const versionOptions = useMemo<Song[]>(() => {
+    if (songVersions.length > 0) return songVersions;
+    if (!cifra) return [];
+    return [{ id: cifra.id, title: cifra.title, slug: normSlug(songSlug), version_name: cifra.version_name }];
+  }, [songVersions, cifra, songSlug]);
   const currentVersionSlug = useMemo(() => {
-    const match = songVersions.find(s => normSlug(s.slug) === normSlug(songSlug));
-    return match ? match.slug : (songVersions[0]?.slug ?? '');
-  }, [songVersions, songSlug]);
+    const match = versionOptions.find(s => normSlug(s.slug) === normSlug(songSlug));
+    return match ? match.slug : (versionOptions[0]?.slug ?? '');
+  }, [versionOptions, songSlug]);
   const handleVersionChange = (slug: string) => {
     navigate(`/cifras/${artistSlug}/${normSlug(slug)}`);
   };
@@ -439,8 +451,6 @@ export const CifraViewer: React.FC = () => {
       return [...filterEasy(raw)].sort(compareStatic);
     });
   }, [voicingFilter, allVoicings, variationIndices, currentChords, lockedVariations, excludedFromFilter]);
-
-  const isFilterActive = voicingFilter.proximity || voicingFilter.maxNotes || voicingFilter.muteFilter !== 'any' || voicingFilter.prioritizeEasy;
 
   if (loading) {
     return (
@@ -690,29 +700,17 @@ export const CifraViewer: React.FC = () => {
               <span className="flex items-center gap-0.5"><Heart size={11} className="text-red-500" /> {cifra.favorited || 0}</span>
             </div>
 
-            <div className="flex flex-col gap-0.5">
-              <label className="font-bold text-[10px] uppercase text-gray-500">Dif:</label>
-              <select value={cifra.difficulty || ""} onChange={(e) => handleDifficulty(e.target.value)} className="bevel-in bg-white px-1 py-0 text-xs w-full outline-none cursor-pointer">
-                <option value="" disabled>...</option>
-                <option value="iniciante">Fácil</option>
-                <option value="intermediario">Médio</option>
-                <option value="avancado">Difícil</option>
-              </select>
-            </div>
-
             <div className="flex items-center gap-1">
               <span className="font-bold text-[10px] uppercase text-gray-500 shrink-0">Tom:</span>
               <span className="font-bold text-xs bg-white border border-gray-400 px-1 text-[#002fa7] min-w-[20px] text-center">{songKey || '?'}</span>
             </div>
 
-            {songVersions.length > 1 && (
-              <div className="flex flex-col gap-0.5">
-                <label className="font-bold text-[10px] uppercase text-gray-500">Versão:</label>
-                <select value={currentVersionSlug} onChange={(e) => handleVersionChange(e.target.value)} className="bevel-in bg-white px-1 py-0 text-xs w-full outline-none cursor-pointer">
-                  {songVersions.map(v => (<option key={v.id} value={v.slug}>{v.version_name || 'Principal'}</option>))}
-                </select>
-              </div>
-            )}
+            <div className="flex flex-col gap-0.5">
+              <label className="font-bold text-[10px] uppercase text-gray-500">Variações:</label>
+              <select value={currentVersionSlug} onChange={(e) => handleVersionChange(e.target.value)} disabled={versionOptions.length <= 1} className="bevel-in bg-white px-1 py-0 text-xs w-full outline-none cursor-pointer disabled:opacity-60 disabled:cursor-default">
+                {versionOptions.map(v => (<option key={v.id} value={v.slug}>{v.version_name || 'Principal'}</option>))}
+              </select>
+            </div>
 
             <div className="flex flex-col gap-0.5">
               <label className="font-bold text-[10px] uppercase text-gray-500">Instrumento:</label>
@@ -771,26 +769,15 @@ export const CifraViewer: React.FC = () => {
               <span className="text-gray-600 flex items-center gap-1 font-bold" title="Visualizações"><Eye size={16} className="text-blue-600" /> {cifra.views || 1}</span>
               <span className="text-gray-600 flex items-center gap-1 font-bold" title="Favoritos"><Heart size={16} className="text-red-500" /> {cifra.favorited || 0}</span>
               <div className="flex items-center gap-1">
-                <label className="font-bold text-[11px] uppercase tracking-wider text-gray-700">Dif:</label>
-                <select value={cifra.difficulty || ""} onChange={(e) => handleDifficulty(e.target.value)} className="bevel-in bg-white px-1 py-0 text-xs outline-none cursor-pointer">
-                  <option value="" disabled>...</option>
-                  <option value="iniciante">Fácil</option>
-                  <option value="intermediario">Médio</option>
-                  <option value="avancado">Difícil</option>
-                </select>
-              </div>
-              <div className="flex items-center gap-1">
                 <label className="font-bold text-[11px] uppercase tracking-wider text-gray-700">Tom:</label>
                 <span className="font-bold text-xs bg-white border border-gray-400 px-1 text-[#002fa7] min-w-[20px] text-center">{songKey || '?'}</span>
               </div>
-              {songVersions.length > 1 && (
-                <div className="flex items-center gap-1">
-                  <label className="font-bold text-[11px] uppercase tracking-wider text-gray-700">Versão:</label>
-                  <select value={currentVersionSlug} onChange={(e) => handleVersionChange(e.target.value)} className="bevel-in bg-white px-1 py-0 text-xs outline-none cursor-pointer max-w-[120px]">
-                    {songVersions.map(v => (<option key={v.id} value={v.slug}>{v.version_name || 'Principal'}</option>))}
-                  </select>
-                </div>
-              )}
+              <div className="flex items-center gap-1">
+                <label className="font-bold text-[11px] uppercase tracking-wider text-gray-700">Variações:</label>
+                <select value={currentVersionSlug} onChange={(e) => handleVersionChange(e.target.value)} disabled={versionOptions.length <= 1} className="bevel-in bg-white px-1 py-0 text-xs outline-none cursor-pointer max-w-[120px] disabled:opacity-60 disabled:cursor-default">
+                  {versionOptions.map(v => (<option key={v.id} value={v.slug}>{v.version_name || 'Principal'}</option>))}
+                </select>
+              </div>
               <div className="flex items-center gap-1">
                 <label className="font-bold text-[11px] uppercase tracking-wider text-gray-700">Instrumento:</label>
                 <select value={selectedInstId} onChange={(e) => { const newInst = PRESET_INSTRUMENTS.find(i => i.id === e.target.value); if (newInst) { setSelectedInstId(newInst.id); setSelectedTuningId(newInst.defaultTuningId || newInst.tunings[0].id); setTabPosIdx(0); } }} className="bevel-in bg-white px-1 py-0 text-xs outline-none cursor-pointer max-w-[100px]">
@@ -836,107 +823,13 @@ export const CifraViewer: React.FC = () => {
         {/* Carousel de Acordes Superior */}
         {currentChords.length > 0 && (
           <div className="bevel-out bg-[var(--color-winxp-panel)] p-2 shrink-0 flex flex-col gap-1 transition-all">
-            <div className="flex justify-between items-center cursor-pointer" onClick={() => setIsCarouselExpanded(!isCarouselExpanded)}>
+            <div className="flex justify-between items-center">
               <span className="text-xs font-bold text-[#002fa7] flex items-center gap-1">
                 Acordes ({currentChords.length}) - {currentTuning.name}
               </span>
-              <div className="flex gap-1 items-center relative" onClick={e => e.stopPropagation()}>
-                {/* Reset rápido — aparece só quando há filtro ativo */}
-                {isFilterActive && (
-                  <button
-                    onClick={() => { setVoicingFilter(DEFAULT_FILTER); setVariationIndices({}); setLockedVariations({}); setExcludedFromFilter({}); }}
-                    className="text-[10px] font-bold border border-gray-400 px-2 py-0.5 bg-[#ece9d8] hover:bg-white text-[#cc3300]"
-                    title="Restaurar todos os filtros ao padrão"
-                  >
-                    Restaurar
-                  </button>
-                )}
-
-                {/* Botão de filtro */}
-                <button
-                  onClick={() => setFilterPopupOpen(p => !p)}
-                  className={`text-[10px] font-bold border px-2 py-0.5 ${isFilterActive ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#ece9d8] text-black border-gray-400 hover:bg-white'}`}
-                  title="Filtrar variações de acordes"
-                >
-                  {isFilterActive ? 'Filtros ▼' : 'Filtros ▽'}
-                </button>
-
-                {/* Overlay para fechar ao clicar fora */}
-                {filterPopupOpen && (
-                  <div className="fixed inset-0 z-30" onClick={() => setFilterPopupOpen(false)} />
-                )}
-
-                {/* Popup de filtros */}
-                {filterPopupOpen && (
-                  <div className="absolute right-0 top-full mt-1 z-40 bg-[#ece9d8] bevel-out shadow-lg w-60 text-xs select-none">
-                    <div className="winxp-gradient-blue text-white px-2 py-0.5 flex items-center justify-between font-bold">
-                      <span>Filtrar Variações</span>
-                      <button
-                        onClick={() => setFilterPopupOpen(false)}
-                        className="bg-red-600 border border-white border-r-gray-600 border-b-gray-600 px-1.5 text-white font-bold leading-tight"
-                      >
-                        ×
-                      </button>
-                    </div>
-
-                    <div className="p-2">
-                      {/* Ordenação — checkboxes combinávies */}
-                      <p className="font-bold text-gray-600 uppercase tracking-wider text-[9px] mb-1">Ordenação (combinável)</p>
-                      <label className="flex items-center gap-2 py-0.5 px-1 cursor-pointer hover:bg-white">
-                        <input type="checkbox" checked={voicingFilter.proximity} className="accent-[#316ac5]"
-                          onChange={e => { setVoicingFilter(f => ({ ...f, proximity: e.target.checked })); setVariationIndices({}); }} />
-                        ★ Acordes próximos
-                      </label>
-                      <label className="flex items-center gap-2 py-0.5 px-1 cursor-pointer hover:bg-white">
-                        <input type="checkbox" checked={voicingFilter.maxNotes} className="accent-[#316ac5]"
-                          onChange={e => { setVoicingFilter(f => ({ ...f, maxNotes: e.target.checked })); setVariationIndices({}); }} />
-                        ♪ Mais notas soando
-                      </label>
-
-                      {/* Abafamento — radio exclusivo */}
-                      <p className="font-bold text-gray-600 uppercase tracking-wider text-[9px] mt-2 mb-1">Abafamento Interno</p>
-                      {([
-                        ['any',       'Qualquer'],
-                        ['with_mute', '≈ Com abafamento'],
-                        ['no_mute',   '○ Sem abafamento'],
-                      ] as const).map(([val, label]) => (
-                        <label key={val} className="flex items-center gap-2 py-0.5 px-1 cursor-pointer hover:bg-white">
-                          <input type="radio" name="muteFilter" className="accent-[#316ac5]"
-                            checked={voicingFilter.muteFilter === val}
-                            onChange={() => { setVoicingFilter(f => ({ ...f, muteFilter: val })); setVariationIndices({}); }} />
-                          {label}
-                        </label>
-                      ))}
-
-                      {/* Fáceis — checkbox */}
-                      <div className="border-t border-gray-400 mt-2 pt-2">
-                        <label className="flex items-center gap-2 py-0.5 px-1 cursor-pointer hover:bg-white">
-                          <input type="checkbox" checked={voicingFilter.prioritizeEasy} className="accent-[#316ac5]"
-                            onChange={e => { setVoicingFilter(f => ({ ...f, prioritizeEasy: e.target.checked })); setVariationIndices({}); }} />
-                          Priorizar acordes fáceis
-                        </label>
-                        <p className="text-gray-400 px-1 text-[9px] leading-tight mt-0.5">Exibe só acordes sem barra, sem abafamento interno e até traste 5</p>
-                      </div>
-
-                      <div className="border-t border-gray-400 mt-2 pt-2 flex justify-end">
-                        <button
-                          onClick={() => { setVoicingFilter(DEFAULT_FILTER); setVariationIndices({}); setLockedVariations({}); setExcludedFromFilter({}); }}
-                          className="bevel-out bg-[#ece9d8] border border-gray-400 px-2 py-0.5 hover:bg-white font-bold text-[10px]"
-                        >
-                          Restaurar padrão
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                <button className="text-[10px] font-bold border border-gray-400 px-2 py-0.5 bg-[#ece9d8] hover:bg-white active:bg-gray-200" onClick={() => setIsCarouselExpanded(!isCarouselExpanded)}>
-                  {isCarouselExpanded ? "Ocultar" : "Expandir"}
-                </button>
-              </div>
             </div>
             
-            <div className={`flex gap-2 overflow-x-auto retro-scrollbar py-2 ${isCarouselExpanded ? 'items-start' : 'items-center'}`}>
+            <div className="flex gap-2 overflow-x-auto retro-scrollbar py-2 items-center">
               {currentChords.map((chordName, idx) => {
                 const voicings = displayedVoicings[idx] ?? [];
                 const isChordLocked = chordName in lockedVariations;
@@ -1001,7 +894,7 @@ export const CifraViewer: React.FC = () => {
                         voicing={bestVoicing}
                         tuning={currentTuning}
                         chordName={chordName}
-                        compact={!isCarouselExpanded}
+                        compact={true}
                         isFavorite={isFav}
                         onToggleFavorite={toggleFav}
                         isInCifra={false}
