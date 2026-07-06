@@ -17,6 +17,7 @@ export const VisualizationOnboardingModal: React.FC = () => {
     frets: [-1, 0, 2, 2, 1, 0],
     notes: ['X', 'A', 'E', 'A', 'C', 'E'],
     score: 0,
+    playabilityIssues: [],
   };
 
   const handleSelect = (order: 'standard' | 'inverted') => {
