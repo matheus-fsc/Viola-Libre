@@ -1,27 +1,24 @@
 import React, { useState } from 'react';
+import { loginEditor, storeEditorSession, type EditorSession } from '../services/authApi';
 
 interface EditorLoginModalProps {
   onClose: () => void;
-  onLoginSuccess: (token: string) => void;
-  currentToken?: string;
+  onLoginSuccess: (session: EditorSession | null) => void;
+  isAuthenticated?: boolean;
 }
 
-export const EditorLoginModal: React.FC<EditorLoginModalProps> = ({ onClose, onLoginSuccess, currentToken }) => {
+export const EditorLoginModal: React.FC<EditorLoginModalProps> = ({ onClose, onLoginSuccess, isAuthenticated }) => {
   const [tokenInput, setTokenInput] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = () => {
-    // Basic frontend security validations
+  const handleLogin = async () => {
+    // Basic frontend format checks before hitting the network
     const trimmedToken = tokenInput.trim();
-    
+
     if (!trimmedToken) {
       setError('O token não pode estar vazio.');
-      return;
-    }
-
-    if (trimmedToken.length < 32) {
-      setError('Token inválido. O token deve ter pelo menos 32 caracteres.');
       return;
     }
 
@@ -36,17 +33,29 @@ export const EditorLoginModal: React.FC<EditorLoginModalProps> = ({ onClose, onL
       return;
     }
 
-    // Mock successful validation
-    // In the real implementation, this would send an auth request to the backend
-    setSuccess(true);
-    setTimeout(() => {
-      onLoginSuccess(trimmedToken);
-      onClose();
-    }, 1200);
+    setError('');
+    setLoading(true);
+    try {
+      const session = await loginEditor(trimmedToken);
+      storeEditorSession(session);
+      setSuccess(true);
+      setTimeout(() => {
+        onLoginSuccess(session);
+        onClose();
+      }, 800);
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 401) setError('Token inválido ou não reconhecido.');
+      else if (status === 429) setError('Muitas tentativas. Aguarde um minuto e tente novamente.');
+      else setError('Não foi possível autenticar agora. Tente novamente em instantes.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleLogout = () => {
-    onLoginSuccess(''); // Clear token
+    storeEditorSession(null);
+    onLoginSuccess(null);
     onClose();
   };
 
@@ -66,7 +75,7 @@ export const EditorLoginModal: React.FC<EditorLoginModalProps> = ({ onClose, onL
         </div>
 
         <div className="p-5 flex flex-col gap-4 text-xs">
-          {currentToken ? (
+          {isAuthenticated ? (
             <div className="flex flex-col items-center gap-4 py-4">
               <div className="text-4xl">🛡️</div>
               <p className="text-center font-bold text-[#0058e6]">Você está autenticado como Editor.</p>
@@ -121,10 +130,10 @@ export const EditorLoginModal: React.FC<EditorLoginModalProps> = ({ onClose, onL
                 </button>
                 <button
                   onClick={handleLogin}
-                  disabled={success}
+                  disabled={success || loading}
                   className="px-4 py-1.5 bg-[#0058e6] text-white border border-[#002fa7] active:border-t-[#002fa7] active:border-l-[#002fa7] font-bold text-xs hover:bg-[#3a8bfb] cursor-pointer disabled:opacity-50"
                 >
-                  Autenticar
+                  {loading ? 'Autenticando...' : 'Autenticar'}
                 </button>
               </div>
             </>

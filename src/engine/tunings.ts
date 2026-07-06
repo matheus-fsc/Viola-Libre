@@ -676,6 +676,24 @@ export const CHORD_FORMULAS: ChordFormula[] = [
     suffix: "m2+",
     intervals: [0, 3, 7, 15],
     requiredIntervals: [0, 3, 15]
+  },
+  {
+    name: "Sétima com Décima Terceira Bemol",
+    suffix: "7(13-)",
+    intervals: [0, 4, 7, 10, 20],
+    requiredIntervals: [0, 4, 10, 20]
+  },
+  {
+    name: "Menor com Sétima e Décima Primeira Aumentada",
+    suffix: "m7(11+)",
+    intervals: [0, 3, 7, 10, 18],
+    requiredIntervals: [0, 3, 10, 18]
+  },
+  {
+    name: "Sétima com Nona e Décima Primeira",
+    suffix: "7(9/11)",
+    intervals: [0, 4, 7, 10, 14, 17],
+    requiredIntervals: [0, 4, 10, 14, 17]
   }
 ];
 

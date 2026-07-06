@@ -14,6 +14,18 @@ import { EarTranscription } from './components/EarTranscription';
 import { ViolaDuets } from './components/ViolaDuets';
 import { StarIcon } from './components/Icons';
 import { EditorLoginModal } from './components/EditorLoginModal';
+import { InstrumentOnboardingModal } from './components/InstrumentOnboardingModal';
+import {
+  getStoredEditorSession,
+  type EditorSession,
+  type ChordRankEntry,
+  buildChordId,
+  getChordRankings,
+  pickCuratedVoicings,
+  applyCurationOrder,
+  rankChord,
+} from './services/authApi';
+import { getPreferredInstrumentId, setPreferredInstrumentId } from './utils/instrumentPreference';
 import { CifrasApp } from './pages/cifras/CifrasApp';
 import { MinhasCifras } from './pages/minhasCifras/MinhasCifras';
 
@@ -45,8 +57,30 @@ interface FavoriteVoicing {
 
 function App() {
   // Navigation & View States
-  const [selectedInst, setSelectedInst] = useState<Instrument>(PRESET_INSTRUMENTS[0]);
-  const [selectedTuning, setSelectedTuning] = useState<Tuning>(PRESET_INSTRUMENTS[0].tunings[0]);
+  const [selectedInst, setSelectedInst] = useState<Instrument>(() => {
+    const savedId = getPreferredInstrumentId();
+    return PRESET_INSTRUMENTS.find(i => i.id === savedId) || PRESET_INSTRUMENTS[0];
+  });
+  const [selectedTuning, setSelectedTuning] = useState<Tuning>(() => {
+    const savedId = getPreferredInstrumentId();
+    const inst = PRESET_INSTRUMENTS.find(i => i.id === savedId) || PRESET_INSTRUMENTS[0];
+    return inst.tunings.find(t => t.id === inst.defaultTuningId) || inst.tunings[0];
+  });
+
+  // Popup de primeira sessão (ou localStorage limpo) pedindo o instrumento preferido
+  const [showInstrumentOnboarding, setShowInstrumentOnboarding] = useState<boolean>(
+    () => getPreferredInstrumentId() === null
+  );
+  const handleInstrumentOnboardingSelect = (inst: Instrument) => {
+    setSelectedInst(inst);
+    setSelectedTuning(inst.tunings.find(t => t.id === inst.defaultTuningId) || inst.tunings[0]);
+    setPreferredInstrumentId(inst.id);
+    setShowInstrumentOnboarding(false);
+  };
+  const handleInstrumentOnboardingSkip = () => {
+    setPreferredInstrumentId(PRESET_INSTRUMENTS[0].id);
+    setShowInstrumentOnboarding(false);
+  };
   
   const [rootName, setRootName] = useState<string>("D");
   const [suffix, setSuffix] = useState<string>(""); // default Major
@@ -82,13 +116,14 @@ function App() {
     return activeVoicings.filter(voicing => {
       const frettedFrets = voicing.frets.filter(f => f > 0);
       const startFret = frettedFrets.length > 0 ? Math.min(...frettedFrets) : 1;
-      
+
       if (minFretFilter > 0 && startFret < minFretFilter) return false;
       if (interiorMuteFilter === 'hide' && voicing.hasInteriorMute) return false;
-      
+
       return true;
     });
   }, [activeVoicings, minFretFilter, interiorMuteFilter]);
+
 
   // Reset visual limit when search parameters change
   useEffect(() => {
@@ -129,7 +164,7 @@ function App() {
 
   // Editor Login State
   const [showEditorLogin, setShowEditorLogin] = useState<boolean>(false);
-  const [editorToken, setEditorToken] = useState<string>(() => localStorage.getItem('vl_editor_token') || '');
+  const [editorSession, setEditorSession] = useState<EditorSession | null>(() => getStoredEditorSession());
 
   // Tab switcher — derived from URL
   const { pathname } = useLocation();
@@ -389,6 +424,78 @@ function App() {
 
   const customNotesNames = customNotes.map(n => useFlats ? NOTE_NAMES_FLAT[n] : NOTE_NAMES_SHARP[n]).join(',');
   const chordDisplayName = `${rootName}${suffix}${bassName ? `/${bassName}` : ''}${customNotes.length > 0 ? ` + [${customNotesNames}]` : ''}`;
+
+  // Editor curation: which voicing (if any) has been ranked by editors as the global
+  // default for this chord on this instrument+tuning. Dictionary curation has no song
+  // context, so it always uses the global (song_slug = null) scope.
+  const dictionaryChordId = rootName ? buildChordId(selectedInst.id, selectedTuning.id, chordDisplayName) : null;
+  const [chordRankings, setChordRankings] = useState<ChordRankEntry[]>([]);
+
+  useEffect(() => {
+    // Clear synchronously on every chord change — otherwise the previous chord's
+    // rankings stay in state during the fetch and can flash a false "curado" badge
+    // on the new chord's cards if a frets_array happens to coincide.
+    setChordRankings([]);
+    if (!dictionaryChordId) return;
+    let cancelled = false;
+    getChordRankings(dictionaryChordId)
+      .then(entries => { if (!cancelled) setChordRankings(entries); })
+      .catch(() => { if (!cancelled) setChordRankings([]); });
+    return () => { cancelled = true; };
+  }, [dictionaryChordId]);
+
+  const curatedVoicings = useMemo(() => pickCuratedVoicings(chordRankings), [chordRankings]);
+
+  const orderedVoicings = useMemo(() => {
+    return applyCurationOrder(
+      filteredVoicings,
+      curatedVoicings.map(c => c.fretsArray),
+      (fretsArray) => buildVoicingFromFrets(fretsArray, selectedTuning, false)
+    );
+  }, [filteredVoicings, curatedVoicings, selectedTuning]);
+
+  const [curatingKey, setCuratingKey] = useState<string | null>(null);
+
+  const handleCurateChord = async (voicing: Voicing) => {
+    if (!editorSession || !dictionaryChordId) return;
+    const key = voicing.frets.join(',');
+    setCuratingKey(key);
+    try {
+      await rankChord(dictionaryChordId, voicing.frets);
+      const entries = await getChordRankings(dictionaryChordId, { forceRefresh: true });
+      setChordRankings(entries);
+    } catch (err) {
+      console.error('Falha ao curar acorde:', err);
+    } finally {
+      setCuratingKey(null);
+    }
+  };
+
+  // Lets the curator explicitly order the shortlist of curated variations (instead of
+  // it silently following recency). Swaps two neighbors and re-stamps the WHOLE curated
+  // list with a fresh descending score ladder, so the new order is unambiguous — a
+  // partial/relative score nudge could be masked by another editor's higher score_boost.
+  const handleReorderCurated = async (fretsArray: number[], direction: -1 | 1) => {
+    if (!editorSession || !dictionaryChordId) return;
+    const idx = curatedVoicings.findIndex(c => c.fretsArray.join(',') === fretsArray.join(','));
+    const otherIdx = idx + direction;
+    if (idx === -1 || otherIdx < 0 || otherIdx >= curatedVoicings.length) return;
+    const reordered = [...curatedVoicings];
+    [reordered[idx], reordered[otherIdx]] = [reordered[otherIdx], reordered[idx]];
+    const key = fretsArray.join(',');
+    setCuratingKey(key);
+    try {
+      await Promise.all(
+        reordered.map((c, i) => rankChord(dictionaryChordId, c.fretsArray, { scoreBoost: reordered.length - i }))
+      );
+      const entries = await getChordRankings(dictionaryChordId, { forceRefresh: true });
+      setChordRankings(entries);
+    } catch (err) {
+      console.error('Falha ao reordenar curadoria:', err);
+    } finally {
+      setCuratingKey(null);
+    }
+  };
 
   // Calcula o paddingBottom dinâmico da página com base no estado atual do sequenciador fixo.
   // Isso garante que o scroll da página sempre alcance o conteúdo abaixo do painel.
@@ -661,9 +768,11 @@ function App() {
                     ) : (
                       <div className="flex flex-col w-full">
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 justify-items-center w-full">
-                          {filteredVoicings.slice(0, visibleVariationsLimit).map((voicing: Voicing, index: number) => {
+                          {orderedVoicings.slice(0, visibleVariationsLimit).map((voicing: Voicing, index: number) => {
                             const isFav = isVoicingFavorited(voicing);
                             const isInCifra = isVoicingInCifra(voicing);
+                            const curatedIdx = curatedVoicings.findIndex(c => c.fretsArray.join(',') === voicing.frets.join(','));
+                            const isCurated = curatedIdx !== -1;
                             return (
                               <div key={index} className="relative hover:translate-y-[-2px] transition-transform">
                                 <FretboardDiagram
@@ -676,6 +785,13 @@ function App() {
                                   onToggleCifra={() => toggleCifraVoicing(voicing)}
                                   useFlats={useFlats}
                                   onEditClick={() => setEditorFrets(voicing.frets)}
+                                  onCurateClick={editorSession ? () => handleCurateChord(voicing) : undefined}
+                                  isCurated={isCurated}
+                                  curateBusy={curatingKey === voicing.frets.join(',')}
+                                  onPromoteClick={editorSession ? () => handleReorderCurated(voicing.frets, -1) : undefined}
+                                  onDemoteClick={editorSession ? () => handleReorderCurated(voicing.frets, 1) : undefined}
+                                  canPromote={curatedIdx > 0}
+                                  canDemote={curatedIdx !== -1 && curatedIdx < curatedVoicings.length - 1}
                                 />
                                 <div className="absolute -top-1.5 -left-1.5 text-[10px] font-bold px-1.5 py-0.5 bg-[#228b22] text-white border border-[#1a6b1a] rounded-sm font-mono shadow-md z-10">
                                   #{index + 1}
@@ -684,13 +800,13 @@ function App() {
                             );
                           })}
                         </div>
-                        {filteredVoicings.length > visibleVariationsLimit && (
+                        {orderedVoicings.length > visibleVariationsLimit && (
                           <div className="w-full flex justify-center mt-6 mb-2">
-                            <button 
-                              onClick={() => setVisibleVariationsLimit(filteredVoicings.length)}
+                            <button
+                              onClick={() => setVisibleVariationsLimit(orderedVoicings.length)}
                               className="bevel-out bg-[#ece9d8] text-black px-6 py-2 font-bold text-sm active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white transition-all hover:bg-white"
                             >
-                              Carregar Mais ({filteredVoicings.length - visibleVariationsLimit} posições ocultas)
+                              Carregar Mais ({orderedVoicings.length - visibleVariationsLimit} posições ocultas)
                             </button>
                           </div>
                         )}
@@ -1122,7 +1238,7 @@ function App() {
               className="flex items-center justify-center cursor-pointer hover:bg-white/20 px-1 rounded transition-colors"
               title="Acesso de Editor"
             >
-              <span className={editorToken ? "text-[#ddffdd]" : "opacity-70"}>🔑 Editor</span>
+              <span className={editorSession ? "text-[#ddffdd]" : "opacity-70"}>🔑 Editor</span>
             </button>
             <div className="w-[1.5px] h-4 bg-white/30 mx-1"></div>
             <span className="cursor-pointer" title="Rede Ativa (Livre)">NET</span>
@@ -1147,16 +1263,16 @@ function App() {
 
       {showEditorLogin && (
         <EditorLoginModal
-          currentToken={editorToken}
+          isAuthenticated={!!editorSession}
           onClose={() => setShowEditorLogin(false)}
-          onLoginSuccess={(token) => {
-            setEditorToken(token);
-            if (token) {
-              localStorage.setItem('vl_editor_token', token);
-            } else {
-              localStorage.removeItem('vl_editor_token');
-            }
-          }}
+          onLoginSuccess={(session) => setEditorSession(session)}
+        />
+      )}
+
+      {showInstrumentOnboarding && (
+        <InstrumentOnboardingModal
+          onSelect={handleInstrumentOnboardingSelect}
+          onSkip={handleInstrumentOnboardingSkip}
         />
       )}
     </div>

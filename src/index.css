@@ -138,5 +138,13 @@ body {
   scrollbar-width: none;  /* Firefox */
 }
 
+/* TimingEditor — top block (player | wizards+trechos), desktop layout. A dedicated class
+   (rather than an inline/arbitrary Tailwind grid-cols) because the width-breakpoint stacking
+   rule (Fase 2 of the layout refactor) needs a plain @media override on grid-template-columns,
+   which reads cleaner here than juggling Tailwind's responsive-variant class names inline. */
+.editor-top-grid {
+  grid-template-columns: 340px 1fr;
+}
+
 
 

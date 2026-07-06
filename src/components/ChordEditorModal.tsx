@@ -8,6 +8,7 @@ import {
   buildChord,
 } from '../engine/chordCalculator';
 import { AudioEngine } from '../engine/AudioEngine';
+import { useEditorSession, rankChord, buildChordId } from '../services/authApi';
 
 interface ChordEditorModalProps {
   chordName: string;
@@ -43,6 +44,8 @@ export const ChordEditorModal: React.FC<ChordEditorModalProps> = ({
   }, [initialFrets, numStrings]);
 
   const [frets, setFrets] = useState<number[]>(normalizedInitial);
+  const editorSession = useEditorSession();
+  const [rankState, setRankState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
 
   // Pitch classes that belong to the target chord (the "harmonic field").
   const { chordPcs, rootPc } = useMemo(() => {
@@ -88,6 +91,24 @@ export const ChordEditorModal: React.FC<ChordEditorModalProps> = ({
       engine.playMidi(tuning.strings[i] + fret, 2.0, delay);
       delay += 0.04;
     }
+  };
+
+  const handleApply = async () => {
+    onApply(frets);
+    if (!editorSession) {
+      onClose();
+      return;
+    }
+    // Editors additionally submit the shape as a global ranking suggestion —
+    // POST /api/chords/rank, unique per (chord_id, editor_id) on the backend.
+    setRankState('sending');
+    try {
+      await rankChord(buildChordId(instrument.id, tuning.id, chordName), frets);
+      setRankState('sent');
+    } catch {
+      setRankState('error');
+    }
+    setTimeout(onClose, 900);
   };
 
   const hasMarker = (fret: number) => [3, 5, 7, 9, 12].includes(fret);
@@ -234,9 +255,15 @@ export const ChordEditorModal: React.FC<ChordEditorModalProps> = ({
               <button onClick={handlePlay} className="px-3 py-1 text-xs font-bold font-mono bg-[#ece9d8] border border-white border-r-[#808080] border-b-[#808080] hover:bg-white">▶ Tocar</button>
               <button onClick={() => setFrets(normalizedInitial)} className="px-3 py-1 text-xs font-bold font-mono bg-[#ece9d8] border border-white border-r-[#808080] border-b-[#808080] hover:bg-white">↺ Resetar</button>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
+              {editorSession && rankState === 'idle' && (
+                <span className="text-[9px] text-gray-500 font-mono">🏆 será enviado como sugestão de Editor</span>
+              )}
+              {rankState === 'sending' && <span className="text-[9px] text-[#0058e6] font-mono">Enviando ranking...</span>}
+              {rankState === 'sent' && <span className="text-[9px] text-[#228b22] font-mono">✔ Ranking enviado</span>}
+              {rankState === 'error' && <span className="text-[9px] text-[#cc3300] font-mono">✗ Falha ao enviar ranking</span>}
               <button onClick={onClose} className="px-3 py-1 text-xs font-bold font-mono bg-[#ece9d8] border border-white border-r-[#808080] border-b-[#808080] hover:bg-white">Cancelar</button>
-              <button onClick={() => { onApply(frets); onClose(); }} className="px-4 py-1 text-xs font-bold font-mono bg-[#316ac5] text-white border border-[#1a4a9c] hover:bg-[#3f7ad6]">Aplicar</button>
+              <button onClick={handleApply} disabled={rankState === 'sending'} className="px-4 py-1 text-xs font-bold font-mono bg-[#316ac5] text-white border border-[#1a4a9c] hover:bg-[#3f7ad6] disabled:opacity-50">Aplicar</button>
             </div>
           </div>
         </div>

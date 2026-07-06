@@ -622,504 +622,531 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
           )}
         </div>
 
-        {/* ── Editor tab ── */}
+        {/* ── Editor tab ──
+            3 blocos verticais: (1) player + wizards/trechos lado a lado, (2) cifra em largura
+            total, (3) timeline fixa no rodapé (mais abaixo, fora deste wrapper). Só reposiciona —
+            nenhuma lógica interna de nenhum componente/handler foi alterada nesta passada. */}
         {activeTab === 'editor' && mode !== 'done' && (
-          <div className={`flex-1 flex min-h-0 ${mode === 'testing' ? 'opacity-40 pointer-events-none' : ''}`}>
+          <div className={`flex-1 flex flex-col min-h-0 ${mode === 'testing' ? 'opacity-40 pointer-events-none' : ''}`}>
 
-            {/* Left column */}
-            <div className="w-72 shrink-0 flex flex-col border-r border-gray-300 overflow-y-auto retro-scrollbar pb-[142px]">
+            {/* ══ Bloco 1: player (esquerda, largura fixa) + wizards/trechos (direita, flex) ══
+                Altura fixa em 340px — cada coluna rola internamente se seu conteúdo passar disso,
+                pra nunca empurrar a cifra (Bloco 2) pra baixo da dobra. Ajuste este valor se o
+                conteúdo típico da coluna do player mudar de altura. */}
+            <div className="editor-top-grid shrink-0 grid border-b-2 border-gray-400" style={{ height: 340 }}>
 
-              {/* Media */}
-              <div className="p-2 border-b border-gray-200 flex flex-col gap-1.5">
-                <p className="font-bold text-[10px] uppercase text-gray-500 tracking-wider">Referência de mídia</p>
-                <div className="flex gap-1">
-                  <input
-                    value={mediaUrlInput}
-                    onChange={e => setMediaUrlInput(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && loadMedia()}
-                    placeholder="YouTube ou link de áudio..."
-                    className="bevel-in bg-white px-1.5 py-0.5 text-[10px] flex-1 min-w-0 outline-none"
-                  />
-                  <button onClick={loadMedia} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-[10px] font-bold border border-gray-400 hover:bg-white shrink-0">
-                    ▶
-                  </button>
-                </div>
+              {/* Coluna esquerda: painel de player */}
+              <div className="flex flex-col border-r border-gray-300 overflow-y-auto retro-scrollbar h-full">
 
-                {mediaType === 'youtube' && <div ref={ytContainerRef} className="w-full" style={{ height: 150 }} />}
-                {mediaType === 'audio' && mediaUrl && (
-                  <audio
-                    ref={audioRef}
-                    controls
-                    src={mediaUrl}
-                    onLoadedMetadata={() => {
-                      const audio = audioRef.current;
-                      const dur = audio ? Math.round(audio.duration) : 0;
-                      registerAudio(audio);
-                      setPlayerReady(true, isFinite(dur) && dur > 0 ? dur : undefined);
-                    }}
-                    className="w-full"
-                  />
-                )}
-                {mediaType === 'other' && mediaUrl && (
-                  <a href={mediaUrl} target="_blank" rel="noopener noreferrer" className="text-[#002fa7] underline text-[10px]">Abrir mídia ↗</a>
-                )}
-              </div>
-
-              {/* BPM */}
-              <div className="p-2 border-b border-gray-200 flex flex-col gap-1.5">
-                <p className="font-bold text-[10px] uppercase text-gray-500 tracking-wider">BPM <span className="normal-case font-normal text-gray-400">(opcional)</span></p>
-                <div className="flex gap-1 items-center">
-                  <input
-                    type="number"
-                    value={bpm ?? ''}
-                    min={20} max={300} step={1}
-                    placeholder="—"
-                    onChange={e => setBpm(e.target.value ? Math.round(parseFloat(e.target.value)) : null)}
-                    className="bevel-in bg-white px-1.5 py-0.5 text-xs w-14 outline-none font-mono"
-                  />
-                  <button
-                    onPointerDown={registerTap}
-                    className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-1 text-[10px] font-bold border border-gray-400 hover:bg-white select-none flex-1 text-center"
-                  >
-                    {bpm ? `♩ ${bpm}` : 'Tap BPM'}
-                  </button>
-                  {bpm !== null && (
-                    <button onClick={() => setBpm(null)} className="bevel-out bg-[var(--color-winxp-panel)] px-1.5 py-0.5 text-[10px] border border-gray-400 hover:bg-white text-[#cc3300]">↺</button>
-                  )}
-                </div>
-                <p className="text-[9px] text-gray-400">Toque Tap BPM no ritmo da música</p>
-              </div>
-
-              {/* Duration */}
-              <div className="p-2 border-b border-gray-200 flex flex-col gap-1.5">
-                <p className="font-bold text-[10px] uppercase text-gray-500 tracking-wider">
-                  Duração {durError && <span className="text-[#cc3300] normal-case font-normal">(obrigatória)</span>}
-                </p>
-                <input
-                  type="text"
-                  value={durationInput}
-                  onChange={e => setDurationInput(e.target.value)}
-                  onBlur={() => { commitDuration(); if (usePlayerStore.getState().duration > 0) setDurError(null); }}
-                  placeholder="m:ss"
-                  className={`bevel-in bg-white px-1.5 py-0.5 text-xs w-full outline-none font-mono ${durError ? 'border border-[#cc3300]' : ''}`}
-                />
-                <p className="text-[9px] text-gray-400">Auto-preenchido ao carregar vídeo/áudio</p>
-              </div>
-
-              {/* Alias */}
-              <div className="p-2 border-b border-gray-200 flex flex-col gap-1">
-                <p className="font-bold text-[10px] uppercase text-gray-500 tracking-wider">Apelido <span className="normal-case font-normal text-gray-400">(opcional)</span></p>
-                <input
-                  type="text"
-                  value={editorAlias}
-                  onChange={e => setEditorAlias(e.target.value)}
-                  placeholder="Anônimo"
-                  className="bevel-in bg-white px-1.5 py-0.5 text-[10px] w-full outline-none"
-                />
-              </div>
-
-              {/* Backup — export/import full regions+markers state as JSON (debug/portability;
-                  own format, NOT the backend submit payload — see regionsToLegacyPayload) */}
-              <div className="p-2 border-b border-gray-200 flex flex-col gap-1.5">
-                <p className="font-bold text-[10px] uppercase text-gray-500 tracking-wider">Backup (debug)</p>
-                <div className="flex gap-1">
-                  <button
-                    onClick={handleExportSnapshot}
-                    className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-1 text-[10px] font-bold border border-gray-400 hover:bg-white flex-1"
-                  >
-                    ⬇ Exportar JSON
-                  </button>
-                  <button
-                    onClick={() => importFileInputRef.current?.click()}
-                    className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-1 text-[10px] font-bold border border-gray-400 hover:bg-white flex-1"
-                  >
-                    ⬆ Importar JSON
-                  </button>
-                  <input
-                    ref={importFileInputRef}
-                    type="file"
-                    accept="application/json,.json"
-                    onChange={handleImportFileChange}
-                    className="hidden"
-                  />
-                </div>
-                <p className="text-[9px] text-gray-400">
-                  Exporta/importa regions + markers para debug e portabilidade entre sessões — substitui tudo, não é o formato enviado ao backend.
-                </p>
-              </div>
-
-              {/* ── Trechos (timed sections) ── */}
-              <div className="p-2 border-b border-gray-200 flex flex-col gap-1.5">
-                <div className="flex items-center justify-between">
-                  <p className="font-bold text-[10px] uppercase text-gray-500 tracking-wider">
-                    Trechos
-                    {sortedSections.length > 0 && <span className="ml-1 font-normal normal-case text-gray-400">({sortedSections.length})</span>}
-                  </p>
-                  <button
-                    onClick={() => setSectionFormOpen(v => !v)}
-                    className="bevel-out bg-[#ece9d8] border border-gray-400 px-1.5 py-0.5 text-[9px] font-bold hover:bg-white"
-                  >
-                    {sectionFormOpen ? '✕' : '+ Novo'}
-                  </button>
-                </div>
-
-                {sectionFormOpen && (
-                  <div className="flex flex-col gap-1 bevel-in bg-white p-1.5">
-                    {/* Type */}
-                    <select
-                      value={sectionFormType}
-                      onChange={e => {
-                        const t = e.target.value as SectionType;
-                        setSectionFormType(t);
-                        setSectionFormLabel(getAutoLabel(t, regions));
-                      }}
-                      className="bevel-in bg-white px-1 py-0.5 text-[10px] w-full outline-none"
-                    >
-                      {SECTION_ORDER.map(k => (
-                        <option key={k} value={k}>{SECTION_TYPE_META[k].ptLabel}</option>
-                      ))}
-                    </select>
-
-                    {/* Label */}
+                {/* Media */}
+                <div className="p-2 border-b border-gray-200 flex flex-col gap-1.5">
+                  <p className="font-bold text-[10px] uppercase text-gray-500 tracking-wider">Referência de mídia</p>
+                  <div className="flex gap-1">
                     <input
-                      value={sectionFormLabel}
-                      onChange={e => setSectionFormLabel(e.target.value)}
-                      placeholder="Nome do trecho"
-                      className="bevel-in bg-white px-1.5 py-0.5 text-[10px] w-full outline-none"
+                      value={mediaUrlInput}
+                      onChange={e => setMediaUrlInput(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && loadMedia()}
+                      placeholder="YouTube ou link de áudio..."
+                      className="bevel-in bg-white px-1.5 py-0.5 text-[10px] flex-1 min-w-0 outline-none"
                     />
-
-                    {/* Start time */}
-                    <div className="flex items-center gap-1">
-                      <span className="text-[9px] text-gray-500 w-8 shrink-0">Início</span>
-                      <input
-                        value={sectionFormStart}
-                        onChange={e => setSectionFormStart(e.target.value)}
-                        placeholder="m:ss"
-                        className="bevel-in bg-white px-1 py-0.5 text-[10px] flex-1 outline-none font-mono"
-                      />
-                    </div>
-
-                    {/* End time */}
-                    <div className="flex items-center gap-1">
-                      <span className="text-[9px] text-gray-500 w-8 shrink-0">Fim</span>
-                      <input
-                        value={sectionFormEnd}
-                        onChange={e => setSectionFormEnd(e.target.value)}
-                        placeholder="m:ss"
-                        className="bevel-in bg-white px-1 py-0.5 text-[10px] flex-1 outline-none font-mono"
-                      />
-                    </div>
-
-                    <p className="text-[9px] text-gray-400 text-center">
-                      💡 Arraste na régua abaixo pra preencher início/fim
-                    </p>
-
-                    <button
-                      onClick={handleAddSection}
-                      className="bevel-out bg-[#d4edda] border border-green-500 px-2 py-1 text-[10px] font-bold hover:bg-white"
-                    >
-                      ✓ Adicionar Trecho
+                    <button onClick={loadMedia} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-[10px] font-bold border border-gray-400 hover:bg-white shrink-0">
+                      ▶
                     </button>
                   </div>
-                )}
 
-                {/* Sections list */}
-                {sortedSections.length > 0 && (
-                  <div className="flex flex-col gap-0.5">
-                    {sortedSections.map(r => {
-                      const meta = SECTION_TYPE_META[r.sectionType!] ?? SECTION_TYPE_META.other;
-                      const dur = r.endTime !== null ? r.endTime! - r.startTime! : null;
-                      return (
-                        <div key={r.id} className={`flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] ${meta.itemClass}`}>
-                          <div className="flex-1 min-w-0">
-                            <span className="font-bold truncate block">{r.label}</span>
-                            <span className="font-mono text-[9px] opacity-70 flex items-center gap-1 mt-0.5">
-                              <span>{formatSeconds(r.startTime ?? 0)} →</span>
-                              <input
-                                type="number"
-                                value={dur !== null ? Math.round(dur) : ''}
-                                onChange={(e) => {
-                                  const val = parseFloat(e.target.value);
-                                  useTimingRegionsStore.getState().updateRegion(r.id, {
-                                    endTime: isNaN(val) ? null : (r.startTime ?? 0) + val,
-                                  });
-                                }}
-                                className="w-10 px-0.5 py-0 border border-gray-300 rounded outline-none text-black bg-white"
-                                placeholder="Duração"
-                                title="Duração em segundos"
-                              />
-                              <span>s</span>
-                            </span>
-                          </div>
-                          <button
-                            onClick={() => useTimingRegionsStore.getState().removeRegion(r.id)}
-                            className="text-red-500 font-bold text-[9px] shrink-0 px-0.5 hover:text-red-700"
-                          >×</button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              {/* ── Trechos vinculados (sections with a Wizard 3 line link) ──
-                  Separate list from "Marcações de letra" below (that one is loop/instrumental/
-                  phrase) — same domain as "Trechos" above, but filtered to only the ones that
-                  already have startLine/endLine, with per-item revincular/remover actions. */}
-              {linkedSections.length > 0 && (
-                <div className="p-2 border-b border-gray-200 flex flex-col gap-1">
-                  <p className="font-bold text-[10px] uppercase text-gray-500 tracking-wider">
-                    Trechos vinculados
-                    <span className="ml-1 font-normal normal-case text-gray-400">({linkedSections.length})</span>
-                  </p>
-                  <div className="flex flex-col gap-0.5">
-                    {linkedSections.map(r => {
-                      const meta = SECTION_TYPE_META[r.sectionType!] ?? SECTION_TYPE_META.other;
-                      return (
-                        <div key={r.id} className={`flex flex-col gap-0.5 px-1.5 py-1 rounded border text-[10px] ${meta.itemClass}`}>
-                          <span className="font-bold truncate">{r.label}</span>
-                          <span className="font-mono text-[9px] opacity-70">
-                            {formatSeconds(r.startTime ?? 0)}–{formatSeconds(r.endTime ?? 0)}
-                            <span className="mx-1">·</span>
-                            linhas {r.startLine! + 1}–{r.endLine! + 1}
-                          </span>
-                          <div className="flex gap-1 mt-0.5">
-                            <button
-                              onClick={() => startReassignLines(r)}
-                              className="bevel-out bg-white border border-gray-400 px-1.5 py-0.5 text-[9px] font-bold hover:bg-blue-50 flex-1"
-                            >
-                              🔁 Revincular
-                            </button>
-                            <button
-                              onClick={() => useTimingRegionsStore.getState().updateRegion(r.id, { startLine: null, endLine: null })}
-                              className="bevel-out bg-white border border-gray-400 px-1.5 py-0.5 text-[9px] font-bold hover:bg-red-50 text-red-600 flex-1"
-                              title="Remove só o vínculo com o texto — a seção continua marcada no tempo"
-                            >
-                              ✕ Remover vínculo
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                  {mediaType === 'youtube' && <div ref={ytContainerRef} className="w-full" style={{ height: 120 }} />}
+                  {mediaType === 'audio' && mediaUrl && (
+                    <audio
+                      ref={audioRef}
+                      controls
+                      src={mediaUrl}
+                      onLoadedMetadata={() => {
+                        const audio = audioRef.current;
+                        const dur = audio ? Math.round(audio.duration) : 0;
+                        registerAudio(audio);
+                        setPlayerReady(true, isFinite(dur) && dur > 0 ? dur : undefined);
+                      }}
+                      className="w-full"
+                    />
+                  )}
+                  {mediaType === 'other' && mediaUrl && (
+                    <a href={mediaUrl} target="_blank" rel="noopener noreferrer" className="text-[#002fa7] underline text-[10px]">Abrir mídia ↗</a>
+                  )}
                 </div>
-              )}
 
-              {/* ── Marcadores de partitura ──
-                  No creation entry point left at all (see useAssistedModeStore.ts's header) —
-                  purely read/edit of markers already in the data (old contributions, or a marker
-                  finish() auto-created). Gated on having something to show, matching "Trechos
-                  vinculados"/"Marcações de letra" below — otherwise this was a bare header always
-                  rendered with nothing under it for any song with zero markers so far. */}
-              {(sortedMarkers.length > 0 || (pendingLinkSource && linkCandidates.length > 0)) && (
-              <div className="p-2 border-b border-gray-200 flex flex-col gap-1.5">
-                <p className="font-bold text-[10px] uppercase text-gray-500 tracking-wider">
-                  Marcadores de Partitura
-                  {sortedMarkers.length > 0 && <span className="ml-1 font-normal normal-case text-gray-400">({sortedMarkers.length})</span>}
-                </p>
-
-                {/* Link selector — shown after creating/clicking a linkable marker */}
-                {pendingLinkSource && linkCandidates.length > 0 && (() => {
-                  const srcMarker = markers.find(m => m.id === pendingLinkSource);
-                  if (!srcMarker) return null;
-                  const srcMeta = MARKER_META[srcMarker.type];
-                  const confirmLink = (targetId: string | undefined) => {
-                    useTimingRegionsStore.getState().updateMarker(pendingLinkSource, { targetMarkerId: targetId });
-                    setPendingLinkSource(null);
-                    setLinkCandidates([]);
-                  };
-                  return (
-                    <div className="bevel-in bg-[#fffbeb] p-2 border-2 border-yellow-400 flex flex-col gap-1 mt-1">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-mono text-sm shrink-0" style={{ color: srcMeta.pinColor }}>{srcMeta.symbol}</span>
-                        <span className="font-bold text-[10px]">Qual destino?</span>
-                        <button onClick={() => { setPendingLinkSource(null); setLinkCandidates([]); }}
-                          className="ml-auto text-[9px] text-gray-400 hover:text-gray-600">✕</button>
-                      </div>
-                      <div className="flex flex-col gap-0.5">
-                        {linkCandidates.map(c => {
-                          const cm = MARKER_META[c.type];
-                          const isCurrent = srcMarker.targetMarkerId === c.id;
-                          return (
-                            <button key={c.id} onClick={() => confirmLink(c.id)}
-                              className={`flex items-center gap-1.5 px-1.5 py-1 text-[10px] border rounded text-left hover:bg-white ${isCurrent ? 'bg-white border-yellow-500 font-bold' : 'bg-[#ece9d8] border-gray-300'}`}
-                            >
-                              <span className="font-mono shrink-0" style={{ color: cm.pinColor }}>{cm.symbol}</span>
-                              <span className="font-mono">{formatSeconds(c.time)}</span>
-                              {isCurrent && <span className="text-[8px] text-yellow-600 ml-auto">atual</span>}
-                            </button>
-                          );
-                        })}
-                        <button onClick={() => confirmLink(undefined)}
-                          className="text-[9px] text-gray-400 hover:text-gray-600 text-left px-1 mt-0.5">
-                          ✕ remover vínculo
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* Placed markers list */}
-                {sortedMarkers.length > 0 && (
-                  <div className="flex flex-col gap-0.5">
-                    {sortedMarkers.map(mk => {
-                      const m = MARKER_META[mk.type];
-                      const isLinkable = !!LINK_TARGET_TYPE[mk.type];
-                      const targetMk = mk.targetMarkerId ? markers.find(t => t.id === mk.targetMarkerId) : null;
-                      return (
-                        <div key={mk.id} className="flex items-center gap-1 px-1.5 py-0.5 rounded border bg-white border-gray-200 text-[10px]">
-                          <span className="font-mono shrink-0 w-6 text-center font-bold" style={{ color: m.pinColor }}>{m.symbol}</span>
-                          <span className="flex-1 font-bold truncate">{m.name}</span>
-                          {targetMk && (
-                            <span className="text-[8px] text-gray-400 shrink-0 font-mono">
-                              → {MARKER_META[targetMk.type].symbol} {formatSeconds(targetMk.time)}
-                            </span>
-                          )}
-                          {isLinkable && !targetMk && (
-                            <button
-                              onClick={() => handleMarkerClick(mk.id)}
-                              className="text-[8px] text-yellow-600 hover:text-yellow-800 shrink-0 px-0.5 border border-yellow-400 rounded"
-                              title="Vincular destino"
-                            >⇢</button>
-                          )}
-                          <span className="font-mono text-gray-500 shrink-0">
-                            {formatSeconds(mk.time)}{mk.endTime !== undefined ? `–${formatSeconds(mk.endTime)}` : ''}
-                          </span>
-                          <button
-                            onClick={() => useTimingRegionsStore.getState().removeMarker(mk.id)}
-                            className="text-red-500 font-bold text-[9px] shrink-0 px-0.5 hover:text-red-700"
-                          >×</button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-              )}
-
-              {/* Line-range sections summary */}
-              {regions.some(r => r.kind === 'loop' || r.kind === 'instrumental' || r.kind === 'phrase') && (
-                <div className="p-2 border-b border-gray-200 flex flex-col gap-1">
-                  <p className="font-bold text-[10px] uppercase text-gray-500 tracking-wider">Marcações de letra</p>
-                  {regions.filter(r => r.kind === 'loop').map(r => (
-                    <div key={r.id} className="flex flex-col bg-blue-50 border border-blue-200 rounded overflow-hidden">
-                      <div className="flex items-center gap-1 px-1.5 py-0.5">
-                        <span className="text-[10px] flex-1 truncate">🔁 <b>{r.label}</b> L{r.startLine! + 1}–{r.endLine! + 1} · {r.repeatCount}×{r.startTime != null ? ` ⏱${formatSeconds(r.startTime)}` : ''}</span>
-                        <button
-                          onClick={() => useLoopSaltoWizardStore.getState().markRepeatOccurrence(r.id)}
-                          title="Marcar mais uma ocorrência desta repetição no áudio"
-                          className="text-[8px] text-blue-600 hover:text-blue-800 border border-blue-300 rounded px-1 py-0.5 shrink-0 font-bold"
-                        >↻</button>
-                        <button onClick={() => useTimingRegionsStore.getState().removeRegion(r.id)} className="text-red-500 font-bold text-[9px] shrink-0 px-0.5">×</button>
-                      </div>
-                      {r.repeats && r.repeats.length > 0 && (
-                        <div className="flex flex-col gap-px px-1.5 pb-0.5 border-t border-blue-200">
-                          {r.repeats.map((rep, i) => (
-                            <div key={i} className="flex items-center gap-1 text-[9px] text-blue-700">
-                              <span className="opacity-50">↳</span>
-                              <span className="font-mono">×{i + 2}</span>
-                              <span className="font-mono flex-1">{formatSeconds(rep.startTime)}–{formatSeconds(rep.endTime)}</span>
-                              <button
-                                onClick={() => {
-                                  const existing = r.repeats ?? [];
-                                  useTimingRegionsStore.getState().updateRegion(r.id, { repeats: existing.filter((_, idx) => idx !== i) });
-                                }}
-                                className="text-red-400 font-bold shrink-0 hover:text-red-600"
-                              >×</button>
-                            </div>
-                          ))}
-                        </div>
+                {/* BPM + Duração lado a lado */}
+                <div className="p-2 border-b border-gray-200 grid grid-cols-2 gap-2">
+                  <div className="flex flex-col gap-1.5 min-w-0">
+                    <p className="font-bold text-[10px] uppercase text-gray-500 tracking-wider">BPM <span className="normal-case font-normal text-gray-400">(opc.)</span></p>
+                    <div className="flex gap-1 items-center">
+                      <input
+                        type="number"
+                        value={bpm ?? ''}
+                        min={20} max={300} step={1}
+                        placeholder="—"
+                        onChange={e => setBpm(e.target.value ? Math.round(parseFloat(e.target.value)) : null)}
+                        className="bevel-in bg-white px-1.5 py-0.5 text-xs w-12 outline-none font-mono"
+                      />
+                      <button
+                        onPointerDown={registerTap}
+                        className="bevel-out bg-[var(--color-winxp-panel)] px-1 py-1 text-[10px] font-bold border border-gray-400 hover:bg-white select-none flex-1 text-center min-w-0 truncate"
+                      >
+                        {bpm ? `♩ ${bpm}` : 'Tap'}
+                      </button>
+                      {bpm !== null && (
+                        <button onClick={() => setBpm(null)} className="bevel-out bg-[var(--color-winxp-panel)] px-1 py-0.5 text-[10px] border border-gray-400 hover:bg-white text-[#cc3300] shrink-0">↺</button>
                       )}
                     </div>
-                  ))}
-                  {regions.filter(r => r.kind === 'instrumental').map(r => (
-                    <div key={r.id} className="flex items-center gap-1 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded">
-                      <span className="text-[10px] flex-1 truncate">
-                        🎸 <b>{r.label}</b> {r.startLine !== null && r.endLine !== null ? `L${r.startLine + 1}–${r.endLine + 1}` : '(só áudio)'}
-                        {r.startTime != null ? ` ⏱${formatSeconds(r.startTime)}` : ''}
-                      </span>
-                      <button onClick={() => useTimingRegionsStore.getState().removeRegion(r.id)} className="text-red-500 font-bold text-[9px] shrink-0 px-0.5">×</button>
-                    </div>
-                  ))}
-                  {regions.filter(r => r.kind === 'phrase').map(r => (
-                    <div key={r.id} className="flex items-center gap-1 bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded">
-                      <span className="text-[10px] flex-1 truncate">🎤 <b>Frase</b> L{r.startLine! + 1} ⏱{formatSeconds(r.startTime ?? 0)}–{formatSeconds(r.endTime ?? 0)}</span>
-                      <button onClick={() => useTimingRegionsStore.getState().removeRegion(r.id)} className="text-red-500 font-bold text-[9px] shrink-0 px-0.5">×</button>
-                    </div>
-                  ))}
+                  </div>
+
+                  <div className="flex flex-col gap-1.5 min-w-0">
+                    <p className="font-bold text-[10px] uppercase text-gray-500 tracking-wider truncate">
+                      Duração {durError && <span className="text-[#cc3300] normal-case font-normal">!</span>}
+                    </p>
+                    <input
+                      type="text"
+                      value={durationInput}
+                      onChange={e => setDurationInput(e.target.value)}
+                      onBlur={() => { commitDuration(); if (usePlayerStore.getState().duration > 0) setDurError(null); }}
+                      placeholder="m:ss"
+                      className={`bevel-in bg-white px-1.5 py-0.5 text-xs w-full outline-none font-mono ${durError ? 'border border-[#cc3300]' : ''}`}
+                    />
+                  </div>
                 </div>
-              )}
 
-              {submitError && (
-                <div className="m-2 mt-auto bg-red-100 border border-red-400 text-red-700 px-2 py-1 text-[10px]">{submitError}</div>
-              )}
-            </div>
+                {/* Alias */}
+                <div className="p-2 border-b border-gray-200 flex flex-col gap-1">
+                  <p className="font-bold text-[10px] uppercase text-gray-500 tracking-wider">Apelido <span className="normal-case font-normal text-gray-400">(opcional)</span></p>
+                  <input
+                    type="text"
+                    value={editorAlias}
+                    onChange={e => setEditorAlias(e.target.value)}
+                    placeholder="Anônimo"
+                    className="bevel-in bg-white px-1.5 py-0.5 text-[10px] w-full outline-none"
+                  />
+                </div>
 
-            {/* Right column: full cifra */}
-            <div className="flex-1 flex flex-col min-w-0 min-h-0">
-
-              {/* Barra de wizards — 3 botões: Estrutura (Wizard 1), Alinhar letra (Wizard de
-                  linha), Vincular Texto (Wizard 3). Paleta manual de chips e drag-and-drop
-                  removidos — toda criação de region agora passa pelos wizards ou por
-                  "Converter em Loop" no menu de contexto de um clip repetido detectado
-                  (TimingTimeline.tsx). */}
-              <div className="shrink-0 border-b border-gray-400 bg-[#d4d0c8] select-none">
-                <div className="flex items-center gap-1 px-2 py-1">
-                  <span className="text-[8px] font-bold text-gray-500 uppercase tracking-wide mr-1 shrink-0">Modo Guiado</span>
-                  <button
-                    onClick={() => useAssistedModeStore.getState().startStructuralPass()}
-                    className="bevel-out bg-[#ece9d8] border border-gray-400 px-2 py-0.5 text-[9px] font-bold hover:bg-white shrink-0"
-                    title="Marcar trechos estruturais (Intro, Verso, Refrão…) em tempo real"
-                  >
-                    ♪ Estrutura
-                  </button>
-                  <button
-                    onClick={() => useAssistedModeStore.getState().startLinePass()}
-                    className="bevel-out bg-[#ece9d8] border border-gray-400 px-2 py-0.5 text-[9px] font-bold hover:bg-white shrink-0"
-                    title="Alinhar cada linha de letra ao áudio (timing sequencial)"
-                  >
-                    ≡ Alinhar letra
-                  </button>
-                  {hasPausedSession && (
+                {/* Backup — export/import full regions+markers state as JSON (debug/portability;
+                    own format, NOT the backend submit payload — see regionsToLegacyPayload).
+                    Visually set apart (dashed divider + tinted bg) since it's a debug tool, not a
+                    primary editor action. */}
+                <div className="p-2 border-t-2 border-dashed border-gray-400 bg-[#f5f3ee] flex flex-col gap-1.5 mt-auto">
+                  <p className="font-bold text-[10px] uppercase text-gray-500 tracking-wider">🛠 Backup (debug)</p>
+                  <div className="flex gap-1">
                     <button
-                      onClick={() => useAssistedModeStore.getState().resumeAssisted()}
-                      className="bevel-out bg-[#d4edda] border border-green-500 px-2 py-0.5 text-[9px] font-bold hover:bg-white shrink-0"
-                      title="Retomar o Modo Guiado de onde parou"
+                      onClick={handleExportSnapshot}
+                      className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-1 text-[10px] font-bold border border-gray-400 hover:bg-white flex-1"
                     >
-                      ↩ Retomar
+                      ⬇ Exportar JSON
                     </button>
-                  )}
-                  {assistedModeError === 'no-media' && (
-                    <span className="text-[9px] text-red-600">
-                      Insira um link de áudio/vídeo antes de usar o Modo Guiado.
-                    </span>
-                  )}
-                  {assistedModeError === 'no-lyric-lines' && (
-                    <span className="text-[9px] text-red-600">
-                      Nenhuma linha de letra detectada na cifra.
-                    </span>
-                  )}
-                  <span className="w-px h-3 bg-gray-400 shrink-0" />
-                  <button
-                    onClick={() => useLineLinkWizardStore.getState().startLineLinkPass()}
-                    className="bevel-out bg-[#ece9d8] border border-gray-400 px-2 py-0.5 text-[9px] font-bold hover:bg-white shrink-0"
-                    title="Vincular cada seção marcada (Intro, Verso…) ao intervalo de linhas correspondente"
-                  >
-                    📍 Vincular Texto
-                  </button>
-                  {/* Preview de rolagem — testa contra as regions em memória, sem salvar nada */}
-                  <span className="w-px h-3 bg-gray-400 shrink-0" />
-                  <button
-                    onClick={() => setTestingScroll(v => !v)}
-                    className={`bevel-out border px-2 py-0.5 text-[9px] font-bold shrink-0 ${
-                      testingScroll ? 'bg-[#316ac5] text-white border-[#001a5c]' : 'bg-[#ece9d8] border-gray-400 hover:bg-white'
-                    }`}
-                    title="Testar a rolagem automática usando as regions atuais (em memória, sem precisar salvar)"
-                  >
-                    {testingScroll ? '⏹ Parar teste' : '🔍 Testar rolagem'}
-                  </button>
+                    <button
+                      onClick={() => importFileInputRef.current?.click()}
+                      className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-1 text-[10px] font-bold border border-gray-400 hover:bg-white flex-1"
+                    >
+                      ⬆ Importar JSON
+                    </button>
+                    <input
+                      ref={importFileInputRef}
+                      type="file"
+                      accept="application/json,.json"
+                      onChange={handleImportFileChange}
+                      className="hidden"
+                    />
+                  </div>
                 </div>
               </div>
+
+              {/* Coluna direita: wizards + trechos */}
+              <div className="flex flex-col min-w-0 h-full overflow-hidden">
+
+                {/* Barra de wizards — 4 botões ícone+label. Paleta manual de chips e
+                    drag-and-drop removidos — toda criação de region agora passa pelos wizards ou
+                    por "Converter em Loop" no menu de contexto de um clip repetido detectado
+                    (TimingTimeline.tsx). */}
+                <div className="shrink-0 border-b border-gray-300 bg-[#d4d0c8] p-1.5 select-none">
+                  <div className="grid grid-cols-4 gap-1">
+                    <button
+                      onClick={() => useAssistedModeStore.getState().startStructuralPass()}
+                      className="wizard-btn bevel-out bg-[#ece9d8] border border-gray-400 px-1 py-1.5 text-[9px] font-bold hover:bg-white flex flex-col items-center gap-0.5"
+                      title="Marcar trechos estruturais (Intro, Verso, Refrão…) em tempo real"
+                      aria-label="Estrutura"
+                    >
+                      <span className="text-sm leading-none">♪</span>
+                      <span className="wizard-btn-label leading-none">Estrutura</span>
+                    </button>
+                    <button
+                      onClick={() => useAssistedModeStore.getState().startLinePass()}
+                      className="wizard-btn bevel-out bg-[#ece9d8] border border-gray-400 px-1 py-1.5 text-[9px] font-bold hover:bg-white flex flex-col items-center gap-0.5"
+                      title="Alinhar cada linha de letra ao áudio (timing sequencial)"
+                      aria-label="Alinhar letra"
+                    >
+                      <span className="text-sm leading-none">≡</span>
+                      <span className="wizard-btn-label leading-none">Alinhar letra</span>
+                    </button>
+                    <button
+                      onClick={() => useLineLinkWizardStore.getState().startLineLinkPass()}
+                      className="wizard-btn bevel-out bg-[#ece9d8] border border-gray-400 px-1 py-1.5 text-[9px] font-bold hover:bg-white flex flex-col items-center gap-0.5"
+                      title="Vincular cada seção marcada (Intro, Verso…) ao intervalo de linhas correspondente"
+                      aria-label="Vincular texto"
+                    >
+                      <span className="text-sm leading-none">📍</span>
+                      <span className="wizard-btn-label leading-none">Vincular texto</span>
+                    </button>
+                    <button
+                      onClick={() => setTestingScroll(v => !v)}
+                      className={`wizard-btn bevel-out border px-1 py-1.5 text-[9px] font-bold flex flex-col items-center gap-0.5 ${
+                        testingScroll ? 'bg-[#316ac5] text-white border-[#001a5c]' : 'bg-[#ece9d8] border-gray-400 hover:bg-white'
+                      }`}
+                      title="Testar a rolagem automática usando as regions atuais (em memória, sem precisar salvar)"
+                      aria-label="Testar rolagem"
+                    >
+                      <span className="text-sm leading-none">{testingScroll ? '⏹' : '🔍'}</span>
+                      <span className="wizard-btn-label leading-none">{testingScroll ? 'Parar teste' : 'Testar rolagem'}</span>
+                    </button>
+                  </div>
+                  {(hasPausedSession || assistedModeError) && (
+                    <div className="flex items-center gap-1 mt-1">
+                      {hasPausedSession && (
+                        <button
+                          onClick={() => useAssistedModeStore.getState().resumeAssisted()}
+                          className="bevel-out bg-[#d4edda] border border-green-500 px-2 py-0.5 text-[9px] font-bold hover:bg-white shrink-0"
+                          title="Retomar o Modo Guiado de onde parou"
+                        >
+                          ↩ Retomar
+                        </button>
+                      )}
+                      {assistedModeError === 'no-media' && (
+                        <span className="text-[9px] text-red-600">
+                          Insira um link de áudio/vídeo antes de usar o Modo Guiado.
+                        </span>
+                      )}
+                      {assistedModeError === 'no-lyric-lines' && (
+                        <span className="text-[9px] text-red-600">
+                          Nenhuma linha de letra detectada na cifra.
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Lista rolável: trechos vinculados, trechos, marcadores, marcações de letra */}
+                <div className="flex-1 overflow-y-auto retro-scrollbar">
+
+                  {/* ── Trechos vinculados (sections with a Wizard 3 line link) ──
+                      Cada item ganha uma barra colorida lateral por categoria — reaproveita
+                      SECTION_TYPE_META[...].barColor, a mesma cor já usada pelos clips na
+                      timeline, em vez de duplicar uma paleta nova. */}
+                  {linkedSections.length > 0 && (
+                    <div className="p-2 border-b border-gray-200 flex flex-col gap-1">
+                      <p className="font-bold text-[10px] uppercase text-gray-500 tracking-wider">
+                        Trechos vinculados
+                        <span className="ml-1 font-normal normal-case text-gray-400">({linkedSections.length})</span>
+                      </p>
+                      <div className="flex flex-col gap-0.5">
+                        {linkedSections.map(r => {
+                          const meta = SECTION_TYPE_META[r.sectionType!] ?? SECTION_TYPE_META.other;
+                          return (
+                            <div
+                              key={r.id}
+                              className={`list-item flex flex-col gap-0.5 px-1.5 py-1 rounded border text-[10px] border-l-4 ${meta.itemClass}`}
+                              style={{ borderLeftColor: meta.barColor }}
+                            >
+                              <span className="font-bold truncate">{r.label}</span>
+                              <span className="font-mono text-[9px] opacity-70">
+                                {formatSeconds(r.startTime ?? 0)}–{formatSeconds(r.endTime ?? 0)}
+                                <span className="mx-1">·</span>
+                                linhas {r.startLine! + 1}–{r.endLine! + 1}
+                              </span>
+                              <div className="flex gap-1 mt-0.5">
+                                <button
+                                  onClick={() => startReassignLines(r)}
+                                  className="bevel-out bg-white border border-gray-400 px-1.5 py-0.5 text-[9px] font-bold hover:bg-blue-50 flex-1"
+                                >
+                                  🔁 Revincular
+                                </button>
+                                <button
+                                  onClick={() => useTimingRegionsStore.getState().updateRegion(r.id, { startLine: null, endLine: null })}
+                                  className="bevel-out bg-white border border-gray-400 px-1.5 py-0.5 text-[9px] font-bold hover:bg-red-50 text-red-600 flex-1"
+                                  title="Remove só o vínculo com o texto — a seção continua marcada no tempo"
+                                >
+                                  ✕ Remover vínculo
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── Trechos (timed sections) ── */}
+                  <div className="p-2 border-b border-gray-200 flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between">
+                      <p className="font-bold text-[10px] uppercase text-gray-500 tracking-wider">
+                        Trechos
+                        {sortedSections.length > 0 && <span className="ml-1 font-normal normal-case text-gray-400">({sortedSections.length})</span>}
+                      </p>
+                      <button
+                        onClick={() => setSectionFormOpen(v => !v)}
+                        className="bevel-out bg-[#ece9d8] border border-gray-400 px-1.5 py-0.5 text-[9px] font-bold hover:bg-white"
+                      >
+                        {sectionFormOpen ? '✕' : '+ Novo'}
+                      </button>
+                    </div>
+
+                    {sectionFormOpen && (
+                      <div className="flex flex-col gap-1 bevel-in bg-white p-1.5 max-w-xs">
+                        {/* Type */}
+                        <select
+                          value={sectionFormType}
+                          onChange={e => {
+                            const t = e.target.value as SectionType;
+                            setSectionFormType(t);
+                            setSectionFormLabel(getAutoLabel(t, regions));
+                          }}
+                          className="bevel-in bg-white px-1 py-0.5 text-[10px] w-full outline-none"
+                        >
+                          {SECTION_ORDER.map(k => (
+                            <option key={k} value={k}>{SECTION_TYPE_META[k].ptLabel}</option>
+                          ))}
+                        </select>
+
+                        {/* Label */}
+                        <input
+                          value={sectionFormLabel}
+                          onChange={e => setSectionFormLabel(e.target.value)}
+                          placeholder="Nome do trecho"
+                          className="bevel-in bg-white px-1.5 py-0.5 text-[10px] w-full outline-none"
+                        />
+
+                        {/* Start time */}
+                        <div className="flex items-center gap-1">
+                          <span className="text-[9px] text-gray-500 w-8 shrink-0">Início</span>
+                          <input
+                            value={sectionFormStart}
+                            onChange={e => setSectionFormStart(e.target.value)}
+                            placeholder="m:ss"
+                            className="bevel-in bg-white px-1 py-0.5 text-[10px] flex-1 outline-none font-mono"
+                          />
+                        </div>
+
+                        {/* End time */}
+                        <div className="flex items-center gap-1">
+                          <span className="text-[9px] text-gray-500 w-8 shrink-0">Fim</span>
+                          <input
+                            value={sectionFormEnd}
+                            onChange={e => setSectionFormEnd(e.target.value)}
+                            placeholder="m:ss"
+                            className="bevel-in bg-white px-1 py-0.5 text-[10px] flex-1 outline-none font-mono"
+                          />
+                        </div>
+
+                        <p className="text-[9px] text-gray-400 text-center">
+                          💡 Arraste na régua abaixo pra preencher início/fim
+                        </p>
+
+                        <button
+                          onClick={handleAddSection}
+                          className="bevel-out bg-[#d4edda] border border-green-500 px-2 py-1 text-[10px] font-bold hover:bg-white"
+                        >
+                          ✓ Adicionar Trecho
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Sections list */}
+                    {sortedSections.length > 0 && (
+                      <div className="flex flex-col gap-0.5">
+                        {sortedSections.map(r => {
+                          const meta = SECTION_TYPE_META[r.sectionType!] ?? SECTION_TYPE_META.other;
+                          const dur = r.endTime !== null ? r.endTime! - r.startTime! : null;
+                          return (
+                            <div key={r.id} className={`list-item flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] border-l-4 ${meta.itemClass}`} style={{ borderLeftColor: meta.barColor }}>
+                              <div className="flex-1 min-w-0">
+                                <span className="font-bold truncate block">{r.label}</span>
+                                <span className="font-mono text-[9px] opacity-70 flex items-center gap-1 mt-0.5">
+                                  <span>{formatSeconds(r.startTime ?? 0)} →</span>
+                                  <input
+                                    type="number"
+                                    value={dur !== null ? Math.round(dur) : ''}
+                                    onChange={(e) => {
+                                      const val = parseFloat(e.target.value);
+                                      useTimingRegionsStore.getState().updateRegion(r.id, {
+                                        endTime: isNaN(val) ? null : (r.startTime ?? 0) + val,
+                                      });
+                                    }}
+                                    className="w-10 px-0.5 py-0 border border-gray-300 rounded outline-none text-black bg-white"
+                                    placeholder="Duração"
+                                    title="Duração em segundos"
+                                  />
+                                  <span>s</span>
+                                </span>
+                              </div>
+                              <button
+                                onClick={() => useTimingRegionsStore.getState().removeRegion(r.id)}
+                                className="text-red-500 font-bold text-[9px] shrink-0 px-0.5 hover:text-red-700"
+                              >×</button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ── Marcadores de partitura ──
+                      No creation entry point left at all (see useAssistedModeStore.ts's header) —
+                      purely read/edit of markers already in the data (old contributions, or a
+                      marker finish() auto-created). Gated on having something to show, matching
+                      "Trechos vinculados"/"Marcações de letra" — otherwise this was a bare header
+                      always rendered with nothing under it for any song with zero markers so far. */}
+                  {(sortedMarkers.length > 0 || (pendingLinkSource && linkCandidates.length > 0)) && (
+                  <div className="p-2 border-b border-gray-200 flex flex-col gap-1.5">
+                    <p className="font-bold text-[10px] uppercase text-gray-500 tracking-wider">
+                      Marcadores de Partitura
+                      {sortedMarkers.length > 0 && <span className="ml-1 font-normal normal-case text-gray-400">({sortedMarkers.length})</span>}
+                    </p>
+
+                    {/* Link selector — shown after creating/clicking a linkable marker */}
+                    {pendingLinkSource && linkCandidates.length > 0 && (() => {
+                      const srcMarker = markers.find(m => m.id === pendingLinkSource);
+                      if (!srcMarker) return null;
+                      const srcMeta = MARKER_META[srcMarker.type];
+                      const confirmLink = (targetId: string | undefined) => {
+                        useTimingRegionsStore.getState().updateMarker(pendingLinkSource, { targetMarkerId: targetId });
+                        setPendingLinkSource(null);
+                        setLinkCandidates([]);
+                      };
+                      return (
+                        <div className="bevel-in bg-[#fffbeb] p-2 border-2 border-yellow-400 flex flex-col gap-1 mt-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono text-sm shrink-0" style={{ color: srcMeta.pinColor }}>{srcMeta.symbol}</span>
+                            <span className="font-bold text-[10px]">Qual destino?</span>
+                            <button onClick={() => { setPendingLinkSource(null); setLinkCandidates([]); }}
+                              className="ml-auto text-[9px] text-gray-400 hover:text-gray-600">✕</button>
+                          </div>
+                          <div className="flex flex-col gap-0.5">
+                            {linkCandidates.map(c => {
+                              const cm = MARKER_META[c.type];
+                              const isCurrent = srcMarker.targetMarkerId === c.id;
+                              return (
+                                <button key={c.id} onClick={() => confirmLink(c.id)}
+                                  className={`flex items-center gap-1.5 px-1.5 py-1 text-[10px] border rounded text-left hover:bg-white ${isCurrent ? 'bg-white border-yellow-500 font-bold' : 'bg-[#ece9d8] border-gray-300'}`}
+                                >
+                                  <span className="font-mono shrink-0" style={{ color: cm.pinColor }}>{cm.symbol}</span>
+                                  <span className="font-mono">{formatSeconds(c.time)}</span>
+                                  {isCurrent && <span className="text-[8px] text-yellow-600 ml-auto">atual</span>}
+                                </button>
+                              );
+                            })}
+                            <button onClick={() => confirmLink(undefined)}
+                              className="text-[9px] text-gray-400 hover:text-gray-600 text-left px-1 mt-0.5">
+                              ✕ remover vínculo
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Placed markers list */}
+                    {sortedMarkers.length > 0 && (
+                      <div className="flex flex-col gap-0.5">
+                        {sortedMarkers.map(mk => {
+                          const m = MARKER_META[mk.type];
+                          const isLinkable = !!LINK_TARGET_TYPE[mk.type];
+                          const targetMk = mk.targetMarkerId ? markers.find(t => t.id === mk.targetMarkerId) : null;
+                          return (
+                            <div key={mk.id} className="flex items-center gap-1 px-1.5 py-0.5 rounded border bg-white border-gray-200 text-[10px]">
+                              <span className="font-mono shrink-0 w-6 text-center font-bold" style={{ color: m.pinColor }}>{m.symbol}</span>
+                              <span className="flex-1 font-bold truncate">{m.name}</span>
+                              {targetMk && (
+                                <span className="text-[8px] text-gray-400 shrink-0 font-mono">
+                                  → {MARKER_META[targetMk.type].symbol} {formatSeconds(targetMk.time)}
+                                </span>
+                              )}
+                              {isLinkable && !targetMk && (
+                                <button
+                                  onClick={() => handleMarkerClick(mk.id)}
+                                  className="text-[8px] text-yellow-600 hover:text-yellow-800 shrink-0 px-0.5 border border-yellow-400 rounded"
+                                  title="Vincular destino"
+                                >⇢</button>
+                              )}
+                              <span className="font-mono text-gray-500 shrink-0">
+                                {formatSeconds(mk.time)}{mk.endTime !== undefined ? `–${formatSeconds(mk.endTime)}` : ''}
+                              </span>
+                              <button
+                                onClick={() => useTimingRegionsStore.getState().removeMarker(mk.id)}
+                                className="text-red-500 font-bold text-[9px] shrink-0 px-0.5 hover:text-red-700"
+                              >×</button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  )}
+
+                  {/* Line-range sections summary */}
+                  {regions.some(r => r.kind === 'loop' || r.kind === 'instrumental' || r.kind === 'phrase') && (
+                    <div className="p-2 border-b border-gray-200 flex flex-col gap-1">
+                      <p className="font-bold text-[10px] uppercase text-gray-500 tracking-wider">Marcações de letra</p>
+                      {regions.filter(r => r.kind === 'loop').map(r => (
+                        <div key={r.id} className="flex flex-col bg-blue-50 border border-blue-200 rounded overflow-hidden">
+                          <div className="flex items-center gap-1 px-1.5 py-0.5">
+                            <span className="text-[10px] flex-1 truncate">🔁 <b>{r.label}</b> L{r.startLine! + 1}–{r.endLine! + 1} · {r.repeatCount}×{r.startTime != null ? ` ⏱${formatSeconds(r.startTime)}` : ''}</span>
+                            <button
+                              onClick={() => useLoopSaltoWizardStore.getState().markRepeatOccurrence(r.id)}
+                              title="Marcar mais uma ocorrência desta repetição no áudio"
+                              className="text-[8px] text-blue-600 hover:text-blue-800 border border-blue-300 rounded px-1 py-0.5 shrink-0 font-bold"
+                            >↻</button>
+                            <button onClick={() => useTimingRegionsStore.getState().removeRegion(r.id)} className="text-red-500 font-bold text-[9px] shrink-0 px-0.5">×</button>
+                          </div>
+                          {r.repeats && r.repeats.length > 0 && (
+                            <div className="flex flex-col gap-px px-1.5 pb-0.5 border-t border-blue-200">
+                              {r.repeats.map((rep, i) => (
+                                <div key={i} className="flex items-center gap-1 text-[9px] text-blue-700">
+                                  <span className="opacity-50">↳</span>
+                                  <span className="font-mono">×{i + 2}</span>
+                                  <span className="font-mono flex-1">{formatSeconds(rep.startTime)}–{formatSeconds(rep.endTime)}</span>
+                                  <button
+                                    onClick={() => {
+                                      const existing = r.repeats ?? [];
+                                      useTimingRegionsStore.getState().updateRegion(r.id, { repeats: existing.filter((_, idx) => idx !== i) });
+                                    }}
+                                    className="text-red-400 font-bold shrink-0 hover:text-red-600"
+                                  >×</button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      {regions.filter(r => r.kind === 'instrumental').map(r => (
+                        <div key={r.id} className="flex items-center gap-1 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded">
+                          <span className="text-[10px] flex-1 truncate">
+                            🎸 <b>{r.label}</b> {r.startLine !== null && r.endLine !== null ? `L${r.startLine + 1}–${r.endLine + 1}` : '(só áudio)'}
+                            {r.startTime != null ? ` ⏱${formatSeconds(r.startTime)}` : ''}
+                          </span>
+                          <button onClick={() => useTimingRegionsStore.getState().removeRegion(r.id)} className="text-red-500 font-bold text-[9px] shrink-0 px-0.5">×</button>
+                        </div>
+                      ))}
+                      {regions.filter(r => r.kind === 'phrase').map(r => (
+                        <div key={r.id} className="flex items-center gap-1 bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded">
+                          <span className="text-[10px] flex-1 truncate">🎤 <b>Frase</b> L{r.startLine! + 1} ⏱{formatSeconds(r.startTime ?? 0)}–{formatSeconds(r.endTime ?? 0)}</span>
+                          <button onClick={() => useTimingRegionsStore.getState().removeRegion(r.id)} className="text-red-500 font-bold text-[9px] shrink-0 px-0.5">×</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {submitError && (
+                    <div className="m-2 bg-red-100 border border-red-400 text-red-700 px-2 py-1 text-[10px]">{submitError}</div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* ══ Bloco 2: cifra em largura total ══ */}
+            <div className="flex-1 flex flex-col min-w-0 min-h-0">
 
               {/* Legend + edit toggle */}
               <div className="flex items-center gap-4 px-3 py-1 text-[9px] border-b border-gray-200 shrink-0 bg-[#f5f3ee]">

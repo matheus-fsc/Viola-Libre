@@ -1,15 +1,22 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { FolderOpen, FileText, Layers } from 'lucide-react';
+import { FolderOpen, FileText, Layers, Flame, Heart } from 'lucide-react';
 import { getSongs, getCifra, type Song } from '../../services/api';
+import { useArtistSongFilter, type ArtistSongTab } from '../../hooks/useArtistSongFilter';
+import { TopSongsHighlight } from './TopSongsHighlight';
 
 const isPrincipal = (v?: string) => (v || '').toLowerCase().includes('principal');
+
+const TABS: { id: ArtistSongTab; label: string }[] = [
+  { id: 'alfabetica', label: 'Ordem alfabética' },
+  { id: 'mais-visualizadas', label: 'Mais visualizadas' },
+  { id: 'mais-curtidas', label: 'Mais curtidas' },
+];
 
 export const SongList: React.FC = () => {
   const { artistSlug } = useParams<{ artistSlug: string }>();
   const [songs, setSongs] = useState<Song[]>([]);
   const [loading, setLoading] = useState(true);
-  const [visibleCount, setVisibleCount] = useState(32);
   const navigate = useNavigate();
 
   // Deduplica por título: músicas com mesmo nome em versões diferentes aparecem
@@ -28,6 +35,13 @@ export const SongList: React.FC = () => {
     }
     return { dedupedSongs: Array.from(byTitle.values()), versionCount: count };
   }, [songs]);
+
+  const {
+    query, setQuery,
+    activeTab, setActiveTab,
+    visibleSongs, hasMore, loadMore,
+    top20,
+  } = useArtistSongFilter(artistSlug ?? '', dedupedSongs);
 
   useEffect(() => {
     if (artistSlug) {
@@ -81,7 +95,41 @@ export const SongList: React.FC = () => {
           </div>
         ) : (
           <div className="flex flex-col gap-2">
-            {dedupedSongs.slice(0, visibleCount).map(song => {
+            <TopSongsHighlight
+              songs={top20}
+              onSelect={(song) => navigate(`/cifras/${artistSlug}/${song.slug}`)}
+            />
+
+            {dedupedSongs.length > 0 && (
+              <>
+                <div className="flex items-center w-full mb-2">
+                  <input
+                    type="text"
+                    placeholder="Buscar música deste artista..."
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    className="bevel-in px-3 py-2 text-sm w-full outline-none"
+                  />
+                </div>
+
+                <div className="flex flex-wrap gap-2 mb-2 p-2 bg-[var(--color-winxp-panel)] bevel-out">
+                  {TABS.map(tab => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      title={tab.id !== 'alfabetica' ? 'Estatísticas ilustrativas — ranking oficial por artista ainda não existe no backend' : undefined}
+                      className={`flex items-center gap-1 px-3 py-1 text-sm font-bold border transition-colors ${activeTab === tab.id ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#e0dfd6] text-black border-gray-400 hover:bg-gray-300'}`}
+                    >
+                      {tab.id === 'mais-visualizadas' && <Flame size={16} className={activeTab === tab.id ? 'text-orange-300' : 'text-orange-500'} />}
+                      {tab.id === 'mais-curtidas' && <Heart size={16} className={activeTab === tab.id ? 'text-red-300' : 'text-red-500'} />}
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {visibleSongs.map(song => {
               const nVersions = versionCount.get(song.title.trim().toLowerCase()) || 1;
               return (
                 <div
@@ -104,13 +152,13 @@ export const SongList: React.FC = () => {
               );
             })}
 
-            {visibleCount < dedupedSongs.length && (
+            {hasMore && (
               <div className="flex justify-center mt-4 mb-4">
                 <button
-                  onClick={() => setVisibleCount(prev => prev + 32)}
+                  onClick={loadMore}
                   className="bevel-out bg-[var(--color-winxp-panel)] px-6 py-2 font-bold text-sm hover:bg-[#e0dfd6] active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white text-black"
                 >
-                  Exibir Mais ({dedupedSongs.length - visibleCount} restantes)
+                  Exibir Mais
                 </button>
               </div>
             )}
@@ -118,6 +166,12 @@ export const SongList: React.FC = () => {
             {songs.length === 0 && (
               <div className="text-center text-sm text-gray-500 py-8">
                 Nenhuma cifra encontrada para este artista.
+              </div>
+            )}
+
+            {songs.length > 0 && dedupedSongs.length > 0 && visibleSongs.length === 0 && (
+              <div className="text-center text-sm text-gray-500 py-8">
+                Nenhuma música encontrada com "{query}"
               </div>
             )}
           </div>

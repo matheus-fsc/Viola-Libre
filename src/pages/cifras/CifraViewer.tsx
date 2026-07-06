@@ -20,6 +20,16 @@ import '../../components/Cifras.css';
 import { fetchBestTiming, type TimingContribution } from '../../services/timingApi';
 import { getIsMobile } from '../../hooks/useIsMobile';
 import { reflowCifraHtml } from '../../services/cifraUtils';
+import { getPreferredInstrumentId } from '../../utils/instrumentPreference';
+import {
+  useEditorSession,
+  type ChordRankEntry,
+  buildChordId,
+  getChordRankings,
+  pickCuratedVoicings,
+  applyCurationOrder,
+  rankChord,
+} from '../../services/authApi';
 
 
 interface VoicingFilter {
@@ -104,6 +114,9 @@ export const CifraViewer: React.FC = () => {
   // User-edited custom chord shapes (override the generated voicing), keyed by chord name.
   const [customVoicings, setCustomVoicings] = useState<Record<string, number[]>>({});
   const [editorChord, setEditorChord] = useState<{ name: string; frets: number[] } | null>(null);
+  const editorSession = useEditorSession();
+  const [chordRankingsById, setChordRankingsById] = useState<Record<string, ChordRankEntry[]>>({});
+  const [curatingChordId, setCuratingChordId] = useState<string | null>(null);
 
   // Sequence save/load states
   const [seqModalOpen, setSeqModalOpen] = useState<'save' | 'load' | null>(null);
@@ -115,9 +128,16 @@ export const CifraViewer: React.FC = () => {
   const [copied, setCopied] = useState(false);
   const [recentSeqs, setRecentSeqs] = useState<RecentSequencia[]>(() => getRecentSequencias());
 
-  // Instrument and Tuning states
-  const [selectedInstId, setSelectedInstId] = useState<string>(PRESET_INSTRUMENTS[0].id);
-  const [selectedTuningId, setSelectedTuningId] = useState<string>(PRESET_INSTRUMENTS[0].defaultTuningId || PRESET_INSTRUMENTS[0].tunings[0].id);
+  // Instrument and Tuning states — default vem da preferência salva no onboarding (App.tsx)
+  const [selectedInstId, setSelectedInstId] = useState<string>(() => {
+    const savedId = getPreferredInstrumentId();
+    return PRESET_INSTRUMENTS.find(i => i.id === savedId)?.id || PRESET_INSTRUMENTS[0].id;
+  });
+  const [selectedTuningId, setSelectedTuningId] = useState<string>(() => {
+    const savedId = getPreferredInstrumentId();
+    const inst = PRESET_INSTRUMENTS.find(i => i.id === savedId) || PRESET_INSTRUMENTS[0];
+    return inst.defaultTuningId || inst.tunings[0].id;
+  });
 
   // BPM / auto-scroll / loop
   const [localBpm, setLocalBpm] = useState<number | null>(null);
@@ -656,6 +676,39 @@ export const CifraViewer: React.FC = () => {
     () => currentInst.tunings.find(t => t.id === selectedTuningId) || currentInst.tunings[0],
     [currentInst, selectedTuningId]
   );
+
+  // Editor curation: rankings per (instrument, tuning, chord). getChordRankings caches
+  // by chordId in localStorage with a TTL (see authApi.ts) — always fetches the
+  // unscoped list (global + every song's overrides), since pickCuratedVoicings already
+  // filters by songSlug client-side. One cache entry per chordId serves every song, so
+  // there's no need to invalidate anything here when switching songs or instruments.
+  const distinctChordIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const name of currentChords) ids.add(buildChordId(currentInst.id, currentTuning.id, name));
+    return Array.from(ids);
+  }, [currentChords, currentInst, currentTuning]);
+
+  useEffect(() => {
+    if (distinctChordIds.length === 0) return;
+    let cancelled = false;
+    Promise.all(
+      distinctChordIds.map(id =>
+        getChordRankings(id)
+          .then((entries): [string, ChordRankEntry[]] => [id, entries])
+          .catch((): [string, ChordRankEntry[]] => [id, []])
+      )
+    ).then(pairs => {
+      if (cancelled) return;
+      setChordRankingsById(prev => {
+        const next = { ...prev };
+        for (const [id, entries] of pairs) {
+          next[id] = entries;
+        }
+        return next;
+      });
+    });
+    return () => { cancelled = true; };
+  }, [distinctChordIds, songSlug]);
 
   const isVertical = panelPosition === 'left' || panelPosition === 'right';
   const PANEL_ICONS: Record<typeof panelPosition, string> = { left: '◧', top: '▀', right: '◨', bottom: '▄' };
@@ -1485,10 +1538,25 @@ export const CifraViewer: React.FC = () => {
             
             <div className="flex gap-1 sm:gap-2 overflow-x-auto retro-scrollbar py-2 items-center">
               {currentChords.map((chordName, idx) => {
-                const voicings = displayedVoicings[idx] ?? [];
                 const isChordLocked = chordName in lockedVariations;
 
-                // Índice efetivo: respeita cadeado
+                // Curadoria de editores para este acorde (instrumento+afinação). Curadorias
+                // desta música vêm primeiro, seguidas das do dicionário que a música não
+                // repetiu — mescladas, não substituídas. Todas ganham as primeiras posições,
+                // inclusive furando os demais filtros: se um deles tiver excluído alguma,
+                // ela é reinserida na frente mesmo assim.
+                const chordId = buildChordId(currentInst.id, currentTuning.id, chordName);
+                const rankEntries = chordRankingsById[chordId] ?? [];
+                const curatedList = pickCuratedVoicings(rankEntries, songSlug);
+                const rawVoicings = displayedVoicings[idx] ?? [];
+                const voicings = applyCurationOrder(
+                  rawVoicings,
+                  curatedList.map(c => c.fretsArray),
+                  (fretsArray) => buildVoicingFromFrets(fretsArray, currentTuning, false)
+                );
+
+                // Índice efetivo: respeita cadeado; sem escolha explícita, começa em #1
+                // (a(s) curada(s), se houver — applyCurationOrder já as deixou lá).
                 const rawIdx = variationIndices[chordName] ?? 0;
                 const effectiveIdx = isChordLocked
                   ? (lockedVariations[chordName] ?? 0) % Math.max(voicings.length, 1)
@@ -1555,6 +1623,27 @@ export const CifraViewer: React.FC = () => {
                   });
                 };
 
+                // Song-scoped curation: "cura" whichever variation is currently displayed
+                // (as picked via the < > arrows) — adiciona à lista curada desta música,
+                // sem substituir outras variações já curadas.
+                const isCuratedForSong = !!bestVoicing && curatedList.some(
+                  c => c.scope === 'song' && c.fretsArray.join(',') === bestVoicing.frets.join(',')
+                );
+                const handleCurateChord = async (e: React.MouseEvent) => {
+                  e.stopPropagation();
+                  if (!editorSession || !bestVoicing || !songSlug) return;
+                  setCuratingChordId(chordId);
+                  try {
+                    await rankChord(chordId, bestVoicing.frets, { songSlug });
+                    const entries = await getChordRankings(chordId, { forceRefresh: true });
+                    setChordRankingsById(prev => ({ ...prev, [chordId]: entries }));
+                  } catch (err) {
+                    console.error('Falha ao curar acorde na música:', err);
+                  } finally {
+                    setCuratingChordId(null);
+                  }
+                };
+
                 return (
                   <div key={idx} className="bg-white bevel-in p-0.5 sm:p-1 flex flex-col items-center shrink-0 min-w-[56px] sm:min-w-[70px]">
                     {bestVoicing ? (
@@ -1575,6 +1664,9 @@ export const CifraViewer: React.FC = () => {
                         onInfoClick={() => setInfoPopupChord(chordName)}
                         infoActive={infoPopupChord === chordName}
                         onEditClick={() => bestVoicing && setEditorChord({ name: chordName, frets: bestVoicing.frets })}
+                        onCurateClick={editorSession ? handleCurateChord : undefined}
+                        isCurated={isCuratedForSong}
+                        curateBusy={curatingChordId === chordId}
                       />
                     ) : (
                       <div className="py-2 text-center text-[#cc3300] text-[10px] font-bold max-w-[90px] break-words leading-tight">

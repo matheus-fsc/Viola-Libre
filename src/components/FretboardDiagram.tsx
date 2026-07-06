@@ -79,6 +79,21 @@ export const IconEdit: React.FC<{ className?: string }> = ({ className = "w-4 h-
   </svg>
 );
 
+export const IconShield: React.FC<{ className?: string; filled?: boolean }> = ({ className = "w-4 h-4", filled = false }) => (
+  <svg className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+    <path
+      d="M8 1.5l5.5 2v4c0 4-2.5 6-5.5 7-3-1-5.5-3-5.5-7v-4l5.5-2z"
+      fill={filled ? "#228b22" : "#ece9d8"}
+      stroke={filled ? "#1a6b1a" : "#808080"}
+      strokeWidth="1"
+      strokeLinejoin="round"
+    />
+    {filled && (
+      <path d="M5.5 8l1.7 1.7L10.5 6" stroke="#ffffff" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+    )}
+  </svg>
+);
+
 interface FretboardDiagramProps {
   voicing: Voicing;
   tuning: Tuning;
@@ -97,6 +112,13 @@ interface FretboardDiagramProps {
   onInfoClick?: (e: React.MouseEvent) => void;
   infoActive?: boolean;
   onEditClick?: (e: React.MouseEvent) => void;
+  onCurateClick?: (e: React.MouseEvent) => void;
+  isCurated?: boolean;
+  curateBusy?: boolean;
+  onPromoteClick?: (e: React.MouseEvent) => void;
+  onDemoteClick?: (e: React.MouseEvent) => void;
+  canPromote?: boolean;
+  canDemote?: boolean;
 }
 
 export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
@@ -116,7 +138,14 @@ export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
   variationLocked = false,
   onInfoClick,
   infoActive = false,
-  onEditClick
+  onEditClick,
+  onCurateClick,
+  isCurated = false,
+  curateBusy = false,
+  onPromoteClick,
+  onDemoteClick,
+  canPromote = false,
+  canDemote = false
 }) => {
   const { frets, notes, barre } = voicing;
   const numStrings = tuning.strings.length;
@@ -183,10 +212,15 @@ export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
   return (
     <div
       onClick={handlePlayChord}
-      className={compact
+      className={(compact
       ? "bg-transparent text-black w-full flex flex-col items-center relative select-none p-0.5 sm:p-1 cursor-pointer hover:bg-gray-100 transition-colors rounded"
       : "bg-[#ece9d8] text-black border-2 border-white border-r-[#808080] border-bottom-[#808080] shadow-sm p-4 w-[200px] flex flex-col items-center relative select-none cursor-pointer hover:bg-[#e4dfc9] transition-colors"
-    }>
+    ) + (isCurated ? " ring-2 ring-[#228b22] ring-inset" : "")}>
+      {isCurated && (
+        <div className="absolute -top-1.5 -right-1.5 z-10 bg-[#228b22] border border-[#1a6b1a] rounded-full w-4 h-4 flex items-center justify-center shadow" title="Variação curada pelos Editores">
+          <IconShield className="w-2.5 h-2.5" filled />
+        </div>
+      )}
       {/* Title bar of the chord card */}
       <div className="w-full flex justify-between items-center mb-1 sm:mb-2 px-1 border-b border-[#d4d0c8] pb-1">
         <span className={compact ? "font-bold text-sm sm:text-base md:text-lg font-mono text-[#002fa7]" : "font-bold text-lg font-mono text-[#002fa7]"}>{chordName}</span>
@@ -208,6 +242,36 @@ export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
             >
               <IconEdit className="w-4 h-4" />
             </button>
+          )}
+          {onCurateClick && (
+            <button
+              onClick={onCurateClick}
+              disabled={curateBusy}
+              className="cursor-pointer focus:outline-none hover:scale-110 transition-transform flex items-center justify-center disabled:opacity-50"
+              title={isCurated ? 'Variação curada pelos Editores' : 'Curar esta variação como recomendada'}
+            >
+              <IconShield className="w-4 h-4" filled={isCurated} />
+            </button>
+          )}
+          {isCurated && (onPromoteClick || onDemoteClick) && (
+            <div className="flex flex-col leading-none -my-1">
+              <button
+                onClick={onPromoteClick}
+                disabled={!canPromote || curateBusy}
+                className="cursor-pointer focus:outline-none hover:text-[#0058e6] disabled:opacity-25 disabled:cursor-default text-gray-600 text-[9px] leading-none"
+                title="Priorizar esta variação (subir posição entre as curadas)"
+              >
+                ▲
+              </button>
+              <button
+                onClick={onDemoteClick}
+                disabled={!canDemote || curateBusy}
+                className="cursor-pointer focus:outline-none hover:text-[#0058e6] disabled:opacity-25 disabled:cursor-default text-gray-600 text-[9px] leading-none"
+                title="Baixar prioridade desta variação"
+              >
+                ▼
+              </button>
+            </div>
           )}
           {onToggleCifra && (
             <button
