@@ -690,6 +690,12 @@ export const CHORD_FORMULAS: ChordFormula[] = [
     requiredIntervals: [0, 3, 10, 18]
   },
   {
+    name: "Sétima com Décima Primeira Aumentada",
+    suffix: "7(11+)",
+    intervals: [0, 4, 7, 10, 18],
+    requiredIntervals: [0, 4, 10, 18]
+  },
+  {
     name: "Sétima com Nona e Décima Primeira",
     suffix: "7(9/11)",
     intervals: [0, 4, 7, 10, 14, 17],

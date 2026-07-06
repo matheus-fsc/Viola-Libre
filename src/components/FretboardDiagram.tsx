@@ -3,6 +3,7 @@ import type { Voicing, Tuning } from '../engine/types';
 import { midiToNoteName, getVoicingDifficulty } from '../engine/chordCalculator';
 import { AudioEngine } from '../engine/AudioEngine';
 import { StarIcon } from './Icons';
+import { useVisualizationStore } from '../stores/useVisualizationStore';
 
 export const IconWarning: React.FC<{ className?: string }> = ({ className = "w-3 h-3" }) => (
   <svg className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -119,6 +120,7 @@ interface FretboardDiagramProps {
   onDemoteClick?: (e: React.MouseEvent) => void;
   canPromote?: boolean;
   canDemote?: boolean;
+  forceInverted?: boolean;
 }
 
 export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
@@ -145,10 +147,14 @@ export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
   onPromoteClick,
   onDemoteClick,
   canPromote = false,
-  canDemote = false
+  canDemote = false,
+  forceInverted
 }) => {
   const { frets, notes, barre } = voicing;
   const numStrings = tuning.strings.length;
+
+  const stringOrder = useVisualizationStore(state => state.stringOrder);
+  const isInverted = forceInverted !== undefined ? forceInverted : stringOrder === 'inverted';
 
   // Determine fret range to display
   const frettedOnly = frets.filter(f => f > 0);
@@ -181,8 +187,8 @@ export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
 
   // Render helpers
   const getStringX = (index: number) => {
-    // 0 index is lowest pitch string (rendered on the left), numStrings - 1 is highest pitch (rendered on the right)
-    return leftPadding + index * stringSpacing;
+    const visualIndex = isInverted ? numStrings - 1 - index : index;
+    return leftPadding + visualIndex * stringSpacing;
   };
 
   const getFretY = (fretNum: number) => {
@@ -345,6 +351,7 @@ export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
         {/* Vertical String Lines */}
         {Array.from({ length: numStrings }).map((_, idx) => {
           const x = getStringX(idx);
+          const thickness = 1.5 + (numStrings - 1 - idx) * 0.3;
           return (
             <line
               key={`string-${idx}`}
@@ -353,7 +360,7 @@ export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
               x2={x}
               y2={topPadding + boardHeight}
               stroke="#404040"
-              strokeWidth={1.5 + (numStrings - 1 - idx) * 0.3} // make lower strings slightly thicker
+              strokeWidth={thickness} 
             />
           );
         })}
@@ -403,17 +410,23 @@ export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
         })}
 
         {/* Draw Barre if applicable */}
-        {barre && (
-          <rect
-            x={getStringX(barre.startString) - 5}
-            y={getFretY(barre.fret) - 6}
-            width={getStringX(barre.endString) - getStringX(barre.startString) + 10}
-            height="12"
-            rx="6"
-            fill="#0058e6"
-            opacity="0.85"
-          />
-        )}
+        {barre && (() => {
+          const startX = getStringX(barre.startString);
+          const endX = getStringX(barre.endString);
+          const minX = Math.min(startX, endX);
+          const width = Math.abs(endX - startX) + 10;
+          return (
+            <rect
+              x={minX - 5}
+              y={getFretY(barre.fret) - 6}
+              width={width}
+              height="12"
+              rx="6"
+              fill="#0058e6"
+              opacity="0.85"
+            />
+          );
+        })()}
 
         {/* Draw Pressed Frets Circles */}
         {frets.map((fret, idx) => {

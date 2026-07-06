@@ -9,6 +9,8 @@ import {
 } from '../engine/chordCalculator';
 import { AudioEngine } from '../engine/AudioEngine';
 import { useEditorSession, rankChord, buildChordId } from '../services/authApi';
+import { useVisualizationStore } from '../stores/useVisualizationStore';
+import { VisualizationOnboardingModal } from './VisualizationOnboardingModal';
 
 interface ChordEditorModalProps {
   chordName: string;
@@ -57,6 +59,9 @@ export const ChordEditorModal: React.FC<ChordEditorModalProps> = ({
       return { chordPcs: new Set<number>(), rootPc: -1 };
     }
   }, [chordName]);
+
+  const { stringOrder, setStringOrder } = useVisualizationStore();
+  const isInverted = stringOrder === 'inverted';
 
   const pcAt = (sIdx: number, fret: number) => (tuning.strings[sIdx] + fret) % 12;
   const noteAt = (sIdx: number, fret: number) =>
@@ -132,6 +137,7 @@ export const ChordEditorModal: React.FC<ChordEditorModalProps> = ({
         </div>
 
         <div className="p-3 flex flex-col gap-3">
+          <VisualizationOnboardingModal />
           {/* Legend */}
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] font-mono text-gray-700 items-center">
             <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-[#0058e6] border border-[#002fa7] inline-block" /> nota tocada</span>
@@ -155,7 +161,7 @@ export const ChordEditorModal: React.FC<ChordEditorModalProps> = ({
 
               <div className="flex flex-col gap-1 bg-[#8B5A2B] border-2 border-t-[#5B3E1F] border-l-[#5B3E1F] border-r-[#C5A37F] border-b-[#C5A37F] p-2 rounded">
                 {Array.from({ length: numStrings }).map((_, rIdx) => {
-                  const sIdx = rIdx;
+                  const sIdx = isInverted ? numStrings - 1 - rIdx : rIdx;
                   const fretVal = frets[sIdx];
                   const isMuted = fretVal === -1;
                   const label = instrument.id === 'viola' ? `${numStrings - sIdx}ª` : `${numStrings - sIdx}`;
@@ -254,6 +260,7 @@ export const ChordEditorModal: React.FC<ChordEditorModalProps> = ({
             <div className="flex gap-2">
               <button onClick={handlePlay} className="px-3 py-1 text-xs font-bold font-mono bg-[#ece9d8] border border-white border-r-[#808080] border-b-[#808080] hover:bg-white">▶ Tocar</button>
               <button onClick={() => setFrets(normalizedInitial)} className="px-3 py-1 text-xs font-bold font-mono bg-[#ece9d8] border border-white border-r-[#808080] border-b-[#808080] hover:bg-white">↺ Resetar</button>
+              <button onClick={() => setStringOrder(isInverted ? 'standard' : 'inverted')} className="px-3 py-1 text-xs font-bold font-mono bg-[#ece9d8] border border-white border-r-[#808080] border-b-[#808080] hover:bg-white" title="Alternar entre visualização padrão e invertida">↕ Inverter</button>
             </div>
             <div className="flex gap-2 items-center">
               {editorSession && rankState === 'idle' && (
