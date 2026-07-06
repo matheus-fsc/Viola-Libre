@@ -79,7 +79,7 @@ export const TabTransposerBlock: React.FC<Props> = ({
         )}
       </div>
       {renderedSystems.map((txt, i) => (
-        <pre key={i} className="m-0 font-mono text-sm leading-snug whitespace-pre text-[#444] overflow-x-auto py-0.5">
+        <pre key={i} className="m-0 font-mono text-[10px] sm:text-sm leading-snug tracking-tight sm:tracking-normal whitespace-pre text-[#444] overflow-x-auto py-0.5">
           {txt}
         </pre>
       ))}

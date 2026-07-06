@@ -6,6 +6,15 @@
   color: inherit;
   background-color: transparent;
   width: 100%;
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
+@media (max-width: 767px) {
+  .cifra-viewer-content {
+    font-size: 13px;
+    line-height: 1.45;
+  }
 }
 
 .cifra-viewer-content pre {
@@ -20,6 +29,37 @@
 .cifra-viewer-content .cnt {
   color: #555555; /* Cinza escuro para tablaturas */
   display: block;
+}
+
+/* Cada linha original vira um bloco próprio — permite quebra de linha normal em vez de
+   depender de \n com white-space:pre (que só reflui a largura toda, não linha a linha). */
+.cifra-viewer-content .cifra-line {
+  display: block;
+}
+
+.cifra-viewer-content .cifra-line-blank {
+  min-height: 1em;
+}
+
+/* Uma palavra + seu acorde (se houver) viram uma única unidade inline — o navegador só
+   quebra linha entre unidades, então o acorde nunca se separa da palavra à qual está preso.
+   Empilhamento via inline-block + filhos block (sem flex) por ser o padrão mais robusto
+   entre navegadores para "duas linhas dentro de um token inline que quebra como átomo". */
+.cifra-viewer-content .cifra-word {
+  display: inline-block;
+  vertical-align: bottom;
+  margin-right: 0.35em;
+}
+
+.cifra-viewer-content .cifra-word-chord {
+  display: block;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.cifra-viewer-content .cifra-word-text {
+  display: block;
+  white-space: nowrap;
 }
 
 /* Destacando os acordes (tags <b>) */

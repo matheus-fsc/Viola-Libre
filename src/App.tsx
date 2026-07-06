@@ -143,6 +143,7 @@ function App() {
     if (pathname === '/favoritos') return 'favorites';
     return 'cifras';
   })();
+  const isTimingRoute = /\/cifras\/[^/]+\/[^/]+\/timing$/.test(pathname);
 
   // Taskbar collapse state
   const [isTaskbarCollapsed, setIsTaskbarCollapsed] = useState(false);
@@ -176,6 +177,18 @@ function App() {
       prevDockedExpandedRef.current = false;
     }
   }, [isMinimized, isDocked, isEditorOpen, activeTab]);
+
+  // Timing editor wants maximum vertical space for the timeline — hide the taskbar on entry,
+  // restore it on exit (user can still toggle it back manually via the collapse tab).
+  const prevTimingRouteRef = React.useRef(false);
+  useEffect(() => {
+    if (isTimingRoute && !prevTimingRouteRef.current) {
+      setIsTaskbarCollapsed(true);
+    } else if (!isTimingRoute && prevTimingRouteRef.current) {
+      setIsTaskbarCollapsed(false);
+    }
+    prevTimingRouteRef.current = isTimingRoute;
+  }, [isTimingRoute]);
 
   // Reverse sync: if taskbar is manually shown while editor is docked+expanded, minimize editor
   const prevTaskbarCollapsedRef = React.useRef(false);
@@ -379,10 +392,13 @@ function App() {
 
   // Calcula o paddingBottom dinâmico da página com base no estado atual do sequenciador fixo.
   // Isso garante que o scroll da página sempre alcance o conteúdo abaixo do painel.
+  // Só se aplica na aba 'ear' (onde o painel docked do EarTranscription existe de verdade) — sem
+  // esse gate, toda outra aba (incl. a rota de timing) herdava até ~388px de padding-bottom
+  // órfão reservado pro painel de outra aba, sobrando como espaço vazio (teal) no fim da tela.
   const taskbarH = isTaskbarCollapsed ? 0 : 40;
-  const sequencerPad = isEditorOpen && isDocked
+  const sequencerPad = activeTab === 'ear' && isEditorOpen && isDocked
     ? (isMinimized ? 35 + taskbarH + 8 : editorHeight + taskbarH + 8)
-    : 48; // padding padrão quando flutuante ou fechado
+    : 48; // padding padrão quando flutuante, fechado, ou fora da aba 'ear'
 
   return (
     <div
@@ -391,11 +407,17 @@ function App() {
     >
 
       {/* --- DESKTOP WINDOW CONTAINER --- */}
-      <div className="flex-1 p-4 md:p-6 flex flex-col items-center justify-start z-10 max-w-7xl w-full mx-auto gap-6">
+      {/* Timing route wants the editor to fill the full viewport (width included) — the
+          max-w-7xl cap + outer padding is the "windowed desktop" look every other tab keeps,
+          but it left the timing editor centered in a box with teal desktop bleeding through on
+          the sides on wide screens. */}
+      <div className={`flex-1 flex flex-col items-center justify-start z-10 w-full mx-auto gap-6 ${
+        isTimingRoute ? '' : 'p-4 md:p-6 max-w-7xl'
+      }`}>
         
         {/* Main Application Window */}
-        <div className="w-full bg-[#ece9d8] border-[3px] border-[#0058e6] rounded-t-lg shadow-2xl flex flex-col">
-          
+        <div className={`w-full bg-[#ece9d8] border-[3px] border-[#0058e6] rounded-t-lg shadow-2xl flex flex-col ${isTimingRoute ? 'flex-1 min-h-0' : ''}`}>
+
           {/* Main Title Bar */}
           <div className="winxp-gradient-blue text-white px-3 py-1.5 flex justify-between items-center rounded-t-md border-b-2 border-[#002fa7] select-none">
             <div className="flex items-center gap-2 min-w-0">
@@ -504,7 +526,10 @@ function App() {
 
           {/* Conditional tab rendering */}
           {activeTab === 'cifras' && (
-            <div className="w-full max-w-full flex flex-col p-2 sm:p-4 gap-4" style={{ minHeight: '400px' }}>
+            <div
+              className={`w-full max-w-full flex flex-col p-2 sm:p-4 gap-4 ${isTimingRoute ? 'flex-1 min-h-0' : ''}`}
+              style={isTimingRoute ? undefined : { minHeight: '400px' }}
+            >
               <CifrasApp />
             </div>
           )}
@@ -1005,8 +1030,9 @@ function App() {
       )}
 
       {/* --- WINDOWS XP CLASSIC TASKBAR (Collapsible) --- */}
+      {/* Hidden entirely on mobile: it duplicates the top tab nav and eats scarce vertical space. */}
       <footer
-        className="fixed bottom-0 left-0 right-0 h-10 z-40 select-none"
+        className="hidden md:block fixed bottom-0 left-0 right-0 h-10 z-40 select-none"
         style={{ pointerEvents: 'none' }}
       >
         {/* Collapsed Toggle Tab (small blue pill on the left) */}

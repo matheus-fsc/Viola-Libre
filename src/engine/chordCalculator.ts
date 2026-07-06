@@ -111,6 +111,27 @@ const SUFFIX_ALIASES: Record<string, string> = {
 };
 function normalizeSuffix(s: string): string { return SUFFIX_ALIASES[s] ?? s; }
 
+// Valid root note pattern: A-G (upper or lower) optionally followed by b or #
+const ROOT_RE = /^[A-Ga-g][b#]?$/;
+
+/**
+ * Returns true if `token` is a chord symbol the engine knows how to handle.
+ * Accepts every suffix in CHORD_FORMULAS + all SUFFIX_ALIASES + 'N.C.' / 'NC'.
+ * Used by isChordLine in cifraUtils.ts so both share the same vocabulary.
+ */
+export function isValidChordToken(token: string): boolean {
+  const t = token.trim();
+  if (!t) return false;
+  if (/^N\.?C\.?$/i.test(t)) return true;  // No Chord marker
+
+  const { root, suffix, bass } = parseChordString(t);
+  if (!root || !ROOT_RE.test(root)) return false;
+  if (bass && !ROOT_RE.test(bass)) return false;
+  if (suffix === '') return true;  // plain major chord
+  const normalized = normalizeSuffix(suffix);
+  return CHORD_FORMULAS.some(f => f.suffix === normalized);
+}
+
 // Build a Chord object from root name, formula suffix, and optional bass name
 export function buildChord(rootName: string, suffix: string, bassName?: string): Chord {
   const root = noteNameToPitchClass(rootName);

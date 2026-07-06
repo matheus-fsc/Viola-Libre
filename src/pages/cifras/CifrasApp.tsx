@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { ArtistList } from './ArtistList';
 import { SongList } from './SongList';
 import { CifraViewer } from './CifraViewer';
+import { TimingEditorPage } from './TimingEditorPage';
 
 export const CifrasApp: React.FC = () => {
   return (
@@ -11,6 +12,7 @@ export const CifrasApp: React.FC = () => {
         <Route path="/" element={<Navigate to="/cifras" replace />} />
         <Route path="/cifras" element={<ArtistList />} />
         <Route path="/cifras/:artistSlug" element={<SongList />} />
+        <Route path="/cifras/:artistSlug/:songSlug/timing" element={<TimingEditorPage />} />
         <Route path="/cifras/:artistSlug/*" element={<CifraViewer />} />
       </Routes>
     </div>

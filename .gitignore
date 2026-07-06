@@ -31,6 +31,9 @@ dist-ssr
 *.sqlite
 *.sqlite3
 *.db
-scrapper/cifras_data.sqlite
 __pycache__/
 *.pyc
+
+# Ferramentas auxiliares (fora do app principal)
+scrapper/
+bpm_seeder/bin/

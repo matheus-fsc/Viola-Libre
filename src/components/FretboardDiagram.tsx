@@ -184,12 +184,12 @@ export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
     <div
       onClick={handlePlayChord}
       className={compact
-      ? "bg-transparent text-black w-full flex flex-col items-center relative select-none p-1 cursor-pointer hover:bg-gray-100 transition-colors rounded" 
+      ? "bg-transparent text-black w-full flex flex-col items-center relative select-none p-0.5 sm:p-1 cursor-pointer hover:bg-gray-100 transition-colors rounded"
       : "bg-[#ece9d8] text-black border-2 border-white border-r-[#808080] border-bottom-[#808080] shadow-sm p-4 w-[200px] flex flex-col items-center relative select-none cursor-pointer hover:bg-[#e4dfc9] transition-colors"
     }>
       {/* Title bar of the chord card */}
-      <div className="w-full flex justify-between items-center mb-2 px-1 border-b border-[#d4d0c8] pb-1">
-        <span className="font-bold text-lg font-mono text-[#002fa7]">{chordName}</span>
+      <div className="w-full flex justify-between items-center mb-1 sm:mb-2 px-1 border-b border-[#d4d0c8] pb-1">
+        <span className={compact ? "font-bold text-sm sm:text-base md:text-lg font-mono text-[#002fa7]" : "font-bold text-lg font-mono text-[#002fa7]"}>{chordName}</span>
         <div className="flex gap-2 items-center">
           {onInfoClick && (
             <button
@@ -231,7 +231,12 @@ export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
       </div>
 
       {/* SVG Diagram */}
-      <svg width={width} height={height} className="overflow-visible">
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        width={width}
+        height={height}
+        className={compact ? "overflow-visible w-full h-auto max-w-[104px] sm:max-w-[150px]" : "overflow-visible"}
+      >
         {/* Draw Fretboard Background Grid */}
         
         {/* Nut (fret 0 line) */}
@@ -406,24 +411,24 @@ export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
         })}
       </svg>
 
-      {/* Info text at the bottom */}
-      <div className="w-full text-center mt-2 border-t border-[#d4d0c8] pt-1">
-        <div className="text-[10px] font-mono text-gray-600 flex justify-between items-center">
+      {/* Info text at the bottom — hidden on mobile in compact mode to save vertical space */}
+      <div className={`w-full text-center border-t border-[#d4d0c8] pt-1 ${compact ? 'mt-1 sm:mt-2' : 'mt-2'}`}>
+        <div className={`${compact ? 'hidden sm:flex' : 'flex'} text-[10px] font-mono text-gray-600 justify-between items-center`}>
           <span>Dificuldade:</span>
           <span className="font-bold text-black">{getVoicingDifficulty(frets).label}</span>
         </div>
         {voicing.hasInteriorMute && (
-          <div className="text-[9px] font-bold text-[#cc3300] font-mono mt-1 bg-[#ffcccc]/70 border border-[#cc3300] rounded px-1 py-0.5 text-center shadow-sm select-none flex items-center justify-center gap-1">
+          <div className={`${compact ? 'hidden sm:flex' : 'flex'} text-[9px] font-bold text-[#cc3300] font-mono mt-1 bg-[#ffcccc]/70 border border-[#cc3300] rounded px-1 py-0.5 text-center shadow-sm select-none items-center justify-center gap-1`}>
             <IconWarning className="w-3 h-3 text-[#cc3300]" />
             <span>Abafamento Interno</span>
           </div>
         )}
-        <div className="text-[9px] font-mono text-gray-500 text-left mt-1.5 truncate" title={voicing.notes.join(' ')}>
+        <div className={`${compact ? 'hidden sm:block' : 'block'} text-[9px] font-mono text-gray-500 text-left mt-1.5 truncate`} title={voicing.notes.join(' ')}>
           Notas: {voicing.notes.filter(n => n !== 'X').join(', ')}
         </div>
-        
+
         {variationTotal && variationTotal > 1 && variationCurrentIndex !== undefined && (variationLocked || (onNextVariation && onPrevVariation)) && (
-          <div className="flex items-center justify-between mt-2 pt-1 border-t border-[#ece9d8] bg-[#f5f5f5] px-1 rounded">
+          <div className="flex items-center justify-between mt-1 sm:mt-2 pt-1 border-t border-[#ece9d8] bg-[#f5f5f5] px-1 rounded">
             {variationLocked ? (
               <span className="w-6" />
             ) : (

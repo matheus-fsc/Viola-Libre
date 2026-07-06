@@ -17,6 +17,9 @@ import { ChordEditorModal } from '../../components/ChordEditorModal';
 import { TabTransposerBlock } from '../../components/TabTransposerBlock';
 import { splitHtmlByTabs, TAB_POSITIONS, type ContentSegment } from '../../engine/tabTransposer';
 import '../../components/Cifras.css';
+import { fetchBestTiming, type TimingContribution } from '../../services/timingApi';
+import { getIsMobile } from '../../hooks/useIsMobile';
+import { reflowCifraHtml } from '../../services/cifraUtils';
 
 
 interface VoicingFilter {
@@ -80,7 +83,7 @@ export const CifraViewer: React.FC = () => {
   // Transpose states
   const [transposeOffset, setTransposeOffset] = useState<number>(0);
   const [tabPosIdx, setTabPosIdx] = useState<number>(0);
-  const [panelPosition, setPanelPosition] = useState<'left' | 'top' | 'right' | 'bottom'>('left');
+  const [panelPosition, setPanelPosition] = useState<'left' | 'top' | 'right' | 'bottom'>(() => getIsMobile() ? 'top' : 'left');
   const [showTabs, setShowTabs] = useState(true);
   
   // Scraped original chords
@@ -123,6 +126,8 @@ export const CifraViewer: React.FC = () => {
   const [loopA, setLoopA] = useState<number | null>(null);
   const [loopB, setLoopB] = useState<number | null>(null);
   const [maxScroll, setMaxScroll] = useState(0);
+  const [previewTiming, setPreviewTiming] = useState<TimingContribution | null>(null);
+  const [bestTiming, setBestTiming] = useState<TimingContribution | null>(null);
   const [scrollFrac, setScrollFrac] = useState(0);
   const [lyricsPopup, setLyricsPopup] = useState<{ chord: string; x: number; y: number } | null>(null);
   const [currentSection, setCurrentSection] = useState<string | null>(null);
@@ -132,8 +137,6 @@ export const CifraViewer: React.FC = () => {
   const rafRef = useRef<number | null>(null);
   const elapsedRef = useRef(0);
   const prevTimeRef = useRef<number | null>(null);
-  const tapTimesRef = useRef<number[]>([]);
-  const tapResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const chordMapRef = useRef<Array<{ chordY: number; time: number }>>([]);
   const sectionTimelineRef = useRef<SectionEntry[]>([]);
   const prevSectionRef = useRef<string | null>(null);
@@ -231,21 +234,6 @@ export const CifraViewer: React.FC = () => {
     if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
     return () => { if ('scrollRestoration' in history) history.scrollRestoration = 'auto'; };
   }, []);
-
-  // BPM tap: calcula BPM pela média dos intervalos entre toques
-  const handleTap = () => {
-    const now = performance.now();
-    const taps = tapTimesRef.current;
-    taps.push(now);
-    if (taps.length > 8) taps.shift();
-    if (tapResetRef.current) clearTimeout(tapResetRef.current);
-    tapResetRef.current = setTimeout(() => { tapTimesRef.current = []; }, 2500);
-    if (taps.length >= 2) {
-      let sum = 0;
-      for (let i = 1; i < taps.length; i++) sum += taps[i] - taps[i - 1];
-      setLocalBpm(Math.round(60000 / (sum / (taps.length - 1))));
-    }
-  };
 
   // Ativar auto-scroll: volta pro topo para sincronizar com o início da música
   const handleToggleAutoScroll = () => {
@@ -421,8 +409,9 @@ export const CifraViewer: React.FC = () => {
       }
 
       const totalWeight = weights.reduce((a, b) => a + b, 0);
-      const dur = cifra.duration ?? null;
-      const bpm = localBpm ?? cifra.bpm ?? 120;
+      const activeTiming = previewTiming ?? bestTiming ?? null;
+      const dur = activeTiming?.duration ?? cifra.duration ?? null;
+      const bpm = activeTiming?.bpm ?? localBpm ?? cifra.bpm ?? 120;
       const totalTime = dur ?? (60 / bpm) * 4 * bEls.length;
       const map: Array<{ chordY: number; time: number }> = [];
       let cumWeight = 0;
@@ -490,7 +479,7 @@ export const CifraViewer: React.FC = () => {
       // ── fim diagnóstico ───────────────────────────────────────────────────
     });
     return () => cancelAnimationFrame(frame);
-  }, [cifra, localBpm]);
+  }, [cifra, localBpm, previewTiming, bestTiming]);
 
   // Reset BPM/scroll/loop ao trocar de música
   useEffect(() => {
@@ -501,7 +490,6 @@ export const CifraViewer: React.FC = () => {
     setCurrentSection(null);
     prevSectionRef.current = null;
     sectionTimelineRef.current = [];
-    tapTimesRef.current = [];
     window.scrollTo(0, 0);
   }, [artistSlug, songSlug]);
 
@@ -522,6 +510,17 @@ export const CifraViewer: React.FC = () => {
       window.removeEventListener('scroll', closeScroll);
     };
   }, [lyricsPopup]);
+
+  useEffect(() => {
+    if (songSlug) fetchBestTiming(songSlug).then(setBestTiming).catch(() => {});
+  }, [songSlug]);
+
+  useEffect(() => {
+    if (!songSlug) return;
+    const stored = localStorage.getItem(`viola_preview_timing_${songSlug}`);
+    if (!stored) { setPreviewTiming(null); return; }
+    try { setPreviewTiming(JSON.parse(stored)); } catch { setPreviewTiming(null); }
+  }, [songSlug]);
 
   const buildSeqData = (): SequenciaData => ({
     artistSlug: artistSlug || '',
@@ -641,7 +640,7 @@ export const CifraViewer: React.FC = () => {
       }
       merged.push({ ...seg });
     }
-    return merged;
+    return merged.map(seg => seg.type === 'html' ? { ...seg, content: reflowCifraHtml(seg.content) } : seg);
   }, [displayHtml, cifra]);
 
   // Transposed unique chords for the carousel
@@ -1126,6 +1125,29 @@ export const CifraViewer: React.FC = () => {
         </button>
       </div>
 
+      {/* Preview timing banner */}
+      {previewTiming && (
+        <div className="bevel-out bg-[#d4edda] border border-green-500 px-3 py-1 text-xs flex items-center justify-between gap-2 shrink-0">
+          <span className="font-bold text-[#155724]">
+            🎵 Auto-scroll usando timing contribuído — BPM: {previewTiming.bpm}, duração: {Math.floor(previewTiming.duration / 60)}:{String(Math.round(previewTiming.duration % 60)).padStart(2, '0')}
+          </span>
+          <div className="flex gap-1 shrink-0">
+            <button
+              onClick={() => navigate(`/cifras/${artistSlug}/${songSlug}/timing`)}
+              className="bevel-out bg-[var(--color-winxp-panel)] border border-gray-400 px-2 py-0 text-[10px] font-bold hover:bg-white"
+            >
+              Editar
+            </button>
+            <button
+              onClick={() => { setPreviewTiming(null); if (songSlug) localStorage.removeItem(`viola_preview_timing_${songSlug}`); }}
+              className="bevel-out bg-[var(--color-winxp-panel)] border border-gray-400 px-1.5 py-0 text-[10px] font-bold hover:bg-white text-[#cc3300]"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Main layout container */}
       <div className={`flex-1 flex gap-2 min-h-0 ${isVertical ? 'flex-row' : 'flex-col'}`}>
         
@@ -1201,14 +1223,14 @@ export const CifraViewer: React.FC = () => {
                 <span className={`font-mono text-xs font-bold flex-1 text-center ${bpmModified ? 'text-[#cc3300]' : 'text-[#005500]'}`}>{effectiveBpm ?? '—'}</span>
                 <button onClick={() => setLocalBpm(p => Math.min(300, (p ?? effectiveBpm ?? 100) + 1))} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white">+</button>
               </div>
-              <div className="flex gap-1">
-                <button onPointerDown={handleTap} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-1 text-xs font-bold flex-1 border border-gray-400 hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white select-none">Tap</button>
-                {bpmModified && (
-                  <button onClick={() => setLocalBpm(null)} className="bevel-out bg-[var(--color-winxp-panel)] px-1.5 py-0.5 text-xs border border-gray-400 hover:bg-white" title="Restaurar BPM da API">↺</button>
-                )}
-              </div>
+              {bpmModified && (
+                <button onClick={() => setLocalBpm(null)} className="bevel-out bg-[var(--color-winxp-panel)] px-1.5 py-0.5 text-xs w-full border border-gray-400 hover:bg-white" title="Restaurar BPM da API">↺ Restaurar</button>
+              )}
               {durationStr && <span className="text-[9px] text-gray-400 text-center">⏱ {durationStr}</span>}
               <button disabled className="bevel-out bg-[#f0f0f0] px-2 py-0.5 text-[9px] w-full border border-gray-300 text-gray-400 cursor-not-allowed" title="Em breve: contribua com BPM e duração para a comunidade">↑ Enviar BPM</button>
+              <button onClick={() => navigate(`/cifras/${artistSlug}/${songSlug}/timing`)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-[9px] w-full border border-gray-400 font-bold hover:bg-white text-black">
+                ✏️ Timing
+              </button>
             </div>
 
             {/* Auto-scroll */}
@@ -1255,75 +1277,120 @@ export const CifraViewer: React.FC = () => {
             </button>
           </aside>
         ) : (
-          <div className={`bevel-out bg-[var(--color-winxp-panel)] p-2 flex flex-wrap items-center justify-between gap-3 text-sm shrink-0 ${panelPosition === 'bottom' ? 'order-last' : ''}`}>
-            <div className="flex items-center gap-3 flex-wrap">
+          <div className={`bevel-out bg-[var(--color-winxp-panel)] p-1.5 sm:p-2 flex flex-col sm:flex-row sm:flex-wrap sm:items-start sm:justify-between gap-2 sm:gap-3 text-xs sm:text-sm shrink-0 ${panelPosition === 'bottom' ? 'order-last' : ''}`}>
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-3 shrink-0">
               <button onClick={cyclePosition} className="bevel-out bg-[var(--color-winxp-panel)] px-1.5 py-0 text-sm font-bold border border-gray-400" title="Mover painel">{PANEL_ICONS[panelPosition]}</button>
               <span className="text-gray-600 flex items-center gap-1 font-bold" title="Visualizações"><Eye size={16} className="text-blue-600" /> {cifra.views || 1}</span>
               <span className="text-gray-600 flex items-center gap-1 font-bold" title="Favoritos"><Heart size={16} className="text-red-500" /> {cifra.favorited || 0}</span>
-              <div className="flex items-center gap-1">
-                <label className="font-bold text-[11px] uppercase tracking-wider text-gray-700">Tom:</label>
-                <span className="font-bold text-xs bg-white border border-gray-400 px-1 text-[#002fa7] min-w-[20px] text-center">{songKey || '?'}</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <label className="font-bold text-[11px] uppercase tracking-wider text-gray-700">Variações:</label>
-                <select value={currentVersionSlug} onChange={(e) => handleVersionChange(e.target.value)} disabled={versionOptions.length <= 1} className="bevel-in bg-white px-1 py-0 text-xs outline-none cursor-pointer max-w-[120px] disabled:opacity-60 disabled:cursor-default">
-                  {versionOptions.map(v => (<option key={v.id} value={v.slug}>{v.version_name || 'Principal'}</option>))}
-                </select>
-              </div>
-              <div className="flex items-center gap-1">
-                <label className="font-bold text-[11px] uppercase tracking-wider text-gray-700">Instrumento:</label>
-                <select value={selectedInstId} onChange={(e) => { const newInst = PRESET_INSTRUMENTS.find(i => i.id === e.target.value); if (newInst) { setSelectedInstId(newInst.id); setSelectedTuningId(newInst.defaultTuningId || newInst.tunings[0].id); setTabPosIdx(0); } }} className="bevel-in bg-white px-1 py-0 text-xs outline-none cursor-pointer max-w-[100px]">
-                  {PRESET_INSTRUMENTS.map(inst => (<option key={inst.id} value={inst.id}>{inst.name}</option>))}
-                </select>
-              </div>
-              <div className="flex items-center gap-1">
-                <label className="font-bold text-[11px] uppercase tracking-wider text-gray-700">Afinação:</label>
-                <select value={selectedTuningId} onChange={(e) => setSelectedTuningId(e.target.value)} className="bevel-in bg-white px-1 py-0 text-xs outline-none cursor-pointer max-w-[100px]">
-                  {currentInst.tunings.map(tuning => (<option key={tuning.id} value={tuning.id}>{tuning.name.split(' (')[0]}</option>))}
-                </select>
+            </div>
+
+            <div className="hidden sm:block w-px self-stretch bg-gray-400/60" />
+
+            {/* Grupo: Música (tom + versão) */}
+            <div className="flex flex-col gap-0.5 min-w-0">
+              <span className="text-[8px] font-bold uppercase tracking-wider text-gray-500 leading-none">Música</span>
+              <div className="flex items-center gap-1.5 sm:gap-3 flex-nowrap sm:flex-wrap overflow-x-auto no-scrollbar [&>*]:shrink-0">
+                <div className="flex items-center gap-1">
+                  <label className="hidden sm:inline font-bold text-[11px] uppercase tracking-wider text-gray-700">Tom:</label>
+                  <span className="font-bold text-xs bg-white border border-gray-400 px-1 text-[#002fa7] min-w-[20px] text-center">{songKey || '?'}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <label className="hidden sm:inline font-bold text-[11px] uppercase tracking-wider text-gray-700">Variações:</label>
+                  <select value={currentVersionSlug} onChange={(e) => handleVersionChange(e.target.value)} disabled={versionOptions.length <= 1} className="bevel-in bg-white px-1 py-0 text-xs outline-none cursor-pointer max-w-[100px] sm:max-w-[120px] disabled:opacity-60 disabled:cursor-default">
+                    {versionOptions.map(v => (<option key={v.id} value={v.slug}>{v.version_name || 'Principal'}</option>))}
+                  </select>
+                </div>
               </div>
             </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="flex items-center bg-[#d4d0c8] bevel-in px-1 py-1 gap-1">
-                <span className="text-[11px] font-bold px-1 text-gray-700">TOM:</span>
-                <button onClick={() => setTransposeOffset(p => p - 1)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white" title="Abaixar meio tom">-½</button>
-                <span className="font-mono text-xs font-bold w-6 text-center text-[#cc3300]">{transposeOffset > 0 ? `+${transposeOffset}` : transposeOffset}</span>
-                <button onClick={() => setTransposeOffset(p => p + 1)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white" title="Aumentar meio tom">+½</button>
+
+            <div className="hidden sm:block w-px self-stretch bg-gray-400/60" />
+
+            {/* Grupo: Instrumento (instrumento + afinação) */}
+            <div className="flex flex-col gap-0.5 min-w-0">
+              <span className="text-[8px] font-bold uppercase tracking-wider text-gray-500 leading-none">Instrumento</span>
+              <div className="flex items-center gap-1.5 sm:gap-3 flex-nowrap sm:flex-wrap overflow-x-auto no-scrollbar [&>*]:shrink-0">
+                <div className="flex items-center gap-1">
+                  <label className="hidden sm:inline font-bold text-[11px] uppercase tracking-wider text-gray-700">Instrumento:</label>
+                  <select value={selectedInstId} onChange={(e) => { const newInst = PRESET_INSTRUMENTS.find(i => i.id === e.target.value); if (newInst) { setSelectedInstId(newInst.id); setSelectedTuningId(newInst.defaultTuningId || newInst.tunings[0].id); setTabPosIdx(0); } }} className="bevel-in bg-white px-1 py-0 text-xs outline-none cursor-pointer max-w-[90px] sm:max-w-[100px]">
+                    {PRESET_INSTRUMENTS.map(inst => (<option key={inst.id} value={inst.id}>{inst.name}</option>))}
+                  </select>
+                </div>
+                <div className="flex items-center gap-1">
+                  <label className="hidden sm:inline font-bold text-[11px] uppercase tracking-wider text-gray-700">Afinação:</label>
+                  <select value={selectedTuningId} onChange={(e) => setSelectedTuningId(e.target.value)} className="bevel-in bg-white px-1 py-0 text-xs outline-none cursor-pointer max-w-[90px] sm:max-w-[100px]">
+                    {currentInst.tunings.map(tuning => (<option key={tuning.id} value={tuning.id}>{tuning.name.split(' (')[0]}</option>))}
+                  </select>
+                </div>
               </div>
-              <div className="flex items-center bg-[#d4d0c8] bevel-in px-1 py-1 gap-1">
-                <span className="text-[11px] font-bold px-1 text-gray-700">POS.TAB:</span>
-                <button onClick={() => setTabPosIdx(p => (p - 1 + TAB_POSITIONS.length) % TAB_POSITIONS.length)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white">◀</button>
-                <span className="font-mono text-xs font-bold min-w-[44px] text-center text-[#005500]">{TAB_POSITIONS[tabPosIdx].label}</span>
-                <button onClick={() => setTabPosIdx(p => (p + 1) % TAB_POSITIONS.length)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white">▶</button>
+            </div>
+
+            <div className="hidden sm:block w-px self-stretch bg-gray-400/60" />
+
+            {/* Grupo: Transposição (tom da execução + posição da tab) */}
+            <div className="flex flex-col gap-0.5 min-w-0">
+              <span className="text-[8px] font-bold uppercase tracking-wider text-gray-500 leading-none">Transposição</span>
+              <div className="flex items-center gap-1.5 sm:gap-3 flex-nowrap sm:flex-wrap overflow-x-auto no-scrollbar [&>*]:shrink-0">
+                <div className="flex items-center bg-[#d4d0c8] bevel-in px-1 py-1 gap-1">
+                  <span className="hidden sm:inline text-[11px] font-bold px-1 text-gray-700">TOM:</span>
+                  <button onClick={() => setTransposeOffset(p => p - 1)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white" title="Abaixar meio tom">-½</button>
+                  <span className="font-mono text-xs font-bold w-6 text-center text-[#cc3300]">{transposeOffset > 0 ? `+${transposeOffset}` : transposeOffset}</span>
+                  <button onClick={() => setTransposeOffset(p => p + 1)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white" title="Aumentar meio tom">+½</button>
+                </div>
+                <div className="flex items-center bg-[#d4d0c8] bevel-in px-1 py-1 gap-1">
+                  <span className="hidden sm:inline text-[11px] font-bold px-1 text-gray-700">POS.TAB:</span>
+                  <button onClick={() => setTabPosIdx(p => (p - 1 + TAB_POSITIONS.length) % TAB_POSITIONS.length)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white">◀</button>
+                  <span className="font-mono text-xs font-bold min-w-[44px] text-center text-[#005500]">{TAB_POSITIONS[tabPosIdx].label}</span>
+                  <button onClick={() => setTabPosIdx(p => (p + 1) % TAB_POSITIONS.length)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white">▶</button>
+                </div>
+                <button onClick={() => setShowTabs(v => !v)} className={`bevel-out px-3 py-1 text-xs font-bold border border-gray-400 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${!showTabs ? 'bg-[#316ac5] text-white' : 'bg-[var(--color-winxp-panel)] text-[#002fa7]'}`}>{showTabs ? 'Tabs ▼' : 'Tabs ▶'}</button>
               </div>
-              <button onClick={() => setShowTabs(v => !v)} className={`bevel-out px-3 py-1 text-xs font-bold border border-gray-400 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${!showTabs ? 'bg-[#316ac5] text-white' : 'bg-[var(--color-winxp-panel)] text-[#002fa7]'}`}>{showTabs ? 'Tabs ▼' : 'Tabs ▶'}</button>
-              <button onClick={handleFavorite} disabled={isFavoriting} className="bevel-out bg-[var(--color-winxp-panel)] px-3 py-1 text-xs font-bold flex items-center gap-1 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white text-black">
-                <Heart size={14} className={`${isFavoriting ? 'opacity-50' : ''} ${cifra.favorited && cifra.favorited > 0 ? "fill-red-500 text-red-500" : "text-gray-600"}`} />
-                <span className={isFavoriting ? 'opacity-50' : ''}>Favoritar</span>
-              </button>
-              <button onClick={() => setSeqModalOpen('save')} className={`bevel-out px-3 py-1 text-xs font-bold flex items-center gap-1 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white text-black ${savedHash ? 'bg-[#d4edda] border border-green-500' : 'bg-[var(--color-winxp-panel)]'}`} title="Salvar ou carregar sequência de acordes">
-                <Save size={13} className={savedHash ? 'text-green-700' : 'text-gray-600'} />
-                <span>{savedHash ? 'Sequência ✓' : 'Sequência'}</span>
-              </button>
-              <div className="flex items-center bg-[#d4d0c8] bevel-in px-1 py-1 gap-1">
-                <span className="text-[11px] font-bold px-1 text-gray-700">BPM:</span>
-                <button onClick={() => setLocalBpm(p => Math.max(20, (p ?? effectiveBpm ?? 100) - 1))} className="bevel-out bg-[var(--color-winxp-panel)] px-1.5 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white">−</button>
-                <span className={`font-mono text-xs font-bold w-9 text-center ${bpmModified ? 'text-[#cc3300]' : 'text-[#005500]'}`}>{effectiveBpm != null ? `${effectiveBpm}${bpmModified ? '*' : ''}` : '—'}</span>
-                <button onClick={() => setLocalBpm(p => Math.min(300, (p ?? effectiveBpm ?? 100) + 1))} className="bevel-out bg-[var(--color-winxp-panel)] px-1.5 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white">+</button>
-                <button onPointerDown={handleTap} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold border border-gray-400 hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white select-none">Tap</button>
-                {bpmModified && <button onClick={() => setLocalBpm(null)} className="bevel-out bg-[var(--color-winxp-panel)] px-1 py-0.5 text-xs border border-gray-400 hover:bg-white" title="Restaurar BPM da API">↺</button>}
+            </div>
+
+            <div className="hidden sm:block w-px self-stretch bg-gray-400/60" />
+
+            {/* Grupo: Reprodução (BPM, auto-rolar, velocidade, loop) */}
+            <div className="flex flex-col gap-0.5 min-w-0">
+              <span className="text-[8px] font-bold uppercase tracking-wider text-gray-500 leading-none">Reprodução</span>
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-nowrap sm:flex-wrap overflow-x-auto no-scrollbar [&>*]:shrink-0">
+                <div className="flex items-center bg-[#d4d0c8] bevel-in px-1 py-1 gap-1">
+                  <span className="hidden sm:inline text-[11px] font-bold px-1 text-gray-700">BPM:</span>
+                  <button onClick={() => setLocalBpm(p => Math.max(20, (p ?? effectiveBpm ?? 100) - 1))} className="bevel-out bg-[var(--color-winxp-panel)] px-1.5 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white">−</button>
+                  <span className={`font-mono text-xs font-bold w-9 text-center ${bpmModified ? 'text-[#cc3300]' : 'text-[#005500]'}`}>{effectiveBpm != null ? `${effectiveBpm}${bpmModified ? '*' : ''}` : '—'}</span>
+                  <button onClick={() => setLocalBpm(p => Math.min(300, (p ?? effectiveBpm ?? 100) + 1))} className="bevel-out bg-[var(--color-winxp-panel)] px-1.5 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white">+</button>
+                  {bpmModified && <button onClick={() => setLocalBpm(null)} className="bevel-out bg-[var(--color-winxp-panel)] px-1 py-0.5 text-xs border border-gray-400 hover:bg-white" title="Restaurar BPM da API">↺</button>}
+                </div>
+                <button onClick={handleToggleAutoScroll} className={`bevel-out px-3 py-1 text-xs font-bold border border-gray-400 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${autoScroll ? 'bg-[#316ac5] text-white' : 'bg-[var(--color-winxp-panel)] text-[#002fa7]'}`}>
+                  {autoScroll ? '⏸' : '▶'} Rolar
+                </button>
+                {([0.5, 1, 2] as const).map(m => (
+                  <button key={m} onClick={() => setScrollMult(m)} className={`text-[10px] font-bold px-1.5 py-1 border leading-tight ${scrollMult === m ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#ece9d8] border-gray-400 hover:bg-white'}`}>{m}×</button>
+                ))}
+                <button onClick={() => setLoopA(window.scrollY)} className={`px-2 py-1 text-xs font-bold border leading-tight active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${loopA !== null ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[var(--color-winxp-panel)] border-gray-400 hover:bg-white'}`} title="Marcar ponto A do loop">A</button>
+                <button onClick={() => setLoopB(window.scrollY)} className={`px-2 py-1 text-xs font-bold border leading-tight active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${loopB !== null ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[var(--color-winxp-panel)] border-gray-400 hover:bg-white'}`} title="Marcar ponto B do loop">B</button>
+                {(loopA !== null || loopB !== null) && (
+                  <button onClick={() => { setLoopA(null); setLoopB(null); }} className="px-2 py-1 text-xs font-bold border border-gray-400 bg-[#ece9d8] text-[#cc3300] hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white">✕ Loop</button>
+                )}
               </div>
-              <button onClick={handleToggleAutoScroll} className={`bevel-out px-3 py-1 text-xs font-bold border border-gray-400 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${autoScroll ? 'bg-[#316ac5] text-white' : 'bg-[var(--color-winxp-panel)] text-[#002fa7]'}`}>
-                {autoScroll ? '⏸' : '▶'} Rolar
-              </button>
-              {([0.5, 1, 2] as const).map(m => (
-                <button key={m} onClick={() => setScrollMult(m)} className={`text-[10px] font-bold px-1.5 py-1 border leading-tight ${scrollMult === m ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#ece9d8] border-gray-400 hover:bg-white'}`}>{m}×</button>
-              ))}
-              <button onClick={() => setLoopA(window.scrollY)} className={`px-2 py-1 text-xs font-bold border leading-tight active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${loopA !== null ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[var(--color-winxp-panel)] border-gray-400 hover:bg-white'}`} title="Marcar ponto A do loop">A</button>
-              <button onClick={() => setLoopB(window.scrollY)} className={`px-2 py-1 text-xs font-bold border leading-tight active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${loopB !== null ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[var(--color-winxp-panel)] border-gray-400 hover:bg-white'}`} title="Marcar ponto B do loop">B</button>
-              {(loopA !== null || loopB !== null) && (
-                <button onClick={() => { setLoopA(null); setLoopB(null); }} className="px-2 py-1 text-xs font-bold border border-gray-400 bg-[#ece9d8] text-[#cc3300] hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white">✕ Loop</button>
-              )}
+            </div>
+
+            <div className="hidden sm:block w-px self-stretch bg-gray-400/60" />
+
+            {/* Grupo: Ações (favoritar, sequência, contribuir timing) */}
+            <div className="flex flex-col gap-0.5 min-w-0">
+              <span className="text-[8px] font-bold uppercase tracking-wider text-gray-500 leading-none">Ações</span>
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-nowrap sm:flex-wrap overflow-x-auto no-scrollbar [&>*]:shrink-0">
+                <button onClick={handleFavorite} disabled={isFavoriting} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-1 sm:px-3 text-xs font-bold flex items-center gap-1 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white text-black" title="Favoritar">
+                  <Heart size={14} className={`${isFavoriting ? 'opacity-50' : ''} ${cifra.favorited && cifra.favorited > 0 ? "fill-red-500 text-red-500" : "text-gray-600"}`} />
+                  <span className={`hidden sm:inline ${isFavoriting ? 'opacity-50' : ''}`}>Favoritar</span>
+                </button>
+                <button onClick={() => setSeqModalOpen('save')} className={`bevel-out px-2 py-1 sm:px-3 text-xs font-bold flex items-center gap-1 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white text-black ${savedHash ? 'bg-[#d4edda] border border-green-500' : 'bg-[var(--color-winxp-panel)]'}`} title="Salvar ou carregar sequência de acordes">
+                  <Save size={13} className={savedHash ? 'text-green-700' : 'text-gray-600'} />
+                  <span className="hidden sm:inline">{savedHash ? 'Sequência ✓' : 'Sequência'}</span>
+                </button>
+                <button onClick={() => navigate(`/cifras/${artistSlug}/${songSlug}/timing`)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-1 sm:px-3 text-xs font-bold border border-gray-400 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white text-black hover:bg-white" title="Contribuir timing">
+                  ✏️ <span className="hidden sm:inline">Contribuir timing</span>
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -1333,7 +1400,7 @@ export const CifraViewer: React.FC = () => {
 
         {/* Carousel de Acordes Superior */}
         {currentChords.length > 0 && (
-          <div className="bevel-out bg-[var(--color-winxp-panel)] p-2 shrink-0 flex flex-col gap-1 transition-all">
+          <div className="bevel-out bg-[var(--color-winxp-panel)] p-1.5 sm:p-2 shrink-0 flex flex-col gap-1 transition-all">
             <div className="flex justify-between items-center">
               <span className="text-xs font-bold text-[#002fa7] flex items-center gap-1">
                 Acordes ({currentChords.length}) - {currentTuning.name}
@@ -1359,25 +1426,25 @@ export const CifraViewer: React.FC = () => {
                   <div className="fixed inset-0 z-30" onClick={() => setFilterPopupOpen(false)} />
                 )}
                 {filterPopupOpen && (
-                  <div className="absolute right-0 top-full mt-1 z-40 bg-[#ece9d8] bevel-out shadow-lg w-60 text-xs select-none">
-                    <div className="winxp-gradient-blue text-white px-2 py-0.5 flex items-center justify-between font-bold">
+                  <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[88vw] max-w-xs sm:absolute sm:left-auto sm:top-full sm:right-0 sm:translate-x-0 sm:translate-y-0 sm:mt-1 sm:w-60 z-40 bg-[#ece9d8] bevel-out shadow-lg text-xs select-none max-h-[80vh] overflow-y-auto">
+                    <div className="winxp-gradient-blue text-white px-2 py-1 sm:py-0.5 flex items-center justify-between font-bold">
                       <span>Filtrar Variações</span>
                       <button
                         onClick={() => setFilterPopupOpen(false)}
-                        className="bg-red-600 border border-white border-r-gray-600 border-b-gray-600 px-1.5 text-white font-bold leading-tight"
+                        className="bg-red-600 border border-white border-r-gray-600 border-b-gray-600 px-2 py-0.5 sm:px-1.5 sm:py-0 text-white font-bold leading-tight"
                       >
                         ×
                       </button>
                     </div>
                     <div className="p-2">
                       <p className="font-bold text-gray-600 uppercase tracking-wider text-[9px] mb-1">Ordenação (combinável)</p>
-                      <label className="flex items-center gap-2 py-0.5 px-1 cursor-pointer hover:bg-white">
-                        <input type="checkbox" checked={voicingFilter.proximity} className="accent-[#316ac5]"
+                      <label className="flex items-center gap-2 py-1.5 sm:py-0.5 px-1 cursor-pointer hover:bg-white">
+                        <input type="checkbox" checked={voicingFilter.proximity} className="accent-[#316ac5] w-4 h-4 sm:w-auto sm:h-auto"
                           onChange={e => { setVoicingFilter(f => ({ ...f, proximity: e.target.checked })); setVariationIndices({}); }} />
                         ★ Acordes próximos
                       </label>
-                      <label className="flex items-center gap-2 py-0.5 px-1 cursor-pointer hover:bg-white">
-                        <input type="checkbox" checked={voicingFilter.maxNotes} className="accent-[#316ac5]"
+                      <label className="flex items-center gap-2 py-1.5 sm:py-0.5 px-1 cursor-pointer hover:bg-white">
+                        <input type="checkbox" checked={voicingFilter.maxNotes} className="accent-[#316ac5] w-4 h-4 sm:w-auto sm:h-auto"
                           onChange={e => { setVoicingFilter(f => ({ ...f, maxNotes: e.target.checked })); setVariationIndices({}); }} />
                         ♪ Mais notas soando
                       </label>
@@ -1387,16 +1454,16 @@ export const CifraViewer: React.FC = () => {
                         ['with_mute', '≈ Com abafamento'],
                         ['no_mute',   '○ Sem abafamento'],
                       ] as const).map(([val, label]) => (
-                        <label key={val} className="flex items-center gap-2 py-0.5 px-1 cursor-pointer hover:bg-white">
-                          <input type="radio" name="muteFilter" className="accent-[#316ac5]"
+                        <label key={val} className="flex items-center gap-2 py-1.5 sm:py-0.5 px-1 cursor-pointer hover:bg-white">
+                          <input type="radio" name="muteFilter" className="accent-[#316ac5] w-4 h-4 sm:w-auto sm:h-auto"
                             checked={voicingFilter.muteFilter === val}
                             onChange={() => { setVoicingFilter(f => ({ ...f, muteFilter: val })); setVariationIndices({}); }} />
                           {label}
                         </label>
                       ))}
                       <div className="border-t border-gray-400 mt-2 pt-2">
-                        <label className="flex items-center gap-2 py-0.5 px-1 cursor-pointer hover:bg-white">
-                          <input type="checkbox" checked={voicingFilter.prioritizeEasy} className="accent-[#316ac5]"
+                        <label className="flex items-center gap-2 py-1.5 sm:py-0.5 px-1 cursor-pointer hover:bg-white">
+                          <input type="checkbox" checked={voicingFilter.prioritizeEasy} className="accent-[#316ac5] w-4 h-4 sm:w-auto sm:h-auto"
                             onChange={e => { setVoicingFilter(f => ({ ...f, prioritizeEasy: e.target.checked })); setVariationIndices({}); }} />
                           Priorizar acordes fáceis
                         </label>
@@ -1405,7 +1472,7 @@ export const CifraViewer: React.FC = () => {
                       <div className="border-t border-gray-400 mt-2 pt-2 flex justify-end">
                         <button
                           onClick={() => { setVoicingFilter(DEFAULT_FILTER); setVariationIndices({}); setLockedVariations({}); setExcludedFromFilter({}); }}
-                          className="bevel-out bg-[#ece9d8] border border-gray-400 px-2 py-0.5 hover:bg-white font-bold text-[10px]"
+                          className="bevel-out bg-[#ece9d8] border border-gray-400 px-2 py-1 sm:py-0.5 hover:bg-white font-bold text-[10px]"
                         >
                           Restaurar padrão
                         </button>
@@ -1416,7 +1483,7 @@ export const CifraViewer: React.FC = () => {
               </div>
             </div>
             
-            <div className="flex gap-2 overflow-x-auto retro-scrollbar py-2 items-center">
+            <div className="flex gap-1 sm:gap-2 overflow-x-auto retro-scrollbar py-2 items-center">
               {currentChords.map((chordName, idx) => {
                 const voicings = displayedVoicings[idx] ?? [];
                 const isChordLocked = chordName in lockedVariations;
@@ -1489,7 +1556,7 @@ export const CifraViewer: React.FC = () => {
                 };
 
                 return (
-                  <div key={idx} className="bg-white bevel-in p-1 flex flex-col items-center shrink-0 min-w-[70px]">
+                  <div key={idx} className="bg-white bevel-in p-0.5 sm:p-1 flex flex-col items-center shrink-0 min-w-[56px] sm:min-w-[70px]">
                     {bestVoicing ? (
                       <FretboardDiagram
                         voicing={bestVoicing}
@@ -1550,7 +1617,7 @@ export const CifraViewer: React.FC = () => {
 
         {/* Cifra Content - Notepad Style */}
         <div className="flex-1 min-h-0 flex gap-0.5 overflow-hidden">
-          <div ref={contentRef} onPointerDown={handleLyricsPointerDown} onClick={handleLyricsChordClick} onMouseOver={handleLyricsMouseOver} onMouseLeave={schedulePopupClose} className="flex-1 min-h-0 bevel-in bg-white p-4 retro-scrollbar font-mono text-sm leading-relaxed text-black overflow-x-hidden overflow-y-auto">
+          <div ref={contentRef} onPointerDown={handleLyricsPointerDown} onClick={handleLyricsChordClick} onMouseOver={handleLyricsMouseOver} onMouseLeave={schedulePopupClose} className="flex-1 min-w-0 min-h-0 bevel-in bg-white p-2 sm:p-4 retro-scrollbar font-mono text-sm leading-relaxed text-black overflow-x-hidden overflow-y-auto">
             {cifraSegments.map((seg, i) =>
               seg.type === 'tab' ? (
                 showTabs ? (
@@ -1566,7 +1633,7 @@ export const CifraViewer: React.FC = () => {
               ) : (
                 <div
                   key={i}
-                  className="cifra-viewer-content whitespace-pre-wrap"
+                  className="cifra-viewer-content"
                   dangerouslySetInnerHTML={{ __html: seg.content }}
                 />
               )

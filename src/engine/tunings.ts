@@ -342,6 +342,12 @@ export const CHORD_FORMULAS: ChordFormula[] = [
     requiredIntervals: [0, 3, 9]
   },
   {
+    name: "Menor com Sexta Menor",
+    suffix: "m6-",
+    intervals: [0, 3, 7, 8],
+    requiredIntervals: [0, 3, 8]
+  },
+  {
     name: "Nona",
     suffix: "7(9)",
     intervals: [0, 4, 7, 10, 14],
@@ -442,6 +448,12 @@ export const CHORD_FORMULAS: ChordFormula[] = [
     suffix: "m6(9)",
     intervals: [0, 3, 7, 9, 14],
     requiredIntervals: [0, 3, 9, 14]
+  },
+  {
+    name: "Sexta com Nona Bemol",
+    suffix: "6(9-)",
+    intervals: [0, 4, 7, 9, 13],
+    requiredIntervals: [0, 4, 9, 13]
   },
   {
     name: "Menor com Sétima e Décima Primeira",
