@@ -530,6 +530,11 @@ export function calculateVoicings(
   const voicings: Voicing[] = [];
   const numStrings = tuning.strings.length;
   const useFlats = shouldUseFlats(chord.rootName);
+  // Conjunto de intervalos obrigatórios em vigor. Começa no estrito da fórmula, mas pode
+  // ser relaxado numa 2ª passada se a busca estrita não achar nenhum voicing (ver abaixo)
+  // — necessário em instrumentos com poucas cordas (viola 5, cavaquinho 4), onde acordes
+  // densos como 7(9/11) exigem mais notas distintas do que cabem nas cordas.
+  let activeRequiredIntervals = chord.formula.requiredIntervals;
   const preferOpenBass = !!opts.violaCebolao;
 
   // Pre-calculate which frets on which strings are part of the chord
@@ -608,8 +613,8 @@ export function calculateVoicings(
       }
     });
 
-    let requiredPcs = chord.formula.requiredIntervals
-      ? chord.formula.requiredIntervals.map(interval => (chord.root + interval) % 12)
+    let requiredPcs = activeRequiredIntervals
+      ? activeRequiredIntervals.map(interval => (chord.root + interval) % 12)
       : chord.notes;
 
     if (chord.customNotes) {
@@ -798,6 +803,20 @@ export function calculateVoicings(
   // Kick off search
   // search(stringIdx, activeFrettedCount, minFret, maxFretVal)
   search(0, 0, -1, -1);
+
+  // Fallback p/ instrumentos com poucas cordas: se o conjunto obrigatório ESTRITO não
+  // produziu nenhum voicing (ex.: 7(9/11) na viola cebolão-ré, que exige 5 notas distintas
+  // em 5 cordas com o baixo preso), relaxa dropando as extensões naturais superiores
+  // (9=14, 11=17, 13=21) — as mais omissíveis — e refaz a busca. Mantém tônica, terça,
+  // sétima e alterações características. Só dispara quando o resultado seria vazio, então
+  // não muda nada para acordes/instrumentos que já geravam voicings (ex.: violão).
+  if (voicings.length === 0 && chord.formula.requiredIntervals) {
+    const relaxado = chord.formula.requiredIntervals.filter(iv => iv !== 14 && iv !== 17 && iv !== 21);
+    if (relaxado.length >= 2 && relaxado.length < chord.formula.requiredIntervals.length) {
+      activeRequiredIntervals = relaxado;
+      search(0, 0, -1, -1);
+    }
+  }
 
   // Sort voicings (priorities, in order):
   // 1. Voicings without interior mutes first
