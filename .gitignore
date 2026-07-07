@@ -37,3 +37,6 @@ __pycache__/
 # Ferramentas auxiliares (fora do app principal)
 scrapper/
 bpm_seeder/bin/
+plan/
+scratch/
+zap-scan-export/
