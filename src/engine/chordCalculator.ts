@@ -1,4 +1,4 @@
-import type { Tuning, Chord, Voicing, PitchClass, ReverseChordMatch } from './types';
+import type { Tuning, Chord, Voicing, PitchClass, ReverseChordMatch, ChordFormula } from './types';
 import { NOTE_NAMES_SHARP, NOTE_NAMES_FLAT, CHORD_FORMULAS } from './tunings';
 
 // Converts a note name (e.g. "C", "F#", "Bb") to a PitchClass (0-11)
@@ -43,10 +43,14 @@ export function parseChordString(chordStr: string): { root: string; suffix: stri
 
   for (let i = 1; i < parts.length; i++) {
     const part = parts[i].trim();
-    if (/^\d/.test(part)) {
-      mainChord += '/' + part;
-    } else {
+    // Um trecho pós-barra é BAIXO invertido apenas quando é uma nota (A–G com # ou b
+    // opcional). Caso contrário — dígito puro (13), ou acidente antes do dígito (-9, +5,
+    // 9b) — é uma tensão/alteração empilhada e pertence ao sufixo do acorde. Assim
+    // distinguimos "Am7/E" (baixo E) de "A7/9" (tensão) e de "G7/4/9/13" (pilha de tensões).
+    if (/^[A-Ga-g][#b]?$/.test(part)) {
       bass = part;
+    } else {
+      mainChord += '/' + part;
     }
   }
 
@@ -108,8 +112,187 @@ const SUFFIX_ALIASES: Record<string, string> = {
   'm7M': 'm(Maj7)',  // notação BR: menor com sétima maior
   'mMaj7': 'm(Maj7)',
   'm(7M)': 'm(Maj7)',
+  '6/9': '6(9)',     // notação de barra p/ sexta com nona
+  'm6/9': 'm6(9)',
+  '69': '6(9)',      // 6/9 grudado (ex.: Db69)
+  'm69': 'm6(9)',
 };
-function normalizeSuffix(s: string): string { return SUFFIX_ALIASES[s] ?? s; }
+
+// Normaliza grafias equivalentes de um sufixo para a forma canônica que a tabela
+// (CHORD_FORMULAS) já entende — a 1ª passada do "strangler". O que não virar entrada
+// da tabela aqui sai limpo o suficiente para o parser genérico (parseSuffixToFormula)
+// montar os intervalos. Regras cobertas:
+//   • glifos: º → °
+//   • caixa:  maj → Maj  (resolve 'maj9' vs 'Maj9')
+//   • 7+ (marca de sétima MAIOR na notação BR) → Maj7  — mas NÃO 7+5/7+9, onde o + é
+//     acidente de outro grau (o negative-lookahead evita reescrever nesses casos).
+function normalizeSuffix(input: string): string {
+  let s = input.trim();
+  s = s.replace(/º/g, '°');           // ordinal → grau (dim)
+  s = s.replace(/maj/g, 'Maj');       // caixa: maj7/maj9 → Maj7/Maj9
+  s = s.replace(/7\+(?![\d#b])/g, 'Maj7'); // 7+ = sétima maior (não 7+5, 7+9)
+  return SUFFIX_ALIASES[s] ?? s;
+}
+
+// Mapeia um grau (número) para o intervalo composto em semitons a partir da tônica,
+// na convenção de tensões de jazz/MPB. Graus baixos (3,4,5,6) têm tratamento próprio
+// no parser porque MODIFICAM a tríade em vez de adicionar oitava acima.
+function grauParaIntervalo(grau: number): number | null {
+  switch (grau) {
+    case 2: return 14;  // 2ª tratada como 9ª (nona)
+    case 3: return 4;   // terça maior
+    case 4: return 5;   // quarta justa
+    case 5: return 7;   // quinta justa
+    case 6: return 9;   // sexta maior
+    case 7: return 10;  // sétima (dominante)
+    case 9: return 14;  // nona
+    case 11: return 17; // décima primeira
+    case 13: return 21; // décima terceira
+    default: return null;
+  }
+}
+
+/**
+ * Parser genérico de FALLBACK (strangler): só é chamado por resolveFormula quando o
+ * sufixo — já normalizado — NÃO existe em CHORD_FORMULAS. Monta os intervalos por partes:
+ * qualidade base (m, 7, Maj7/7M, dim/°, aug, sus...) + pilha de tensões/alterações que
+ * podem vir por parênteses (7(9)), parênteses encadeados (7(9)(11)), vírgula (7(9,#11))
+ * ou barra (7/4/9/13). Retorna o MESMO formato { intervals, requiredIntervals } da tabela.
+ *
+ * requiredIntervals (política, alinhada ao Passo 5): obrigatórios = tônica + terça +
+ * sétima + quinta ALTERADA (b5/#5) + toda tensão com acidente + a tensão estendida mais
+ * aguda (o "nome" do acorde). A quinta JUSTA nunca é obrigatória (é a nota mais
+ * descartável); tensões naturais intermediárias também não — assim sempre há voicing tocável.
+ */
+function parseSuffixToFormula(suffixRaw: string): ChordFormula | null {
+  let s = suffixRaw.trim();
+  if (s === '') return null; // '' = maior puro, resolvido pela tabela
+
+  let third: number | null = 4; // 4 maior, 3 menor, null = omitida (sus / grau isolado)
+  let fifth: number | null = 7; // 7 justa, 6 (b5), 8 (#5), null = omitida
+  let seventh: number | null = null; // 10 dominante, 11 maior, 9 diminuta
+  const extra = new Set<number>();
+  const required = new Set<number>([0]);
+  let ok = false;
+  let alteredBase = false; // dim/aug: quinta alterada — não implicar 7ª dominante
+
+  // 1) terça menor: 'm' minúsculo inicial (não confundir com 'Maj'/'M' maiúsculo)
+  if (s[0] === 'm' && !/^maj/i.test(s)) { third = 3; s = s.slice(1); ok = true; }
+
+  const eat = (re: RegExp): boolean => {
+    const m = re.exec(s);
+    if (m && m.index === 0) { s = s.slice(m[0].length); return true; }
+    return false;
+  };
+
+  // 2) qualidades base que alteram quinta / terça. O lookahead (?!M) evita que '°7' seja
+  // consumido como diminuta-com-7ª em '°7M' (dim + sétima MAIOR) — nesse caso cai no ramo
+  // '°' (tríade dim) e o '7M' seguinte vira sétima maior.
+  if (eat(/^(dim7|°7)(?!M)/)) { third = 3; fifth = 6; seventh = 9; required.add(3).add(6).add(9); alteredBase = true; ok = true; }
+  else if (eat(/^(dim|°)/)) { third = 3; fifth = 6; required.add(3).add(6); alteredBase = true; ok = true; }
+  else if (eat(/^aug/)) { fifth = 8; required.add(8); alteredBase = true; ok = true; }
+  else if (eat(/^sus4/)) { third = null; extra.add(5); required.add(5); ok = true; }
+  else if (eat(/^sus2/)) { third = null; extra.add(2); required.add(2); ok = true; }
+  else if (eat(/^sus/)) { third = null; extra.add(5); required.add(5); ok = true; }
+
+  // 3) marca de sétima
+  if (eat(/^(Maj7|M7|7M)/)) { seventh = 11; ok = true; }
+  else if (eat(/^7/)) { if (seventh === null) seventh = 10; ok = true; }
+
+  // 4) tensões/alterações restantes: normaliza delimitadores (parênteses, vírgula, barra)
+  const rest = s.replace(/[()]/g, ' ').replace(/[,/]/g, ' ').trim();
+  const tokens = rest.length ? rest.split(/\s+/) : [];
+
+  let sawExtended = false;  // presença de 9/11/13 (dispara sétima dominante implícita)
+  let sawSixth = false;     // presença de 6 (bloqueia sétima implícita: é 6/9, não 9)
+  let suppressImplied7 = false; // 'add' explícito não implica sétima
+  let maxExt = -1;          // tensão estendida mais aguda (vira obrigatória)
+
+  for (const raw of tokens) {
+    let tok = raw;
+    if (tok === '') continue;
+    // 'sus' pode vir depois da 7ª (ex.: 7sus, Ab7sus) — trata como sus4.
+    if (/^sus4?$/i.test(tok)) { third = null; extra.add(5); required.add(5); ok = true; continue; }
+    if (/^sus2$/i.test(tok)) { third = null; extra.add(2); required.add(2); ok = true; continue; }
+    // marca de sétima maior como TOKEN (dentro de parênteses ou após barra):
+    // ex.: m(7M/9), 6(5-/7M). O '7+' já virou 'Maj7' no normalizeSuffix.
+    if (/^(Maj7|M7|7M)$/.test(tok)) { seventh = 11; ok = true; continue; }
+    const wasAdd = /^add/i.test(tok);
+    if (wasAdd) { tok = tok.replace(/^add/i, ''); suppressImplied7 = true; }
+    const mm = /^([#b+-]?)(\d+)([#b+-]?)$/.exec(tok);
+    // Token não numérico/não reconhecido → NÃO é acorde. Rejeitar em vez de ignorar,
+    // senão "Amor" (A + 'mor') viraria Am, poluindo isChordLine com falsos positivos.
+    if (!mm) return null;
+    const accCh = mm[1] || mm[3];
+    const acc = (accCh === '#' || accCh === '+') ? 1 : (accCh === 'b' || accCh === '-') ? -1 : 0;
+    const grau = parseInt(mm[2], 10);
+
+    switch (grau) {
+      case 3: // terça explícita
+        third = 4 + acc; required.add(4 + acc); ok = true; break;
+      case 5: // altera a QUINTA (não adiciona nota) — b5/#5 substituem a justa
+        if (acc !== 0) { fifth = 7 + acc; required.add(7 + acc); }
+        ok = true; break;
+      case 4:
+        if (wasAdd) { extra.add(5); required.add(5); }        // add4: mantém a terça
+        else if (acc > 0) { extra.add(6); required.add(6); }  // #4/#11: tensão, mantém terça
+        else if (acc < 0) { extra.add(4); }                   // b4 ~ terça: ignora
+        else { third = null; extra.add(5); required.add(5); } // 4 puro = sus4 (sem terça)
+        ok = true; break;
+      case 2: extra.add(14); ok = true; break;                // 2 como nona adicionada
+      case 6: extra.add(9); required.add(9); sawSixth = true; ok = true; break;
+      case 7: if (seventh === null) seventh = 10; ok = true; break;
+      case 9: case 11: case 13: {
+        const iv = grauParaIntervalo(grau)! + acc;
+        extra.add(iv);
+        if (acc !== 0) required.add(iv); // tensão alterada é característica → obrigatória
+        sawExtended = true;
+        maxExt = Math.max(maxExt, iv);
+        ok = true; break;
+      }
+      default: break;
+    }
+  }
+
+  if (!ok) return null;
+
+  // sétima dominante implícita em acordes estendidos (9/11/13) sem sétima explícita,
+  // exceto quando é acorde de sexta (6/9), 'add', ou base alterada (dim/aug) — que não
+  // trazem a b7.
+  if (seventh === null && sawExtended && !sawSixth && !suppressImplied7 && !alteredBase) seventh = 10;
+
+  // monta obrigatórios: terça, quinta alterada, sétima, e a tensão estendida mais aguda
+  if (third !== null) required.add(third);
+  if (fifth === 6 || fifth === 8) required.add(fifth);
+  if (seventh !== null) required.add(seventh);
+  if (maxExt > 0) required.add(maxExt);
+
+  const noteSet = new Set<number>([0]);
+  if (third !== null) noteSet.add(third);
+  if (fifth !== null) noteSet.add(fifth);
+  if (seventh !== null) noteSet.add(seventh);
+  extra.forEach(iv => noteSet.add(iv));
+
+  const intervals = Array.from(noteSet).sort((a, b) => a - b);
+  const requiredIntervals = Array.from(required).sort((a, b) => a - b);
+
+  return {
+    name: `Personalizado (${suffixRaw})`,
+    suffix: suffixRaw,
+    intervals,
+    requiredIntervals,
+  };
+}
+
+// Resolve a fórmula de um sufixo: tabela PRIMEIRO (fonte de verdade, intocada), parser
+// genérico só como fallback. Usado por buildChord e isValidChordToken para compartilharem
+// exatamente o mesmo vocabulário (tabela + parser).
+function resolveFormula(suffix: string): ChordFormula | null {
+  const norm = normalizeSuffix(suffix);
+  const fromTable = CHORD_FORMULAS.find(f => f.suffix === norm);
+  if (fromTable) return fromTable;
+  return parseSuffixToFormula(norm);
+}
 
 // Valid root note pattern: A-G (upper or lower) optionally followed by b or #
 const ROOT_RE = /^[A-Ga-g][b#]?$/;
@@ -128,14 +311,16 @@ export function isValidChordToken(token: string): boolean {
   if (!root || !ROOT_RE.test(root)) return false;
   if (bass && !ROOT_RE.test(bass)) return false;
   if (suffix === '') return true;  // plain major chord
-  const normalized = normalizeSuffix(suffix);
-  return CHORD_FORMULAS.some(f => f.suffix === normalized);
+  // Tabela primeiro, parser de fallback depois — mesmo vocabulário de buildChord, para
+  // isChordLine (cifraUtils) aceitar tudo que o motor sabe montar.
+  return resolveFormula(suffix) !== null;
 }
 
 // Build a Chord object from root name, formula suffix, and optional bass name
 export function buildChord(rootName: string, suffix: string, bassName?: string): Chord {
   const root = noteNameToPitchClass(rootName);
-  const formula = CHORD_FORMULAS.find(f => f.suffix === normalizeSuffix(suffix));
+  // Tabela primeiro (comportamento intocado); parser genérico só quando a tabela falha.
+  const formula = resolveFormula(suffix);
   if (!formula) {
     throw new Error(`Fórmula não encontrada para o sufixo: ${suffix}`);
   }
@@ -738,15 +923,45 @@ export function detectChord(frets: number[], tuning: Tuning): ReverseChordMatch[
     });
   }
 
-  // Sort: perfect matches first, then non-inversions first, then shorter suffix names (simpler chords)
+  // Ordenação — mostra o "baixo em" (inversão) quando o grave real não é a fundamental,
+  // em vez de colapsar num acorde exótico de raiz na nota do baixo. Critérios, em ordem:
+  //   1. Match exato do conjunto de notas primeiro (isPerfectMatch).
+  //   2. Qualidade comum vence qualidade EXÓTICA: uma tríade maior/menor invertida se
+  //      disfarça de acorde raro na nota do grave (D–F#–A com F# no baixo casa com
+  //      F#m(#5)). Preferimos a leitura comum expressa como slash chord → "D/F#", não
+  //      "F#m(#5)". (Só de desempate: se o acorde exótico for o ÚNICO match, ele aparece.)
+  //   3. Baixo coerente: dentro da mesma classe de qualidade, posição fundamental (raiz no
+  //      grave) antes de inversão — assim "C6" (Dó no grave) não vira "Am7/C". O slash só
+  //      assume o topo quando o grave NÃO é a fundamental, pois aí a posição fundamental
+  //      do mesmo acorde nem chega a ser gerada (o laço só cria candidatos cuja fórmula
+  //      casa com as notas tocadas — nunca inventa raiz na nota do baixo).
+  //   4. Determinismo: nome mais curto (mais simples), depois alfabético.
+  // Escopo por instrumento (Cuidado 2): vale para TODOS os instrumentos. detectChord é
+  // reconhecimento reverso (nomeia o que está sendo tocado) e um baixo diferente da
+  // fundamental É uma inversão em qualquer instrumento. O preferOpenBass da viola atua só
+  // na GERAÇÃO de voicings (calculateVoicings), não aqui. Para suprimir por instrumento no
+  // futuro, bastaria um parâmetro opcional — sem quebrar a assinatura atual.
   return matches.sort((a, b) => {
     if (a.isPerfectMatch !== b.isPerfectMatch) {
       return a.isPerfectMatch ? -1 : 1;
     }
-    if (a.isInversion !== b.isInversion) {
-      return a.isInversion ? 1 : -1;
+    const exoticaA = QUALIDADES_EXOTICAS.has(a.suffix) ? 1 : 0;
+    const exoticaB = QUALIDADES_EXOTICAS.has(b.suffix) ? 1 : 0;
+    if (exoticaA !== exoticaB) {
+      return exoticaA - exoticaB; // qualidade comum (0) antes da exótica (1)
     }
-    return a.chordName.length - b.chordName.length;
+    if (a.isInversion !== b.isInversion) {
+      return a.isInversion ? 1 : -1; // posição fundamental antes da inversão
+    }
+    if (a.chordName.length !== b.chordName.length) {
+      return a.chordName.length - b.chordName.length;
+    }
+    return a.chordName.localeCompare(b.chordName);
   });
 }
+
+// Qualidades raras nas quais uma tríade maior/menor invertida acaba casando por engano
+// (a 3ª no grave de um acorde maior forma um "m(#5)" de raiz nessa 3ª). Entre matches
+// igualmente exatos, essas leituras cedem lugar ao slash chord da qualidade comum.
+const QUALIDADES_EXOTICAS = new Set<string>(['m(#5)', 'm6-']);
 

@@ -480,6 +480,15 @@ export const CHORD_FORMULAS: ChordFormula[] = [
     requiredIntervals: [0, 7]
   },
   {
+    // Terça isolada (díade): tônica + terça maior, SEM a quinta. Dual do power chord
+    // (quinta sem terça). Ex.: D3 = D+F#. Fica de fora do voicing a quinta justa, e o
+    // match reverso (detectChord) não confunde um Ré completo (com quinta) com D3.
+    name: "Terça (díade)",
+    suffix: "3",
+    intervals: [0, 4],
+    requiredIntervals: [0, 4]
+  },
+  {
     name: "Sétima Maior",
     suffix: "7M",
     intervals: [0, 4, 7, 11],
