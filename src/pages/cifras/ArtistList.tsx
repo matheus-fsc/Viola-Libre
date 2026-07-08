@@ -216,8 +216,11 @@ export const ArtistList: React.FC = () => {
     return () => clearTimeout(t);
   }, [search, searchMode]);
 
-  // Carrega primeira página quando filtros mudam
-  useEffect(() => {
+  // Carrega primeira página quando filtros mudam.
+  // useLayoutEffect (e não useEffect) garante que setIsLoadingPage(true) commita
+  // ANTES do paint — senão o React pinta um frame com a lista vazia e sem loading,
+  // que aparece como "Nenhum artista encontrado" antes da resposta chegar.
+  useLayoutEffect(() => {
     if (searchMode !== 'artistas') return;
     pageOffsetRef.current = 0;
     totalArtistsRef.current = 0;
@@ -497,9 +500,9 @@ export const ArtistList: React.FC = () => {
                       </div>
                     </div>
                   ))}
-                  {pagedArtists.length === 0 && !isLoadingPage && (
+                  {pagedArtists.length === 0 && !isLoadingPage && search === debouncedSearch && (
                     <div className="col-span-full text-center text-sm text-gray-500 py-8">
-                      Nenhum artista encontrado com "{search}"
+                      Nenhum artista encontrado com "{debouncedSearch}"
                     </div>
                   )}
                 </div>

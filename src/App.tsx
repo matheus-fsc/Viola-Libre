@@ -26,6 +26,7 @@ import {
   rankChord,
 } from './services/authApi';
 import { getPreferredInstrumentId, setPreferredInstrumentId } from './utils/instrumentPreference';
+import { preloadSoundfont } from './engine/AudioEngine';
 import { CifrasApp } from './pages/cifras/CifrasApp';
 import { MinhasCifras } from './pages/minhasCifras/MinhasCifras';
 
@@ -124,6 +125,24 @@ function App() {
     });
   }, [activeVoicings, minFretFilter, interiorMuteFilter]);
 
+
+  // Aquece o soundfont do instrumento preferido em idle (após os gets iniciais),
+  // pra o primeiro clique num acorde na página de cifra não travar baixando ~1-2MB.
+  // requestIdleCallback garante que não compete com o load nem com os gets do Orange.
+  useEffect(() => {
+    const prefId = getPreferredInstrumentId();
+    const name = prefId === 'viola' ? 'acoustic_guitar_steel'
+               : prefId === 'piano' ? 'acoustic_grand_piano'
+               : 'acoustic_guitar_nylon';
+    const hasRIC = typeof window.requestIdleCallback === 'function';
+    const handle = hasRIC
+      ? window.requestIdleCallback(() => preloadSoundfont(name), { timeout: 5000 })
+      : window.setTimeout(() => preloadSoundfont(name), 3000);
+    return () => {
+      if (hasRIC) window.cancelIdleCallback(handle as number);
+      else window.clearTimeout(handle as number);
+    };
+  }, []);
 
   // Reset visual limit when search parameters change
   useEffect(() => {

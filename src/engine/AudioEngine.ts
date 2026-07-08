@@ -179,6 +179,20 @@ export class SoundFontVoice implements InstrumentVoice {
   }
 }
 
+/**
+ * Aquece o cache HTTP do soundfont (gleitz.github.io) para que o PRIMEIRO clique
+ * num acorde não pague a latência de download (~1-2 MB por instrumento). É só um
+ * fetch que popula o cache do navegador — não cria AudioContext nem decodifica
+ * áudio, então é leve. Best-effort: ignora falhas (offline, CSP, etc.).
+ * Formato mp3 fixo, batendo com a URL que o soundfont-player pede depois.
+ */
+export function preloadSoundfont(instrumentName: InstrumentName): void {
+  const url = `https://gleitz.github.io/midi-js-soundfonts/MusyngKite/${instrumentName}-mp3.js`;
+  fetch(url, { mode: 'cors' })
+    .then(res => res.arrayBuffer())
+    .catch(() => { /* preload é opcional — o load real acontece no clique */ });
+}
+
 // --- Registry of available voices ---
 
 const VOICE_REGISTRY: InstrumentVoice[] = [
