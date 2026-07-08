@@ -66,14 +66,19 @@ function buildReflowedPair(chordLine: string, lyricLine: string): string {
     else chordsByWord.set(targetIdx, [...(chordsByWord.get(targetIdx) ?? []), c.text]);
   }
 
-  const units = words.map((w, idx) => {
-    const here = chordsByWord.get(idx);
-    const chordHtml = here && here.length > 0 ? here.map(escapeHtml).join(' ') : ' ';
-    return `<span class="cifra-word"><b class="cifra-word-chord">${chordHtml}</b><span class="cifra-word-text">${escapeHtml(w.text)}</span></span>`;
-  });
+  // Cada acorde vira seu proprio <b> dentro do conteiner .cifra-word-chord — mesmo quando
+  // varios acordes se empilham sobre a mesma palavra. Assim cada acorde continua sendo um
+  // alvo de clique/hover individual (o viewer le b.textContent como nome do acorde); junta-los
+  // num unico <b> faria o nome virar "F7/A Bb7(9/11)", invalido para diagrama e som.
+  const chordCell = (list: string[] | undefined) =>
+    list && list.length > 0 ? list.map(c => `<b>${escapeHtml(c)}</b>`).join(' ') : ' ';
+
+  const units = words.map((w, idx) =>
+    `<span class="cifra-word"><span class="cifra-word-chord">${chordCell(chordsByWord.get(idx))}</span><span class="cifra-word-text">${escapeHtml(w.text)}</span></span>`
+  );
 
   if (trailing.length > 0) {
-    units.push(`<span class="cifra-word"><b class="cifra-word-chord">${trailing.map(escapeHtml).join(' ')}</b><span class="cifra-word-text"> </span></span>`);
+    units.push(`<span class="cifra-word"><span class="cifra-word-chord">${chordCell(trailing)}</span><span class="cifra-word-text"> </span></span>`);
   }
 
   return `<div class="cifra-line cifra-line-paired">${units.join(' ')}</div>`;
