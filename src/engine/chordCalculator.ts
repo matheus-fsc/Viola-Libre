@@ -473,31 +473,45 @@ export function evaluatePlayability(frets: number[]): PlayabilityResult {
 }
 
 // Difficulty derived purely from the physical shape (independent of the heuristic score).
-// The factors are the ones a player actually feels: how far the fingers stretch across
-// frets, how many fingers are needed, whether there is a pestana, and interior mutes.
-function difficultyFromPlayability(p: PlayabilityResult): { label: 'Fácil' | 'Média' | 'Difícil'; score: number } {
-  if (!p.isValid) return { label: 'Difícil', score: 99 };
+// Two INDEPENDENT metrics are computed here, deliberately kept apart:
+//   • shapeScore  — difficulty of the LEFT HAND SHAPE: how far the fingers stretch, how
+//     many fingers, pestana, and how far up the neck. This is what ranks voicings by
+//     "hand difficulty".
+//   • techniqueScore — difficulty of TECHNIQUE (deliberate muting / palm mute; in the
+//     future also palhetada and ligados). A muted string is not "one more finger", so it
+//     must NOT inflate the shape ranking (see item 1). It lives on its own axis.
+// `score`/`label` reflect the SHAPE only, so interior mutes never make a shape rank harder
+// than the same fretted shape without the mute.
+function difficultyFromPlayability(
+  p: PlayabilityResult
+): { label: 'Fácil' | 'Média' | 'Difícil'; score: number; shapeScore: number; techniqueScore: number } {
+  if (!p.isValid) return { label: 'Difícil', score: 99, shapeScore: 99, techniqueScore: 0 };
 
-  let d = 0;
+  let shape = 0;
   // Stretch: more frets between the closest and farthest note = harder.
   // 2-fret span adds 1, 3-fret adds 2, etc. (a tight 0-1 span costs nothing).
-  d += Math.max(0, p.stretch - 1);
+  shape += Math.max(0, p.stretch - 1);
   // Using a 4th finger is noticeably harder than 3 or fewer.
-  d += Math.max(0, p.fingersUsed - 3) * 1.5;
+  shape += Math.max(0, p.fingersUsed - 3) * 1.5;
   // A pestana (barre) is harder for most players.
-  if (p.barre) d += 2;
-  // Muting a string between two ringing strings is awkward.
-  if (p.hasInteriorMute) d += 1.5;
+  if (p.barre) shape += 2;
   // Playing away from the open position (up the neck) is harder to reach and hold.
-  if (p.highestFret >= 5) d += 1; // out of the open position (5th fret and beyond)
-  if (p.highestFret >= 9) d += 1; // high up the neck
+  if (p.highestFret >= 5) shape += 1; // out of the open position (5th fret and beyond)
+  if (p.highestFret >= 9) shape += 1; // high up the neck
 
-  const label = d <= 1.5 ? 'Fácil' : d <= 3.5 ? 'Média' : 'Difícil';
-  return { label, score: d };
+  // Technique axis (kept OFF the shape score). Muting a string between two ringing strings
+  // is a right-hand/damping technique, not a harder left-hand shape.
+  let technique = 0;
+  if (p.hasInteriorMute) technique += 1.5;
+
+  const label = shape <= 1.5 ? 'Fácil' : shape <= 3.5 ? 'Média' : 'Difícil';
+  return { label, score: shape, shapeScore: shape, techniqueScore: technique };
 }
 
-// Public helper: classify how hard a fret shape is to play.
-export function getVoicingDifficulty(frets: number[]): { label: 'Fácil' | 'Média' | 'Difícil'; score: number } {
+// Public helper: classify how hard a fret shape is to play (shape difficulty only).
+export function getVoicingDifficulty(
+  frets: number[]
+): { label: 'Fácil' | 'Média' | 'Difícil'; score: number; shapeScore: number; techniqueScore: number } {
   return difficultyFromPlayability(evaluatePlayability(frets));
 }
 
@@ -536,6 +550,19 @@ export function calculateVoicings(
   // densos como 7(9/11) exigem mais notas distintas do que cabem nas cordas.
   let activeRequiredIntervals = chord.formula.requiredIntervals;
   const preferOpenBass = !!opts.violaCebolao;
+
+  // Item 4 — pitch classes that are ALLOWED in the bass (lowest sounding string).
+  // A tension (6ª, 7ª, 9ª, 11ª, 13ª) in the bass turns the chord into an UNINTENDED
+  // inversion (e.g. C7 with Bb in the bass sounds like a Bb chord), which is a correctness
+  // bug, not a preference. The only notes that may legitimately sit in the bass are the
+  // triad tones — root, 3rd and 5th (interval < 9 semitones from the root, which also
+  // covers sus 2/4). Everything from the 6th up (interval >= 9) is a tension and is
+  // rejected below unless the user explicitly asked for that bass via a slash chord.
+  // This applies to EVERY instrument: on the viola cebolão the idiomatic open bass is the
+  // 5th (still allowed here), but a 7th in the bass is wrong there too.
+  const allowedBassPcs = new Set<PitchClass>(
+    chord.formula.intervals.filter(iv => iv < 9).map(iv => (chord.root + iv) % 12)
+  );
 
   // Pre-calculate which frets on which strings are part of the chord
   // stringNotes[stringIndex][fret] = { pitchClass, noteName, midi }
@@ -665,19 +692,42 @@ export function calculateVoicings(
           return; // Discard this voicing because it doesn't have the requested bass note as the lowest note
         }
         score += 35; // Got the exact requested bass note!
-      } else if (!preferOpenBass) {
-        // Standard instruments: prefer the root in the bass (fundamental position).
-        if (bassPc === chord.root) {
-          score += 45; // Bass is the root (tônica / 1º grau)! Strongly preferred.
-          bassIsRoot = true;
-        } else {
-          score -= 30; // Inversion (bass is 3rd, 5th, etc.). Valid but less standard.
+        bassIsRoot = bassPc === chord.root; // slash on the root itself is still fundamental position
+      } else {
+        // Item 4 (hard filter): with no explicit slash, the lowest sounding string must be
+        // a triad tone. A tension in the bass is an unintended inversion → discard. This
+        // runs for standard instruments AND the viola (a 7th in the bass is wrong on both;
+        // the viola's idiomatic open-5th bass is a triad tone, so it survives).
+        if (!allowedBassPcs.has(bassPc)) {
+          return;
         }
+        bassIsRoot = bassPc === chord.root;
+        if (bassIsRoot) {
+          // Item 2: root in the bass = fundamental position, strongly preferred. Softer on
+          // the viola, where the open (5th) bass is idiomatic and shouldn't be steamrolled.
+          score += preferOpenBass ? 20 : 45;
+        } else if (!preferOpenBass) {
+          score -= 30; // Inversion (bass is 3rd or 5th). Valid but less standard.
+        }
+        // Viola (preferOpenBass): non-root triad tone in the bass keeps score neutral — the
+        // open bass is idiomatic — but bassIsRoot above still lets fundamental voicings win
+        // the tiebreak when one of equivalent difficulty exists.
       }
-      // Viola (preferOpenBass): no root/inversion adjustment — the open bass is idiomatic.
     } else {
       if (chord.bass !== undefined) {
         return; // No strings played, but bass was requested
+      }
+    }
+
+    // Item 2 — reward the fundamental appearing on one of the TWO lowest strings, even when
+    // the very lowest is an (idiomatic) 5th. Small weight: a desempate, not a dominating
+    // term. Skipped for explicit slash chords, where the requested bass rules.
+    if (chord.bass === undefined) {
+      for (let i = 0; i < Math.min(2, numStrings); i++) {
+        if (frets[i] >= 0 && stringFretNotes[i][frets[i]].pitchClass === chord.root) {
+          score += 8;
+          break;
+        }
       }
     }
 
@@ -983,4 +1033,167 @@ export function detectChord(frets: number[], tuning: Tuning): ReverseChordMatch[
 // (a 3ª no grave de um acorde maior forma um "m(#5)" de raiz nessa 3ª). Entre matches
 // igualmente exatos, essas leituras cedem lugar ao slash chord da qualidade comum.
 const QUALIDADES_EXOTICAS = new Set<string>(['m(#5)', 'm6-']);
+
+// Item 5 — reducible pool. When an extended chord has more theoretical notes than the
+// instrument has positions (strings), these are the notes allowed to fall: the PERFECT 5th
+// and the NATURAL upper extensions (9=14, 11=17, 13=21). Everything else stays protected —
+// root, 3rd (or sus tone), the 6th, the diminished 7th, ALTERED 5ths (b5/#5) and ALTERED
+// tensions (b9/#9/#11/b13) — because those define the chord's identity. This mirrors the
+// existing requiredIntervals philosophy (chordCalculator.ts:162), which already treats the
+// perfect 5th as "a mais descartável" and natural intermediate tensions as omissible.
+const REDUCIBLE_INTERVALS = new Set<number>([7, 14, 17, 21]); // perfect 5th, 9th, 11th, 13th
+// Base drop priority, used ONLY to break a proximity tie (most-disposable FIRST): the
+// perfect 5th is least missed, then the lower natural extensions, protecting the highest
+// one (the note that names the chord). Same order the relax fallback (line ~857) implies.
+const BASE_DROP_ORDER = [7, 14, 17, 21];
+
+/**
+ * Item 5 — next-chord-guided note reduction. A step BEFORE voicing search: it decides which
+ * PITCH CLASSES of an extended chord are eligible to be voiced, when the chord has more
+ * theoretical notes than the instrument has positions (`capacity` = number of strings).
+ *
+ * Protected (never dropped here): root, 3rd/sus, the definer 7th and every altered tone —
+ * i.e. all intervals NOT in REDUCIBLE_INTERVALS. Disposable pool: perfect 5th + natural
+ * 9/11/13. When notes must be cut, the pool is ordered worst-to-drop by:
+ *   1. proximity — a note whose pitch class is ABSENT from the next chord drops before one
+ *      that is PRESENT (keep the shared colour tones, smoothing the harmonic transition);
+ *   2. tie-break — the existing base priority (5th, then 9, 11, protecting the highest).
+ * With no next chord (last of the progression) proximity is skipped: pure base priority.
+ *
+ * Returns a NEW Chord with `notes`/`formula.intervals`/`formula.requiredIntervals` trimmed;
+ * returns the chord untouched when it already fits. This is complementary to — not a
+ * duplicate of — item 3: item 5 chooses the harmonic CONTENT, item 3 later chooses the
+ * physical STRING placement of that content, both looking at the same next chord.
+ *
+ * DIVERGENCE FROM EXISTING POLICY (reported, per the brief): the current requiredIntervals
+ * protects the HIGHEST natural extension as the chord's "name". Item 5 deliberately makes
+ * every natural extension (9/11/13) disposable subject to proximity — the brief's own
+ * acceptance example, D#7(9,11), needs both the 9th and 11th to be proximity-eligible. The
+ * altered-tone protection above keeps this aligned with the documented reduction philosophy.
+ */
+export function reduceExtendedChord(chord: Chord, nextChord: Chord | null, capacity: number): Chord {
+  const intervals = chord.formula.intervals;
+  const distinctPcs = new Set<PitchClass>(intervals.map(iv => (chord.root + iv) % 12));
+  if (chord.bass !== undefined) distinctPcs.add(chord.bass); // an explicit bass occupies a position too
+  if (distinctPcs.size <= capacity) return chord; // already fits — nothing to reduce
+
+  const disposable = intervals.filter(iv => REDUCIBLE_INTERVALS.has(iv));
+  const nextPcs = nextChord ? new Set<PitchClass>(nextChord.notes) : null;
+  const sharedWithNext = (iv: number) => (nextPcs ? nextPcs.has(((chord.root + iv) % 12)) : false);
+  const baseRank = (iv: number) => { const i = BASE_DROP_ORDER.indexOf(iv); return i === -1 ? 99 : i; };
+
+  // Sort disposable notes worst-to-drop: not-shared before shared, then base priority.
+  const dropOrder = [...disposable].sort((a, b) => {
+    const sa = sharedWithNext(a) ? 1 : 0;
+    const sb = sharedWithNext(b) ? 1 : 0;
+    if (sa !== sb) return sa - sb; // 0 (absent from next) drops first
+    return baseRank(a) - baseRank(b); // tie → most disposable by base order
+  });
+
+  let needToDrop = distinctPcs.size - capacity;
+  const dropped = new Set<number>();
+  for (const iv of dropOrder) {
+    if (needToDrop <= 0) break;
+    dropped.add(iv);
+    needToDrop--;
+  }
+
+  const keptIntervals = intervals.filter(iv => !dropped.has(iv));
+  const keptNotes = Array.from(new Set<PitchClass>(keptIntervals.map(iv => (chord.root + iv) % 12)));
+  if (chord.bass !== undefined && !keptNotes.includes(chord.bass)) keptNotes.push(chord.bass);
+  const origRequired = chord.formula.requiredIntervals ?? intervals;
+  const keptRequired = origRequired.filter(iv => !dropped.has(iv));
+
+  return {
+    ...chord,
+    notes: keptNotes,
+    formula: { ...chord.formula, intervals: keptIntervals, requiredIntervals: keptRequired },
+  };
+}
+
+/**
+ * Item 3 — Voice leading (greedy). Given the chords of a progression IN ORDER, choose one
+ * voicing to display per chord so that consecutive chords share as many notes as possible
+ * (ideally the SAME note on the SAME string), minimizing hand jumps between chords.
+ *
+ * Strategy: GREEDY, processed RIGHT-TO-LEFT. The last chord takes its own best-ranked
+ * voicing (calculateVoicings already returns candidates best-first). Each earlier chord
+ * then picks — among candidates of EQUIVALENT difficulty to its own best — the one that
+ * shares the most notes with the ALREADY-CHOSEN voicing of the NEXT chord. This keeps the
+ * heuristic from trading a much easier shape for a slightly smoother connection.
+ *
+ * FUTURE WORK (intentionally NOT done here, as requested): this is a purely local greedy —
+ * the best choice for the pair (i, i+1) can push the pair (i-1, i) toward a worse
+ * connection (a "bad chain"). If that shows up in real progressions, the natural evolution
+ * is dynamic programming (Viterbi) minimizing the ACCUMULATED voice-leading cost over the
+ * whole sequence. Greedy solves the majority of cases and is what this task asked for.
+ */
+export function chooseVoicingsForProgression(
+  tuning: Tuning,
+  chords: Chord[],
+  maxFret = 12,
+  opts: { violaCebolao?: boolean } = {}
+): (Voicing | null)[] {
+  // Item 5 runs FIRST (forward pass): reduce each extended chord's harmonic content toward
+  // its NEXT chord before any voicing is generated. Chords that already fit pass through
+  // untouched, so plain triads are unaffected. Item 3's greedy then operates on the reduced
+  // candidate sets — content selection first, physical placement second.
+  const capacity = tuning.strings.length;
+  const reducedChords = chords.map((c, i) =>
+    reduceExtendedChord(c, i + 1 < chords.length ? chords[i + 1] : null, capacity)
+  );
+  const candidatesPerChord = reducedChords.map(c => calculateVoicings(tuning, c, maxFret, opts));
+  const chosen: (Voicing | null)[] = new Array(chords.length).fill(null);
+
+  // Coarse difficulty band (same buckets used by the calculateVoicings sort), so voice
+  // leading only ever swaps between voicings that feel equally hard to the hand.
+  const bandOf = (v: Voicing): number => {
+    const d = v.difficultyScore ?? 0;
+    return d <= 1.5 ? 0 : d <= 3.5 ? 1 : 2;
+  };
+
+  const pcAt = (v: Voicing, s: number): number | null =>
+    v.frets[s] >= 0 ? (tuning.strings[s] + v.frets[s]) % 12 : null;
+
+  // Connection strength between two voicings: the SAME note on the SAME string (identical
+  // fret) is the ideal and weighs 10; a shared pitch class on any other string is a weaker
+  // bonus weighing 1. Higher = smoother voice leading.
+  const connection = (a: Voicing, b: Voicing): number => {
+    let strength = 0;
+    const setA = new Set<number>();
+    for (let s = 0; s < tuning.strings.length; s++) {
+      if (a.frets[s] >= 0 && b.frets[s] >= 0 && a.frets[s] === b.frets[s]) strength += 10;
+      const pa = pcAt(a, s);
+      if (pa !== null) setA.add(pa);
+    }
+    for (let s = 0; s < tuning.strings.length; s++) {
+      const pb = pcAt(b, s);
+      if (pb !== null && setA.has(pb)) strength += 1;
+    }
+    return strength;
+  };
+
+  for (let i = chords.length - 1; i >= 0; i--) {
+    const cands = candidatesPerChord[i];
+    if (cands.length === 0) { chosen[i] = null; continue; }
+
+    const next = i + 1 < chords.length ? chosen[i + 1] : null;
+    if (!next) { chosen[i] = cands[0]; continue; } // last chord (or next had no voicing): own best
+
+    // Only consider candidates as easy as the best one — voice leading is a tiebreak among
+    // equivalent-difficulty shapes, never a reason to jump to a harder voicing.
+    const bestBand = bandOf(cands[0]);
+    const equiv = cands.filter(v => bandOf(v) === bestBand);
+
+    let best = equiv[0];
+    let bestConn = connection(best, next);
+    for (let k = 1; k < equiv.length; k++) {
+      const conn = connection(equiv[k], next);
+      if (conn > bestConn) { best = equiv[k]; bestConn = conn; } // ties keep the original (best-scored) order
+    }
+    chosen[i] = best;
+  }
+
+  return chosen;
+}
 
