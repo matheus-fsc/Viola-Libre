@@ -516,7 +516,7 @@ export function splitHtmlByTabs(html: string): ContentSegment[] {
   const segments: ContentSegment[] = [];
 
   // Match <span class="tablatura"> or <div class="tablatura"> elements
-  // Also match <span class="cnt"> which the tab source uses for tab-like content
+  // Also match <span class="cnt"> used for tab-like content
   const tabElRe = /<(span|div)[^>]+class="([^"]*)"[^>]*>([\s\S]*?)<\/\1>/gi;
 
   let lastIdx = 0;
