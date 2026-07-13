@@ -40,3 +40,6 @@ bpm_seeder/bin/
 plan/
 scratch/
 zap-scan-export/
+
+# Graphify: versiona o knowledge graph, ignora o cache local
+graphify-out/cache/
