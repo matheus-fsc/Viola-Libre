@@ -1,0 +1,6 @@
+# Viola Libre
+# Ferramenta livre de teoria musical e visualização de acordes.
+
+User-agent: *
+Disallow: /cifras
+Disallow: /minhascifras
