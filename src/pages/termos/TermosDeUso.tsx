@@ -1,15 +1,14 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
-// Canal de contato para notice-and-takedown. Centralizado numa constante pra facilitar
-// a troca depois (ex: se for criado um e-mail no domínio próprio).
-const CONTACT_EMAIL = 'matheusvgp29@gmail.com';
+// Canal de contato para notice-and-takedown. Centralizado numa constante pra facilitar a troca.
+const CONTACT_EMAIL = 'suporte@violalibre.com.br';
 
 // Repositório open source do projeto — referência da licença do código.
 const REPO_URL = 'https://github.com/matheus-fsc/Viola-Libre';
 
 // Data da última atualização deste termo (mostrada ao final da página).
-const LAST_UPDATED = '13 de julho de 2026';
+const LAST_UPDATED = '14 de julho de 2026';
 
 const Section: React.FC<{ n: number; title: string; children: React.ReactNode }> = ({ n, title, children }) => (
   <section className="flex flex-col gap-2">
