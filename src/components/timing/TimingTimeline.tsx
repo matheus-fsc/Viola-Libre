@@ -140,13 +140,6 @@ export const TimingTimeline: React.FC<TimingTimelineProps> = ({
     setViewEnd(newEnd);
   };
 
-  const pan = (deltaTime: number) => {
-    if (isFullView) return;
-    const newStart = Math.max(0, Math.min(vStart + deltaTime, dur - vDur));
-    setViewStart(newStart);
-    setViewEnd(newStart + vDur);
-  };
-
   // ── Track-area pointer handlers ───────────────────────────────────────────
   const handleAreaDown = (e: React.PointerEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();

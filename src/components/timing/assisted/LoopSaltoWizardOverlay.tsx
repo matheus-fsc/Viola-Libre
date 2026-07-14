@@ -11,7 +11,7 @@ export const LoopSaltoWizardOverlay: React.FC = () => {
   const {
     active, mode, phase, segmentStartTime,
     pendingRepeatRegionId,
-    beginRecording, commitBoundary,
+    commitBoundary,
     undoLast, exitAssisted,
   } = useLoopSaltoWizardStore();
 

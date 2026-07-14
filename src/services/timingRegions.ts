@@ -19,7 +19,6 @@ import type {
   TimingLoop,
   TimingInstrumental,
   TimingSection,
-  TimingMarker,
   MarkerType,
   SectionType,
   TimingSubmitPayload,

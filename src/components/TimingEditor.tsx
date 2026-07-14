@@ -35,7 +35,6 @@ declare global {
   }
 }
 
-const INSTR_RE = /\b(interlude|interlúdio|interludio|solo|ponte|bridge|instrumental|intro|introdução|introducao|finalização)\b/i;
 const SECTION_LINE_RE = /^\[([^\]]+)\]$/;
 
 // Section type metadata — ptLabel is Portuguese display name, barColor is for the timeline
@@ -118,10 +117,9 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
 
   // Player state — lives in usePlayerStore
   const {
-    mediaUrlInput, mediaUrl, mediaType, playerReady, currentTime: playerCurrentTime,
-    duration, durationInput, bpm, isPlaying,
+    mediaUrlInput, mediaUrl, mediaType,
+    durationInput, bpm,
     setMediaUrlInput, loadMedia, setDurationInput, commitDuration, setBpm, registerTap,
-    previewRange,
     setPlayerReady, registerYtPlayer, clearYtPlayer, registerAudio, loadContribution,
   } = usePlayerStore();
 
@@ -427,6 +425,7 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
   // palette, no reachable creation path passes a `type` that LINK_TARGET_TYPE recognizes anymore —
   // this stays defined (and correct) purely so the "⇢ vincular destino" affordance keeps working on
   // already-existing legacy markers loaded from old contributions/snapshots.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- mantido de propósito (ver NOTE acima); nenhum caminho de criação atual o chama, mas preserva a afordância em markers legados.
   const maybePromptLink = (newId: string, type: MarkerType) => {
     const targetType = LINK_TARGET_TYPE[type];
     if (!targetType) return;

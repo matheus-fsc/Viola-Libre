@@ -11,8 +11,6 @@ import { useTimingSelectionStore } from '../../stores/useTimingSelectionStore';
 import { usePlayerStore } from '../../stores/usePlayerStore';
 import { InlineMarkerDot } from './InlineMarkerDot';
 
-export { isChordLine } from '../../services/cifraUtils';
-
 // ── Chord parsing ────────────────────────────────────────────────────────────
 const SECTION_LINE_RE = /^\[([^\]]+)\]$/;
 const INSTR_RE = /\b(interlude|interlúdio|interludio|solo|ponte|bridge|instrumental|intro|introdução|introducao|finalização)\b/i;

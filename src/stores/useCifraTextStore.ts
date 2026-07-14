@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { parseChordLine, buildChordLineText, pixelDeltaToCol, type ChordPos } from '../services/cifraUtils';
+import { buildChordLineText, pixelDeltaToCol, type ChordPos } from '../services/cifraUtils';
 
 // Performance note: updateChordDrag rebuilds the full chord line text on every mousemove
 // (O(line length) per pixel). The hot path could be deferred to endChordDrag(), tracking

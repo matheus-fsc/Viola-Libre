@@ -78,7 +78,7 @@ function buildReflowedPair(chordLine: string, lyricLine: string): string {
   );
 
   if (trailing.length > 0) {
-    units.push(`<span class="cifra-word"><span class="cifra-word-chord">${chordCell(trailing)}</span><span class="cifra-word-text"> </span></span>`);
+    units.push(`<span class="cifra-word"><span class="cifra-word-chord">${chordCell(trailing)}</span><span class="cifra-word-text">\u00A0</span></span>`);
   }
 
   return `<div class="cifra-line cifra-line-paired">${units.join(' ')}</div>`;
