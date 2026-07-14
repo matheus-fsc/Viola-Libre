@@ -4,3 +4,5 @@
 User-agent: *
 Disallow: /cifras
 Disallow: /minhascifras
+
+Sitemap: https://violalibre.com.br/sitemap.xml
