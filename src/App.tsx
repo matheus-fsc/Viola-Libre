@@ -1008,6 +1008,20 @@ function App() {
 
       </div>
 
+      {/* --- MOBILE FOOTER (browsewrap) --- */}
+      {/* A taskbar (footer XP) é escondida no mobile, então este é o ponto de acesso
+          discreto aos Termos de Uso em telas pequenas. */}
+      <div className="md:hidden w-full flex justify-center py-3 z-10">
+        <button
+          onClick={() => navigate('/termos')}
+          className={`text-[11px] font-mono underline underline-offset-2 cursor-pointer select-none transition-colors ${
+            activeTab === 'termos' ? 'text-white font-bold' : 'text-white/75 hover:text-white'
+          }`}
+        >
+          Termos de Uso
+        </button>
+      </div>
+
       {/* --- MINHA CIFRA FLOATING WINDOW --- */}
       {showCifraWindow && (
         <div className="fixed top-12 left-4 md:left-[15%] w-[90%] md:w-[70%] bg-[#ece9d8] border-[3px] border-[#0058e6] rounded-t-lg shadow-2xl z-50">
