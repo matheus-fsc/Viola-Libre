@@ -1,3 +1,8 @@
+/*
+ * Viola Libre — o cifrário aberto e matemático da música de raiz
+ * Copyright (C) 2026 Matheus Coelho
+ * Licenciado sob a GNU AGPL-3.0 — veja o arquivo LICENSE na raiz do projeto.
+ */
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import type { Instrument, Tuning, Voicing } from './engine/types';
@@ -29,6 +34,7 @@ import { getPreferredInstrumentId, setPreferredInstrumentId } from './utils/inst
 import { preloadSoundfont } from './engine/AudioEngine';
 import { CifrasApp } from './pages/cifras/CifrasApp';
 import { MinhasCifras } from './pages/minhasCifras/MinhasCifras';
+import { TermosDeUso } from './pages/termos/TermosDeUso';
 
 
 const IconInfo: React.FC<{ className?: string }> = ({ className = "w-3.5 h-3.5" }) => (
@@ -188,7 +194,8 @@ function App() {
   // Tab switcher — derived from URL
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  const activeTab = ((): 'cifras' | 'minhascifras' | 'chords' | 'train' | 'ear' | 'favorites' => {
+  const activeTab = ((): 'cifras' | 'minhascifras' | 'chords' | 'train' | 'ear' | 'favorites' | 'termos' => {
+    if (pathname === '/termos') return 'termos';
     if (pathname.startsWith('/cifras')) return 'cifras';
     if (pathname === '/minhascifras') return 'minhascifras';
     if (pathname === '/chords') return 'chords';
@@ -991,6 +998,12 @@ function App() {
             </div>
           )}
 
+          {activeTab === 'termos' && (
+            <div className="w-full" style={{ minHeight: '400px' }}>
+              <TermosDeUso />
+            </div>
+          )}
+
         </div>
 
       </div>
@@ -1258,6 +1271,14 @@ function App() {
               title="Acesso de Editor"
             >
               <span className={editorSession ? "text-[#ddffdd]" : "opacity-70"}>🔑 Editor</span>
+            </button>
+            <div className="w-[1.5px] h-4 bg-white/30 mx-1"></div>
+            <button
+              onClick={() => navigate('/termos')}
+              className={`cursor-pointer hover:bg-white/20 px-1 rounded transition-colors ${activeTab === 'termos' ? 'text-[#ddffdd] font-bold' : ''}`}
+              title="Termos de Uso"
+            >
+              Termos de Uso
             </button>
             <div className="w-[1.5px] h-4 bg-white/30 mx-1"></div>
             <span className="cursor-pointer" title="Rede Ativa (Livre)">NET</span>
