@@ -21,7 +21,7 @@ import '../../components/Cifras.css';
 import { fetchBestTiming, type TimingContribution } from '../../services/timingApi';
 import { getIsMobile } from '../../hooks/useIsMobile';
 import { reflowCifraHtml } from '../../services/cifraUtils';
-import { getPreferredInstrumentId } from '../../utils/instrumentPreference';
+import { getPreferredInstrumentId, setPreferredInstrumentId } from '../../utils/instrumentPreference';
 import {
   useEditorSession,
   type ChordRankEntry,
@@ -64,6 +64,10 @@ const USER_SCROLL_EPS = 2;
 const SETTLE_MS = 900;
 // Salto dos atalhos ← / →.
 const NUDGE_SEC = 5;
+// Fatia do tempo repartida pela altura da página (o resto vai pela densidade de
+// acordes). 0 = só densidade — é o que fazia a tela voar sobre as tablaturas;
+// 1 = velocidade constante, ignorando a música.
+const GEOMETRIC_SHARE = 0.5;
 
 type ChordMapPoint = { chordY: number; time: number };
 
@@ -318,6 +322,17 @@ export const CifraViewer: React.FC = () => {
     return () => { if ('scrollRestoration' in history) history.scrollRestoration = 'auto'; };
   }, []);
 
+  // Trocar de instrumento aqui também vira a preferência padrão (mesma chave que o
+  // onboarding do App grava) — senão a próxima cifra reabre no instrumento antigo.
+  const handleInstrumentChange = (instId: string) => {
+    const newInst = PRESET_INSTRUMENTS.find(i => i.id === instId);
+    if (!newInst) return;
+    setSelectedInstId(newInst.id);
+    setSelectedTuningId(newInst.defaultTuningId || newInst.tunings[0].id);
+    setTabPosIdx(0);
+    setPreferredInstrumentId(newInst.id);
+  };
+
   // ── Transporte ──────────────────────────────────────────────────────────────
   // Invariante do sistema: o playhead (elapsedRef) e a posição da tela são duas
   // vistas da mesma coisa. O motor escreve a tela a partir do playhead; qualquer
@@ -549,6 +564,33 @@ export const CifraViewer: React.FC = () => {
     };
   }, [cifra]);
 
+  // O mapa guarda posições Y absolutas da página, então vira lixo assim que o
+  // layout muda (ocultar/mostrar tabs, transpor, trocar afinação, redimensionar,
+  // fontes carregando). Este token força a reconstrução nesses casos — sem ele o
+  // rolamento passa a mirar Ys que não existem mais e a cifra parece "quebrar".
+  const [geometryToken, setGeometryToken] = useState(0);
+  useEffect(() => {
+    const root = document.documentElement;
+    let lastHeight = root.scrollHeight;
+    let pending: number | null = null;
+    const bump = () => {
+      const h = root.scrollHeight;
+      if (Math.abs(h - lastHeight) < 4) return;
+      lastHeight = h;
+      if (pending !== null) cancelAnimationFrame(pending);
+      pending = requestAnimationFrame(() => { pending = null; setGeometryToken(t => t + 1); });
+    };
+    const ro = new ResizeObserver(bump);
+    ro.observe(root);
+    if (contentRef.current) ro.observe(contentRef.current);
+    window.addEventListener('resize', bump);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', bump);
+      if (pending !== null) cancelAnimationFrame(pending);
+    };
+  }, [cifra]);
+
   // Constrói o mapa de timing com dois critérios:
   // 1. Peso proporcional ao nº de acordes por linha (grupo denso = mais tempo)
   // 2. Seções instrumentais detectadas via labels [Interlude], [Solo], [Ponte], etc.
@@ -619,18 +661,30 @@ export const CifraViewer: React.FC = () => {
         domChordIdx += g.count;
       }
 
-      const totalWeight = weights.reduce((a, b) => a + b, 0);
       const activeTiming = previewTiming ?? bestTiming ?? null;
       const dur = activeTiming?.duration ?? cifra.duration ?? null;
       const bpm = activeTiming?.bpm ?? localBpm ?? cifra.bpm ?? 120;
       const totalTime = dur ?? (60 / bpm) * 4 * bEls.length;
+
+      // O tempo é repartido entre os intervalos (âncora i → i+1), não entre as
+      // âncoras. Só a densidade de acordes não basta: blocos de tablatura não têm
+      // <b> no fluxo, então um intervalo pode ter 2000px de altura e o mesmo peso
+      // de uma linha de letra — a tela voava nesses trechos. Metade do tempo vai
+      // pela altura percorrida (velocidade uniforme, protege os tabs) e metade
+      // pela densidade musical (mantém a desaceleração em trechos carregados).
+      const anchors: number[] = groups.map(g => g.y);
+      anchors.push(groups[n - 1].y + window.innerHeight); // fim do conteúdo
+      const dys: number[] = [];
+      for (let i = 0; i < n; i++) dys.push(Math.max(1, anchors[i + 1] - anchors[i]));
+      const sumMusical = weights.reduce((a, b) => a + b, 0) || 1;
+      const sumDy = dys.reduce((a, b) => a + b, 0) || 1;
       const map: Array<{ chordY: number; time: number }> = [];
-      let cumWeight = 0;
+      let acc = 0;
       for (let i = 0; i < n; i++) {
-        map.push({ chordY: groups[i].y, time: (cumWeight / totalWeight) * totalTime });
-        cumWeight += weights[i];
+        map.push({ chordY: anchors[i], time: acc * totalTime });
+        acc += GEOMETRIC_SHARE * (dys[i] / sumDy) + (1 - GEOMETRIC_SHARE) * (weights[i] / sumMusical);
       }
-      map.push({ chordY: groups[n - 1].y + window.innerHeight, time: totalTime });
+      map.push({ chordY: anchors[n], time: totalTime });
       chordMapRef.current = map;
 
       // Build section timeline: maps each [Label] to a time range and Y range.
@@ -698,7 +752,7 @@ export const CifraViewer: React.FC = () => {
       // ── fim diagnóstico ───────────────────────────────────────────────────
     });
     return () => cancelAnimationFrame(frame);
-  }, [cifra, localBpm, previewTiming, bestTiming, syncPlayheadToScroll]);
+  }, [cifra, localBpm, previewTiming, bestTiming, geometryToken, syncPlayheadToScroll]);
 
   // Reset BPM/scroll/loop ao trocar de música
   useEffect(() => {
@@ -1453,7 +1507,7 @@ export const CifraViewer: React.FC = () => {
 
             <div className="flex flex-col gap-0.5">
               <label className="font-bold text-[10px] uppercase text-gray-500">Instrumento:</label>
-              <select value={selectedInstId} onChange={(e) => { const newInst = PRESET_INSTRUMENTS.find(i => i.id === e.target.value); if (newInst) { setSelectedInstId(newInst.id); setSelectedTuningId(newInst.defaultTuningId || newInst.tunings[0].id); setTabPosIdx(0); } }} className="bevel-in bg-white px-1 py-0 text-xs w-full outline-none cursor-pointer">
+              <select value={selectedInstId} onChange={(e) => handleInstrumentChange(e.target.value)} className="bevel-in bg-white px-1 py-0 text-xs w-full outline-none cursor-pointer">
                 {PRESET_INSTRUMENTS.map(inst => (<option key={inst.id} value={inst.id}>{inst.name}</option>))}
               </select>
             </div>
@@ -1594,7 +1648,7 @@ export const CifraViewer: React.FC = () => {
               <div className="flex items-center gap-1.5 sm:gap-3 flex-nowrap sm:flex-wrap overflow-x-auto no-scrollbar [&>*]:shrink-0">
                 <div className="flex items-center gap-1">
                   <label className="hidden sm:inline font-bold text-[11px] uppercase tracking-wider text-gray-700">Instrumento:</label>
-                  <select value={selectedInstId} onChange={(e) => { const newInst = PRESET_INSTRUMENTS.find(i => i.id === e.target.value); if (newInst) { setSelectedInstId(newInst.id); setSelectedTuningId(newInst.defaultTuningId || newInst.tunings[0].id); setTabPosIdx(0); } }} className="bevel-in bg-white px-1 py-0 text-xs outline-none cursor-pointer max-w-[90px] sm:max-w-[100px]">
+                  <select value={selectedInstId} onChange={(e) => handleInstrumentChange(e.target.value)} className="bevel-in bg-white px-1 py-0 text-xs outline-none cursor-pointer max-w-[90px] sm:max-w-[100px]">
                     {PRESET_INSTRUMENTS.map(inst => (<option key={inst.id} value={inst.id}>{inst.name}</option>))}
                   </select>
                 </div>
