@@ -13,6 +13,7 @@ import { buildChord, buildVoicingFromFrets, calculateVoicings, noteNameToPitchCl
 import { PRESET_INSTRUMENTS } from '../../engine/tunings';
 import { AudioEngine } from '../../engine/AudioEngine';
 import { FretboardDiagram } from '../../components/FretboardDiagram';
+import { ChordHoverCard, type ChordAnchor } from '../../components/ChordHoverCard';
 import { ChordEditorModal } from '../../components/ChordEditorModal';
 import { TabTransposerBlock } from '../../components/TabTransposerBlock';
 import { splitHtmlByTabs, TAB_POSITIONS, type ContentSegment } from '../../engine/tabTransposer';
@@ -97,8 +98,6 @@ function fmtTime(sec: number): string {
   const s = Number.isFinite(sec) && sec > 0 ? sec : 0;
   return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 }
-
-const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
 
 function isChordDiatonic(chordName: string, songKey: string): boolean {
   if (!songKey || !chordName) return false;
@@ -196,7 +195,7 @@ export const CifraViewer: React.FC = () => {
   const [previewTiming, setPreviewTiming] = useState<TimingContribution | null>(null);
   const [bestTiming, setBestTiming] = useState<TimingContribution | null>(null);
   const [scrollFrac, setScrollFrac] = useState(0);
-  const [lyricsPopup, setLyricsPopup] = useState<{ chord: string; x: number; y: number } | null>(null);
+  const [lyricsPopup, setLyricsPopup] = useState<ChordAnchor | null>(null);
   const [currentSection, setCurrentSection] = useState<string | null>(null);
   // Transporte: relógio exibido, duração total e seções (para a barra de posição)
   const [elapsedDisplay, setElapsedDisplay] = useState(0);
@@ -1104,15 +1103,31 @@ export const CifraViewer: React.FC = () => {
     popupCloseTimer.current = setTimeout(() => setLyricsPopup(null), 180);
   };
 
+  const anchorAt = (target: HTMLElement, chordName: string): ChordAnchor => {
+    const rect = target.getBoundingClientRect();
+    return { chord: chordName, x: rect.left + rect.width / 2, top: rect.top, bottom: rect.bottom };
+  };
+
   const showPopupForTarget = (target: HTMLElement) => {
     if (target.tagName !== 'B') return false;
     const chordName = target.textContent?.trim() ?? '';
     if (!chordName) return false;
     cancelPopupClose();
-    if (chordName !== lyricsPopup?.chord) {
-      const rect = target.getBoundingClientRect();
-      setLyricsPopup({ chord: chordName, x: rect.left + rect.width / 2, y: rect.top });
-    }
+    // A âncora é identificada pela geometria, não pelo nome nem pelo nó do DOM:
+    //  - por nome, o card ficava preso na primeira ocorrência hoverada e não
+    //    acompanhava o mesmo acorde repetido em outras linhas;
+    //  - por nó, não serve de guarda, porque o HTML da letra é recriado a cada
+    //    render e o <b> sob o ponteiro vira um elemento novo (o que reabriria o
+    //    popup em loop).
+    // Devolver `prev` faz o React abortar o re-render quando nada mudou.
+    setLyricsPopup(prev => {
+      const next = anchorAt(target, chordName);
+      const same = prev
+        && prev.chord === next.chord
+        && Math.abs(prev.x - next.x) < 1
+        && Math.abs(prev.top - next.top) < 1;
+      return same ? prev : next;
+    });
     return true;
   };
 
@@ -1144,8 +1159,7 @@ export const CifraViewer: React.FC = () => {
     const chordName = target.textContent?.trim() ?? '';
     if (!chordName) return;
     cancelPopupClose();
-    const rect = target.getBoundingClientRect();
-    setLyricsPopup({ chord: chordName, x: rect.left + rect.width / 2, y: rect.top });
+    setLyricsPopup(anchorAt(target, chordName));
   };
 
   const effectiveBpm = localBpm ?? (cifra?.bpm ?? null);
@@ -1959,109 +1973,23 @@ export const CifraViewer: React.FC = () => {
 
       </div>
 
-      {/* Mini chord popup — aparece acima do acorde clicado na cifra */}
-      {lyricsPopup && (() => {
-        const POP_W = 104;
-        const POP_H = 148;
-        const vx = Math.max(4, Math.min(lyricsPopup.x - POP_W / 2, window.innerWidth - POP_W - 4));
-        const above = lyricsPopup.y - POP_H - 8;
-        const vy = above >= 4 ? above : lyricsPopup.y + 20;
-
-        const svgW = 92, svgH = 88;
-        const lPad = 12, rPad = 3, tPad = 13, bPad = 3;
-        const boardW = svgW - lPad - rPad;
-        const boardH = svgH - tPad - bPad;
-        const numStr = currentTuning.strings.length;
-        const sSp = numStr > 1 ? boardW / (numStr - 1) : boardW;
-        const numFrets = 5;
-        const fSp = boardH / numFrets;
-        const frets = lyricsVoicing?.frets ?? [];
-        const activeFrets = frets.filter(f => f > 0);
-        const minFret = activeFrets.length > 0 ? Math.min(...activeFrets) : 1;
-        const startFret = minFret > 1 ? minFret : 1;
-        const sX = (i: number) => lPad + i * sSp;
-        const dotFY = (f: number) => tPad + (f - startFret + 0.5) * fSp;
-
-        const noteNames = lyricsVoicing
-          ? frets.map((f, i) => {
-              if (f === -1) return null;
-              const midi = currentTuning.strings[i] + f;
-              return NOTE_NAMES[(midi % 12 + 12) % 12];
-            }).filter(Boolean)
-          : [];
-        const uniqueNotes = [...new Set(noteNames)].join(' ');
-
-        return (
-          <div
-            ref={lyricsPopupRef}
-            className="fixed z-50 bevel-out bg-[#ece9d8] shadow-xl select-none"
-            style={{ left: vx, top: vy, width: POP_W }}
-            onMouseEnter={cancelPopupClose}
-            onMouseLeave={schedulePopupClose}
-          >
-            <div className="pt-1.5 pb-0 flex justify-center">
-              {lyricsVoicing ? (
-                <svg width={svgW} height={svgH}>
-                  {startFret === 1 && (
-                    <rect x={lPad} y={tPad - 3} width={boardW} height={3} fill="#333" />
-                  )}
-                  {startFret > 1 && (
-                    <text x={lPad - 2} y={tPad + fSp * 0.5} textAnchor="end" fontSize={7} fill="#555" dominantBaseline="middle">{startFret}</text>
-                  )}
-                  {Array.from({ length: numFrets }, (_, k) => (
-                    <line key={k} x1={lPad} y1={tPad + (k + 1) * fSp} x2={lPad + boardW} y2={tPad + (k + 1) * fSp} stroke="#bbb" strokeWidth={0.6} />
-                  ))}
-                  {Array.from({ length: numStr }, (_, i) => (
-                    <line key={i} x1={sX(i)} y1={tPad} x2={sX(i)} y2={tPad + boardH} stroke="#777" strokeWidth={0.6} />
-                  ))}
-                  {frets.map((f, i) =>
-                    f === 0 ? (
-                      <circle key={i} cx={sX(i)} cy={tPad - 6} r={3.5} fill="none" stroke="#333" strokeWidth={0.9} />
-                    ) : f === -1 ? (
-                      <text key={i} x={sX(i)} y={tPad - 6} textAnchor="middle" fontSize={7} fill="#cc3300" dominantBaseline="middle">✕</text>
-                    ) : null
-                  )}
-                  {frets.map((f, i) =>
-                    f > 0 && f >= startFret && f < startFret + numFrets ? (
-                      <circle key={i} cx={sX(i)} cy={dotFY(f)} r={Math.min(sSp * 0.37, 6)} fill="#002fa7" />
-                    ) : null
-                  )}
-                </svg>
-              ) : (
-                <div className="h-[88px] flex items-center justify-center text-[10px] text-gray-400">—</div>
-              )}
-            </div>
-            {uniqueNotes && (
-              <div className="px-1.5 pb-0.5">
-                <span className="text-[8px] text-gray-500 text-center font-mono leading-tight block">{uniqueNotes}</span>
-              </div>
-            )}
-            {lyricsVoicings.length > 1 && (
-              <div className="flex items-center justify-between px-1 pb-1 gap-0.5">
-                <button
-                  onClick={() => {
-                    const total = lyricsVoicings.length;
-                    const newIdx = (lyricsVidx - 1 + total) % total;
-                    setVariationIndices(prev => ({ ...prev, [lyricsPopup.chord]: newIdx }));
-                    playLyricsChordSound(lyricsVoicings[newIdx]);
-                  }}
-                  className="bevel-out bg-[var(--color-winxp-panel)] px-1.5 py-0.5 text-[10px] font-bold border border-gray-400 hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
-                >◀</button>
-                <span className="text-[9px] font-bold text-gray-600">{lyricsVidx + 1}/{lyricsVoicings.length}</span>
-                <button
-                  onClick={() => {
-                    const total = lyricsVoicings.length;
-                    const newIdx = (lyricsVidx + 1) % total;
-                    setVariationIndices(prev => ({ ...prev, [lyricsPopup.chord]: newIdx }));
-                    playLyricsChordSound(lyricsVoicings[newIdx]);
-                  }}
-                  className="bevel-out bg-[var(--color-winxp-panel)] px-1.5 py-0.5 text-[10px] font-bold border border-gray-400 hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
-                >▶</button>
-              </div>
-            )}
-          </div>
-        );
-      })()}
+      {/* Mini-card de acorde — segue o acorde apontado/clicado na letra */}
+      {lyricsPopup && (
+        <ChordHoverCard
+          anchor={lyricsPopup}
+          voicings={lyricsVoicings}
+          index={lyricsVidx}
+          tuning={currentTuning}
+          containerRef={lyricsPopupRef}
+          onMouseEnter={cancelPopupClose}
+          onMouseLeave={schedulePopupClose}
+          onSelectIndex={(newIdx) => {
+            setVariationIndices(prev => ({ ...prev, [lyricsPopup.chord]: newIdx }));
+            const next = lyricsVoicings[newIdx];
+            if (next) playLyricsChordSound(next);
+          }}
+        />
+      )}
 
       {/* Barra de posição — fixa na viewport para continuar alcançável durante o
           rolamento. Clique/arraste reposiciona; os traços são as seções da cifra. */}
