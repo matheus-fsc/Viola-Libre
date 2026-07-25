@@ -358,6 +358,8 @@ interface PlayabilityResult {
   highestFret: number; // highest fretted position (0 if all-open) — how far up the neck
   playabilityIssues: string[];
   hasInteriorMute?: boolean;
+  /** Interior mute that the bass-fretting finger already damps — cheap, not a real maneuver. */
+  interiorMuteDampedByBassFinger?: boolean;
 }
 
 export function evaluatePlayability(frets: number[]): PlayabilityResult {
@@ -443,22 +445,36 @@ export function evaluatePlayability(frets: number[]): PlayabilityResult {
       lastPlayed = i;
     }
   }
-  let hasInteriorMute = false;
+  const interiorMuted: number[] = [];
   if (firstPlayed !== -1 && lastPlayed !== -1) {
     for (let i = firstPlayed + 1; i < lastPlayed; i++) {
-      if (frets[i] === -1) {
-        hasInteriorMute = true;
-        break;
-      }
+      if (frets[i] === -1) interiorMuted.push(i);
     }
   }
-  if (hasInteriorMute) {
+  const hasInteriorMute = interiorMuted.length > 0;
+
+  // WHERE the mute sits decides whether it costs anything. ONE muted string sitting
+  // immediately above the lowest sounding string is damped by the very finger (or thumb)
+  // already fretting the bass — the player does nothing extra. That is the standard
+  // bossa/samba grip: bass on the low string, its neighbour deadened, chord tones ringing
+  // above it (Gm7 `3,x,3,3,3,x`). A mute in the MIDDLE of the ringing block is a different
+  // animal: it needs a dedicated damping finger while everything around it keeps sounding.
+  //
+  // Strictly ONE string: a single finger does not deaden a run of two or three. Allowing runs
+  // made `E5` rank `0,x,x,x,0,0` first — low E, then A/D/G all silenced, then B and high E
+  // ringing — which no one plays. Every interior mute in the curated corpus is of the cheap
+  // kind and is exactly one string above the bass (4 of 4), so the evidence only ever
+  // supported the singular case.
+  const interiorMuteDampedByBassFinger =
+    interiorMuted.length === 1 && interiorMuted[0] === firstPlayed + 1;
+
+  if (hasInteriorMute && !interiorMuteDampedByBassFinger) {
     issues.push("Abafamento de corda interna");
   }
 
   // Check finger count (max 4 fingers)
   if (fingersUsed > 4) {
-    return { isValid: false, fingersUsed, stretch, highestFret: maxFret, playabilityIssues: ["Exige mais de 4 dedos"], hasInteriorMute };
+    return { isValid: false, fingersUsed, stretch, highestFret: maxFret, playabilityIssues: ["Exige mais de 4 dedos"], hasInteriorMute, interiorMuteDampedByBassFinger };
   }
 
   return {
@@ -468,7 +484,8 @@ export function evaluatePlayability(frets: number[]): PlayabilityResult {
     stretch,
     highestFret: maxFret,
     playabilityIssues: issues,
-    hasInteriorMute
+    hasInteriorMute,
+    interiorMuteDampedByBassFinger
   };
 }
 
@@ -493,8 +510,13 @@ function difficultyFromPlayability(
   shape += Math.max(0, p.stretch - 1);
   // Using a 4th finger is noticeably harder than 3 or fewer.
   shape += Math.max(0, p.fingersUsed - 3) * 1.5;
-  // A pestana (barre) is harder for most players.
-  if (p.barre) shape += 2;
+  // A pestana is NOT scored here. It is a single learned gesture, and the fingersUsed term
+  // above already credits it (a barre collapses several stops into one finger). Charging it
+  // again pushed every canonical movable shape — the F barre, every CAGED form — into the
+  // "Difícil" band, which the sort uses as a gate. Measured against the curated corpus, the
+  // editors pick a barre in 36% of their voicings while this penalty kept barres out of the
+  // #0 slot in 140 of 140 cases. The score still carries a -15 for the barre (see "D. Barre
+  // penalty"), so it remains a mild negative — just not a band-changing one.
   // Playing away from the open position (up the neck) is harder to reach and hold.
   if (p.highestFret >= 5) shape += 1; // out of the open position (5th fret and beyond)
   if (p.highestFret >= 9) shape += 1; // high up the neck
@@ -502,7 +524,7 @@ function difficultyFromPlayability(
   // Technique axis (kept OFF the shape score). Muting a string between two ringing strings
   // is a right-hand/damping technique, not a harder left-hand shape.
   let technique = 0;
-  if (p.hasInteriorMute) technique += 1.5;
+  if (p.hasInteriorMute && !p.interiorMuteDampedByBassFinger) technique += 1.5;
 
   const label = shape <= 1.5 ? 'Fácil' : shape <= 3.5 ? 'Média' : 'Difícil';
   return { label, score: shape, shapeScore: shape, techniqueScore: technique };
@@ -527,19 +549,124 @@ export function buildVoicingFromFrets(frets: number[], tuning: Tuning, useFlats 
     score: 0,
     playabilityIssues: p.playabilityIssues,
     hasInteriorMute: p.hasInteriorMute,
+    hasCostlyInteriorMute: p.hasInteriorMute && !p.interiorMuteDampedByBassFinger,
     difficultyScore: difficultyFromPlayability(p).score,
   };
+}
+
+/**
+ * Normalized SHAPE of a voicing — the movable pattern behind it, independent of which fret
+ * it sits on. Open strings become the barre line (offset 0); a shape with no open strings is
+ * shifted down by its lowest fretted position. So the open A chord `x02220` and the barre
+ * `x-5-7-7-7-5` normalize to the SAME template `x,0,2,2,2,0` — which is exactly what a
+ * player means by "the A shape".
+ */
+export function normalizeShape(frets: number[]): string | null {
+  if (!frets.some(f => f >= 0)) return null;
+  const fretted = frets.filter(f => f > 0);
+  const base = frets.some(f => f === 0) || !fretted.length ? 0 : Math.min(...fretted);
+  return frets.map(f => (f === -1 ? 'x' : f - base)).join(',');
+}
+
+// Places a normalized template at fret `n`.
+function applyTemplateAt(template: string, n: number): number[] {
+  return template.split(',').map(s => (s === 'x' ? -1 : Number(s) + n));
+}
+
+const templateCache = new Map<string, Set<string>>();
+
+/**
+ * The movable SHAPE VOCABULARY of a tuning for a given chord quality — derived from the
+ * instrument itself, not from a hand-written table.
+ *
+ * The insight: the CAGED system is nothing but the open-position chords treated as movable
+ * forms. So we ask the engine for the open-position voicings of that quality across all 12
+ * roots and keep the ones that behave like canonical forms:
+ *   • harmonically complete (every chord tone sounds);
+ *   • root in the bass — canonical movable shapes are root-position. Skipped on the viola
+ *     cebolão, where the idiomatic open bass is the 5th (same rule as `preferOpenBass`);
+ *   • still playable once transposed up the neck (this is what drops the G shape, whose
+ *     barre-plus-stretch form nobody actually uses — and indeed it appears zero times in
+ *     the curated corpus);
+ *   • MAXIMAL — a template that is another one with extra strings muted is a fragment of it,
+ *     not a shape of its own. Without this the derivation returns ~48 near-duplicates per
+ *     quality and discriminates nothing; with it, the violão returns exactly C-A-G-E-D.
+ *
+ * Deriving instead of hardcoding is what makes this work on all 26 tunings — including viola
+ * cebolão, rio abaixo and the rest, which no public chord database covers.
+ */
+export function deriveMovableTemplates(
+  tuning: Tuning,
+  formula: ChordFormula,
+  violaCebolao = false
+): Set<string> {
+  const key = `${tuning.id}|${formula.suffix}|${violaCebolao}`;
+  const cached = templateCache.get(key);
+  if (cached) return cached;
+
+  const candidates = new Set<string>();
+  for (let root = 0; root < 12; root++) {
+    const chord: Chord = {
+      root,
+      rootName: NOTE_NAMES_SHARP[root],
+      formula,
+      notes: formula.intervals.map(iv => (root + iv) % 12),
+    };
+    // maxFret 4 keeps us in the open position; skipVocabulary avoids recursing back here.
+    for (const v of calculateVoicings(tuning, chord, 4, { violaCebolao, skipVocabulary: true })) {
+      if (!v.frets.some(f => f === 0)) continue; // must be an open-position shape
+      const sounding = new Set(
+        v.frets.map((f, s) => (f >= 0 ? (tuning.strings[s] + f) % 12 : -1)).filter(pc => pc >= 0)
+      );
+      if (sounding.size < chord.notes.length) continue; // incomplete
+      if (!violaCebolao && !v.bassIsRoot) continue;     // canonical forms are root-position
+      const t = normalizeShape(v.frets);
+      if (t) candidates.add(t);
+    }
+  }
+
+  // Drop fragments: `a` is dominated by `b` when it is `b` with more strings muted.
+  const isFragmentOf = (a: string, b: string): boolean => {
+    if (a === b) return false;
+    const A = a.split(','), B = b.split(',');
+    let fewer = false;
+    for (let i = 0; i < A.length; i++) {
+      if (A[i] === 'x') { if (B[i] !== 'x') fewer = true; continue; }
+      if (A[i] !== B[i]) return false;
+    }
+    return fewer;
+  };
+
+  // Playability FIRST, maximality among the survivors.
+  //
+  // The reverse order is tempting — it would stop a fragment inheriting canonical status when
+  // its parent shape happens not to transpose (on the viola cebolão the full Am `0,2,3,3,2`
+  // needs five fingers once moved up, so its 4-string fragment `0,x,3,3,2` becomes canonical
+  // and outranks the curated full shape, which sits at #11). But measured against the corpus
+  // that swap is a net loss: it strips the viola of most of its vocabulary, median rank goes
+  // 2 → 3, p90 20 → 28, and C on cebolão starts opening at the 7th fret. A fragment that
+  // travels IS a real movable shape; the parent's immobility does not disqualify it.
+  const playable = [...candidates].filter(t => {
+    const p = evaluatePlayability(applyTemplateAt(t, 5));
+    return p.isValid && !(p.hasInteriorMute && !p.interiorMuteDampedByBassFinger) && p.stretch <= 3;
+  });
+
+  const vocabulary = new Set(playable.filter(t => !playable.some(other => isFragmentOf(t, other))));
+  templateCache.set(key, vocabulary);
+  return vocabulary;
 }
 
 // Generate all valid voicings for a given tuning and chord.
 // opts.violaCebolao: for the viola caipira (open tunings like Cebolão), the open strings
 // already form a chord, so the characteristic voicing keeps the open bass even when it is
 // the 5th (an inversion). In that mode we don't force the root into the bass.
+// opts.skipVocabulary: internal — used by deriveMovableTemplates to break the recursion
+// (the vocabulary is derived FROM this function, so derivation must not consult it).
 export function calculateVoicings(
   tuning: Tuning,
   chord: Chord,
   maxFret = 12,
-  opts: { violaCebolao?: boolean } = {}
+  opts: { violaCebolao?: boolean; skipVocabulary?: boolean } = {}
 ): Voicing[] {
   const voicings: Voicing[] = [];
   const numStrings = tuning.strings.length;
@@ -776,8 +903,9 @@ export function calculateVoicings(
     const mutedCount = frets.filter(f => f === -1).length;
     score -= mutedCount * 15;
 
-    // G2. Interior muted string penalty (muting inside played strings is hard!)
-    if (playability.hasInteriorMute) {
+    // G2. Interior muted string penalty. Only the costly kind is charged: a mute the
+    // bass-fretting finger already damps (see evaluatePlayability) is free technique.
+    if (playability.hasInteriorMute && !playability.interiorMuteDampedByBassFinger) {
       score -= 35;
     }
 
@@ -845,6 +973,7 @@ export function calculateVoicings(
       score: Math.max(1, Math.round(score)),
       playabilityIssues: playability.playabilityIssues,
       hasInteriorMute: playability.hasInteriorMute,
+      hasCostlyInteriorMute: playability.hasInteriorMute && !playability.interiorMuteDampedByBassFinger,
       bassIsRoot,
       difficultyScore: difficultyFromPlayability(playability).score
     });
@@ -868,7 +997,48 @@ export function calculateVoicings(
     }
   }
 
+  // Harmonic floor. The search is allowed to drop the 5th and to mute down to 3 strings,
+  // which is right for FINDING candidates but wrong for RANKING them: it let skeletal
+  // fragments win the #0 slot. On the violão the top-ranked F was `1,0,3,2,x,x` — F, A, F, A,
+  // two pitch classes, no 5th at all — beating the canonical barre that scored 69 points
+  // higher. Against the curated corpus the editors' voicings ring 4.82 strings on average
+  // versus 4.16 for the old #0, and 92% of their picks are harmonically complete.
+  //
+  // So this is a RANKING key, never a filter: thin voicings stay in the list (curators do
+  // pick them deliberately — a 4-string Am7 `5,0,5,5,x,x` is a real choice, and the chord
+  // editor must be able to offer every shape), they just stop outranking complete ones.
+  // Piso de cordas soando: 4 — o número de dedos da mão esquerda sem contar o polegar. Tendo
+  // quatro dedos disponíveis não há razão física para oferecer uma forma mais magra que isso.
+  // O corpus curado é unânime a respeito: 101 de 101 voicings soam 4 cordas ou mais, em todos
+  // os instrumentos (ukulele sempre 4, viola 4-5, violão 4-6) — nenhum curador escolheu 3.
+  //
+  // Exceção: acordes pequenos POR DEFINIÇÃO. Power chord (`5`) e díade (`3`) têm duas notas na
+  // fórmula; cobrar 4 cordas deles obrigaria a dobrar notas artificialmente, descaracterizando
+  // justamente o que o acorde é. Detectado pela fórmula, não por lista de sufixos, para valer
+  // também para qualquer díade que venha do parser genérico.
+  const chordIsSmallByDefinition = chord.formula.intervals.length <= 2;
+  const minSoundingStrings = chordIsSmallByDefinition
+    ? chord.formula.intervals.length
+    : Math.min(4, numStrings);
+
+  const isHarmonicallyFull = (v: Voicing) => {
+    const sounding = new Set(
+      v.frets.map((f, s) => (f >= 0 ? stringFretNotes[s][f].pitchClass : -1)).filter(pc => pc >= 0)
+    );
+    return sounding.size >= chord.notes.length && v.frets.filter(f => f >= 0).length >= minSoundingStrings;
+  };
+
+  // The movable shape vocabulary of this tuning+quality (see deriveMovableTemplates). A
+  // voicing that instantiates a canonical form is what a player actually reaches for, so it
+  // outranks an equally-scoring ad-hoc shape.
+  const vocabulary = opts.skipVocabulary
+    ? null
+    : deriveMovableTemplates(tuning, chord.formula, preferOpenBass);
+  const isCanonical = (v: Voicing) =>
+    vocabulary !== null && vocabulary.has(normalizeShape(v.frets) ?? '');
+
   // Sort voicings (priorities, in order):
+  // 0. Canonical movable shapes (the instrument's own vocabulary) first
   // 1. Voicings without interior mutes first
   // 2. Difficulty band: Fácil → Média → Difícil (easy shapes first)
   // 3. Neck position: shapes toward the nut (left side of the neck) first. Variations
@@ -890,10 +1060,34 @@ export function calculateVoicings(
     return d <= 1.5 ? 0 : d <= 3.5 ? 1 : 2; // 0: Fácil, 1: Média, 2: Difícil
   };
   return voicings.sort((a, b) => {
-    const muteA = a.hasInteriorMute ? 1 : 0;
-    const muteB = b.hasInteriorMute ? 1 : 0;
+    const muteA = a.hasCostlyInteriorMute ? 1 : 0;
+    const muteB = b.hasCostlyInteriorMute ? 1 : 0;
     if (muteA !== muteB) {
-      return muteA - muteB; // 0 (sem abafamento) antes de 1 (com abafamento)
+      return muteA - muteB; // 0 (sem abafamento caro) antes de 1 (com)
+    }
+    const canonA = isCanonical(a) ? 0 : 1;
+    const canonB = isCanonical(b) ? 0 : 1;
+    if (canonA !== canonB) {
+      return canonA - canonB; // forma do vocabulário antes de forma ad-hoc
+    }
+    const fullA = isHarmonicallyFull(a) ? 0 : 1;
+    const fullB = isHarmonicallyFull(b) ? 0 : 1;
+    if (fullA !== fullB) {
+      return fullA - fullB; // acorde completo antes de fragmento
+    }
+    // Power chord e díade são formas COMPACTAS, em cordas vizinhas — é isso que os define,
+    // não é preferência de gosto. Sem esta regra o bônus de cordas soltas entregava o E5 para
+    // `x,x,2,x,0,0` (fino, agudo, com buraco no meio) e o G5 para `3,x,0,0,3,3` (espalhado
+    // pelo braço), em vez dos clássicos `0,2,2,x,x,x` e `3,5,5,x,x,x`. Aqui qualquer buraco
+    // conta, inclusive o abafamento colado no baixo que é barato nos outros acordes: um
+    // power chord simplesmente não precisa dele. Restrito aos acordes pequenos por
+    // definição — para os demais a região do braço e o score já resolvem abaixo.
+    if (chordIsSmallByDefinition) {
+      const gapA = a.hasInteriorMute ? 1 : 0;
+      const gapB = b.hasInteriorMute ? 1 : 0;
+      if (gapA !== gapB) {
+        return gapA - gapB; // cordas vizinhas antes de forma com buraco
+      }
     }
     const bandA = difficultyBand(a);
     const bandB = difficultyBand(b);

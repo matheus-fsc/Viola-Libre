@@ -47,6 +47,13 @@ export interface Voicing {
   score: number;         // Calculated playability score
   playabilityIssues: string[];
   hasInteriorMute?: boolean;
+  /**
+   * Interior mute that actually costs the player something. A muted string sitting right
+   * above the bass is damped by the finger already fretting it (the bossa grip, e.g. Gm7
+   * `3,x,3,3,3,x`) and is NOT costly; one in the middle of the ringing block is.
+   * `hasInteriorMute` stays factual — the UI filter and badge use it.
+   */
+  hasCostlyInteriorMute?: boolean;
   bassIsRoot?: boolean;     // true when the lowest played note is the chord root (tônica / 1º grau)
   difficultyScore?: number; // physical difficulty metric (lower = easier), see difficultyFromPlayability
 }

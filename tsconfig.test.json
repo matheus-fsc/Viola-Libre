@@ -1,10 +1,12 @@
 {
   "compilerOptions": {
-    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.test.tsbuildinfo",
     "target": "es2023",
     "lib": ["ES2023", "DOM"],
     "module": "esnext",
-    "types": ["vite/client"],
+    /* Testes rodam no Node (vitest), então diferente do app eles podem ler arquivos —
+       a regressão de curadoria carrega o dump JSON da raiz do repo. */
+    "types": ["node", "vite/client"],
     "skipLibCheck": true,
 
     /* Bundler mode */
@@ -21,8 +23,5 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"],
-  /* Testes têm projeto próprio (tsconfig.test.json) porque rodam no Node e precisam dos
-     tipos dele; mantê-los fora daqui evita expor APIs de Node ao código do app. */
-  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]
+  "include": ["src/**/*.test.ts", "src/**/*.test.tsx"]
 }

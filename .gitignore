@@ -43,3 +43,7 @@ zap-scan-export/
 
 # Graphify: versiona o knowledge graph, ignora o cache local
 graphify-out/cache/
+
+# Dumps/backups do banco de produção — nunca versionar (o .zip tem centenas de MB)
+cifras_data_backup.zip
+*.sqlite.zip

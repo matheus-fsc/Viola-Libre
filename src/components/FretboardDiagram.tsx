@@ -494,7 +494,11 @@ export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
           <span>Dificuldade:</span>
           <span className="font-bold text-black">{getVoicingDifficulty(frets).label}</span>
         </div>
-        {voicing.hasInteriorMute && (
+        {/* Só o abafamento CARO vira alerta. O que fica colado no baixo é abafado pelo próprio
+            dedo da fundamental (pegada de bossa, ex.: Gm7 3-x-3-3-3-x) e não merece aviso
+            vermelho. O filtro "esconder abafamento" em App.tsx segue usando hasInteriorMute,
+            que é factual: quem pede para esconder quer esconder todos. */}
+        {voicing.hasCostlyInteriorMute && (
           <div className={`${compact ? 'hidden sm:flex' : 'flex'} text-[9px] font-bold text-[#cc3300] font-mono mt-1 bg-[#ffcccc]/70 border border-[#cc3300] rounded px-1 py-0.5 text-center shadow-sm select-none items-center justify-center gap-1`}>
             <IconWarning className="w-3 h-3 text-[#cc3300]" />
             <span>Abafamento Interno</span>
