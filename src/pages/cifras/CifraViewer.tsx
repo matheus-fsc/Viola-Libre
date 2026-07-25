@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useState, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { FileText, Eye, Heart, Pin, Save } from 'lucide-react';
 import {
@@ -49,6 +49,53 @@ interface SectionEntry {
   endTime: number;
   startY: number;
   endY: number;
+}
+
+// ── Transporte do rolamento ───────────────────────────────────────────────────
+// Fração da viewport onde o acorde "atual" é posicionado (linha de leitura).
+const READING_LINE = 0.30;
+// Divergência (px) entre o Y que escrevemos e o Y real da página a partir da qual
+// consideramos que o músico mexeu na tela. 2px absorve o arredondamento que o
+// navegador aplica em window.scrollTo.
+const USER_SCROLL_EPS = 2;
+// Silêncio do motor após o último gesto: deixa a inércia do toque/trackpad
+// terminar antes de retomar, senão o rolamento briga com o dedo do músico.
+const SETTLE_MS = 900;
+// Salto dos atalhos ← / →.
+const NUDGE_SEC = 5;
+
+type ChordMapPoint = { chordY: number; time: number };
+
+// Tempo → Y da página, interpolando o mapa de acordes.
+function yAtTime(map: ChordMapPoint[], t: number, maxScroll: number): number {
+  const last = map[map.length - 1];
+  if (t >= last.time) return maxScroll;
+  let lo = 0, hi = map.length - 1;
+  while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (map[mid].time <= t) lo = mid; else hi = mid; }
+  const { chordY: y0, time: t0 } = map[lo];
+  const { chordY: y1, time: t1 } = map[hi];
+  const frac = t1 > t0 ? (t - t0) / (t1 - t0) : 0;
+  return Math.max(0, y0 + (y1 - y0) * frac - window.innerHeight * READING_LINE);
+}
+
+// Inverso de yAtTime: onde a tela está ⇒ em que ponto da música o playhead está.
+// É esta função que permite rolar a tela no meio do play e continuar dali.
+function timeAtY(map: ChordMapPoint[], y: number): number {
+  if (map.length < 2) return 0;
+  const chordY = y + window.innerHeight * READING_LINE;
+  if (chordY <= map[0].chordY) return map[0].time;
+  const last = map[map.length - 1];
+  if (chordY >= last.chordY) return last.time;
+  let lo = 0, hi = map.length - 1;
+  while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (map[mid].chordY <= chordY) lo = mid; else hi = mid; }
+  const a = map[lo], b = map[hi];
+  const frac = b.chordY > a.chordY ? (chordY - a.chordY) / (b.chordY - a.chordY) : 0;
+  return a.time + (b.time - a.time) * frac;
+}
+
+function fmtTime(sec: number): string {
+  const s = Number.isFinite(sec) && sec > 0 ? sec : 0;
+  return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 }
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
@@ -151,6 +198,12 @@ export const CifraViewer: React.FC = () => {
   const [scrollFrac, setScrollFrac] = useState(0);
   const [lyricsPopup, setLyricsPopup] = useState<{ chord: string; x: number; y: number } | null>(null);
   const [currentSection, setCurrentSection] = useState<string | null>(null);
+  // Transporte: relógio exibido, duração total e seções (para a barra de posição)
+  const [elapsedDisplay, setElapsedDisplay] = useState(0);
+  const [totalTime, setTotalTime] = useState(0);
+  const [sections, setSections] = useState<SectionEntry[]>([]);
+  // true enquanto o músico está reposicionando a tela (motor em silêncio)
+  const [userSeeking, setUserSeeking] = useState(false);
 
   // Refs
   const contentRef = useRef<HTMLDivElement>(null);
@@ -162,6 +215,17 @@ export const CifraViewer: React.FC = () => {
   const prevSectionRef = useRef<string | null>(null);
   const lyricsPopupRef = useRef<HTMLDivElement>(null);
   const popupCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Transporte — driveY é o alvo em float (acumular em px inteiros trava o
+  // rolamento lento no arredondamento); appliedY é o último Y que NÓS escrevemos,
+  // e serve para distinguir movimento nosso de movimento do músico.
+  const driveYRef = useRef(0);
+  const appliedYRef = useRef(0);
+  const lastGestureRef = useRef(-Infinity);
+  const seekingRef = useRef(false);
+  const totalTimeRef = useRef(0);
+  const lastClockAtRef = useRef(0);
+  const railRef = useRef<HTMLDivElement>(null);
+  const railDragRef = useRef(false);
   // Mirror mutable values for rAF closure (updated each render)
   const scrollMultRef = useRef(scrollMult);
   const loopARef = useRef(loopA);
@@ -255,14 +319,84 @@ export const CifraViewer: React.FC = () => {
     return () => { if ('scrollRestoration' in history) history.scrollRestoration = 'auto'; };
   }, []);
 
-  // Ativar auto-scroll: volta pro topo para sincronizar com o início da música
-  const handleToggleAutoScroll = () => {
-    if (!autoScroll) window.scrollTo(0, 0);
+  // ── Transporte ──────────────────────────────────────────────────────────────
+  // Invariante do sistema: o playhead (elapsedRef) e a posição da tela são duas
+  // vistas da mesma coisa. O motor escreve a tela a partir do playhead; qualquer
+  // movimento que não veio do motor reancora o playhead na tela — é isso que faz
+  // "rolar com o dedo" virar um seek em vez de uma briga com o rAF.
+  const syncPlayheadToScroll = useCallback(() => {
+    const y = window.scrollY;
+    driveYRef.current = y;
+    appliedYRef.current = y;
+    const map = chordMapRef.current;
+    if (map.length >= 2) elapsedRef.current = timeAtY(map, y);
+    setElapsedDisplay(elapsedRef.current);
+  }, []);
+
+  // Play/pause. Nunca volta ao topo: retoma de onde o músico está lendo.
+  const handleToggleAutoScroll = useCallback(() => {
+    if (!autoScroll) syncPlayheadToScroll();
     setAutoScroll(p => !p);
+  }, [autoScroll, syncPlayheadToScroll]);
+
+  // ⏮ — único caminho que volta ao início da cifra.
+  const handleRestart = useCallback(() => {
+    window.scrollTo(0, 0);
+    elapsedRef.current = 0;
+    lastGestureRef.current = -Infinity;
+    syncPlayheadToScroll();
+  }, [syncPlayheadToScroll]);
+
+  // Seek absoluto (barra de posição, atalhos, salto de seção). Zera o "settle"
+  // porque um seek explícito já é a posição final desejada.
+  const seekToY = useCallback((y: number) => {
+    const maxSc = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+    window.scrollTo(0, Math.max(0, Math.min(y, maxSc)));
+    lastGestureRef.current = -Infinity;
+    syncPlayheadToScroll();
+  }, [syncPlayheadToScroll]);
+
+  const seekBySeconds = useCallback((delta: number) => {
+    const map = chordMapRef.current;
+    if (map.length < 2) { seekToY(window.scrollY + delta * 60); return; }
+    const maxSc = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+    const t = Math.max(0, Math.min(timeAtY(map, window.scrollY) + delta, totalTimeRef.current));
+    seekToY(yAtTime(map, t, maxSc));
+  }, [seekToY]);
+
+  const seekToTime = useCallback((t: number) => {
+    const map = chordMapRef.current;
+    const maxSc = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+    if (map.length < 2) { seekToY(totalTimeRef.current > 0 ? (t / totalTimeRef.current) * maxSc : 0); return; }
+    seekToY(yAtTime(map, Math.max(0, t), maxSc));
+  }, [seekToY]);
+
+  // Barra de posição: a fração vertical do clique/arraste vira posição na cifra.
+  const seekFromRail = useCallback((clientY: number) => {
+    const rect = railRef.current?.getBoundingClientRect();
+    if (!rect || rect.height === 0) return;
+    const frac = Math.max(0, Math.min((clientY - rect.top) / rect.height, 1));
+    const maxSc = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+    seekToY(frac * maxSc);
+  }, [seekToY]);
+
+  const handleRailPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    railDragRef.current = true;
+    seekFromRail(e.clientY);
+  };
+  const handleRailPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (railDragRef.current) seekFromRail(e.clientY);
+  };
+  const handleRailPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    railDragRef.current = false;
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
   };
 
-  // Auto-scroll: interpola posição pelo mapa de acordes (velocidade não-uniforme)
-  // ou usa velocidade constante como fallback quando o mapa está vazio.
+  // Motor de rolamento: interpola posição pelo mapa de acordes (velocidade
+  // não-uniforme) ou usa velocidade constante como fallback quando o mapa está
+  // vazio. Cede a tela ao músico assim que ele rola, e retoma do ponto onde ele
+  // parou — o cronômetro NÃO é zerado ao dar play (isso é papel do ⏮).
   useEffect(() => {
     if (!autoScroll) {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -270,56 +404,69 @@ export const CifraViewer: React.FC = () => {
       prevTimeRef.current = null;
       setCurrentSection(null);
       prevSectionRef.current = null;
+      seekingRef.current = false;
+      setUserSeeking(false);
       return;
     }
-    elapsedRef.current = 0;
     const step = (ts: number) => {
+      rafRef.current = requestAnimationFrame(step);
       if (prevTimeRef.current === null) prevTimeRef.current = ts;
       const dt = Math.min(ts - prevTimeRef.current, 100);
       prevTimeRef.current = ts;
       const maxSc = document.documentElement.scrollHeight - window.innerHeight;
-      if (maxSc <= 0) { rafRef.current = requestAnimationFrame(step); return; }
-      const mult = scrollMultRef.current;
-      elapsedRef.current += (dt / 1000) * mult;
+      if (maxSc <= 0) return;
       const map = chordMapRef.current;
-      let targetY: number;
-      if (map.length >= 2) {
-        const t = elapsedRef.current;
-        const last = map[map.length - 1];
-        if (t >= last.time) {
-          targetY = maxSc;
-        } else {
-          let lo = 0, hi = map.length - 1;
-          while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (map[mid].time <= t) lo = mid; else hi = mid; }
-          const { chordY: y0, time: t0 } = map[lo];
-          const { chordY: y1, time: t1 } = map[hi];
-          const frac = t1 > t0 ? (t - t0) / (t1 - t0) : 0;
-          // Posiciona o acorde na linha de leitura (30vh do topo)
-          targetY = Math.max(0, y0 + (y1 - y0) * frac - window.innerHeight * 0.30);
-        }
+      const actualY = window.scrollY;
+
+      // Movimento que não foi escrito por nós = o músico rolou a tela (roda,
+      // toque, barra de rolagem, teclas de página).
+      if (Math.abs(actualY - appliedYRef.current) > USER_SCROLL_EPS) lastGestureRef.current = ts;
+      const settling = ts - lastGestureRef.current < SETTLE_MS;
+      if (seekingRef.current !== settling) { seekingRef.current = settling; setUserSeeking(settling); }
+
+      if (settling) {
+        // Motor em silêncio: a inércia do toque/trackpad termina sozinha e o
+        // playhead acompanha a posição que o músico escolheu.
+        driveYRef.current = actualY;
+        appliedYRef.current = actualY;
+        if (map.length >= 2) elapsedRef.current = timeAtY(map, actualY);
       } else {
-        // Fallback: velocidade constante por duração ou 60px/s
-        const dur = cifraForRaf.current?.duration ?? null;
-        const pxPerSec = dur ? Math.max(40, maxSc / dur) : 60;
-        targetY = window.scrollY + pxPerSec * (dt / 1000) * mult;
-      }
-      const la = loopARef.current;
-      const lb = loopBRef.current;
-      if (la !== null || lb !== null) {
-        const loopEnd = lb ?? maxSc;
-        if (targetY >= loopEnd) {
-          targetY = la ?? 0;
-          // Sincroniza elapsedRef com a posição A para continuar o mapa coerentemente
-          const startChordY = targetY + window.innerHeight * 0.30;
-          const idx = map.findIndex(p => p.chordY > startChordY);
-          elapsedRef.current = idx > 0 ? map[idx - 1].time : 0;
+        const mult = scrollMultRef.current;
+        elapsedRef.current += (dt / 1000) * mult;
+        let targetY: number;
+        if (map.length >= 2) {
+          targetY = yAtTime(map, elapsedRef.current, maxSc);
+        } else {
+          // Fallback: velocidade constante por duração ou 60px/s. O alvo é
+          // acumulado em float — ler window.scrollY aqui faria o rolamento lento
+          // travar no arredondamento de pixel do navegador.
+          const dur = cifraForRaf.current?.duration ?? null;
+          const pxPerSec = dur ? Math.max(40, maxSc / dur) : 60;
+          driveYRef.current += pxPerSec * (dt / 1000) * mult;
+          targetY = driveYRef.current;
         }
-      } else if (targetY >= maxSc) {
-        window.scrollTo(0, maxSc);
-        setAutoScroll(false);
-        return;
+
+        const la = loopARef.current;
+        const lb = loopBRef.current;
+        if (la !== null || lb !== null) {
+          const loopEnd = lb ?? maxSc;
+          if (targetY >= loopEnd) {
+            // Volta pro A e recoloca o playhead no tempo daquela posição.
+            targetY = la ?? 0;
+            elapsedRef.current = map.length >= 2 ? timeAtY(map, targetY) : 0;
+          }
+        } else if (targetY >= maxSc) {
+          window.scrollTo(0, maxSc);
+          appliedYRef.current = window.scrollY;
+          setAutoScroll(false);
+          return;
+        }
+        const y = Math.max(0, Math.min(targetY, maxSc));
+        driveYRef.current = y;
+        window.scrollTo(0, y);
+        appliedYRef.current = window.scrollY;
       }
-      window.scrollTo(0, Math.max(0, Math.min(targetY, maxSc)));
+
       // Section detection — only triggers a re-render when section changes
       const tl = sectionTimelineRef.current;
       if (tl.length > 0) {
@@ -333,11 +480,46 @@ export const CifraViewer: React.FC = () => {
           setCurrentSection(secLabel);
         }
       }
-      rafRef.current = requestAnimationFrame(step);
+      // Relógio: 4 re-renders por segundo em vez de 60.
+      if (ts - lastClockAtRef.current > 250) {
+        lastClockAtRef.current = ts;
+        setElapsedDisplay(elapsedRef.current);
+      }
     };
     rafRef.current = requestAnimationFrame(step);
     return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
   }, [autoScroll]);
+
+  // Marca o gesto no primeiro sinal — antes mesmo da página se mover — para o
+  // motor não disputar o primeiro pixel do arraste com o dedo do músico.
+  useEffect(() => {
+    if (!autoScroll) return;
+    const mark = () => { lastGestureRef.current = performance.now(); };
+    const opts: AddEventListenerOptions = { passive: true };
+    window.addEventListener('wheel', mark, opts);
+    window.addEventListener('touchstart', mark, opts);
+    window.addEventListener('touchmove', mark, opts);
+    return () => {
+      window.removeEventListener('wheel', mark);
+      window.removeEventListener('touchstart', mark);
+      window.removeEventListener('touchmove', mark);
+    };
+  }, [autoScroll]);
+
+  // Atalhos de transporte (ignorados quando o foco está num campo de texto).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = e.target as HTMLElement | null;
+      if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
+      if (e.code === 'Space') { e.preventDefault(); handleToggleAutoScroll(); }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); seekBySeconds(-NUDGE_SEC); }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); seekBySeconds(NUDGE_SEC); }
+      else if (e.key === 'Home') { e.preventDefault(); handleRestart(); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [handleToggleAutoScroll, handleRestart, seekBySeconds]);
 
   // Scroll position tracker via window scroll
   useEffect(() => {
@@ -345,9 +527,19 @@ export const CifraViewer: React.FC = () => {
       const max = document.documentElement.scrollHeight - window.innerHeight;
       setMaxScroll(max);
     };
+    // Durante o rolamento o evento dispara a cada frame — sem esta trava seriam
+    // 60 re-renders/s só para mover o marcador da barra de posição.
+    let ticking = false;
     const onScroll = () => {
-      const max = document.documentElement.scrollHeight - window.innerHeight;
-      if (max > 0) setScrollFrac(window.scrollY / max);
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        ticking = false;
+        const max = document.documentElement.scrollHeight - window.innerHeight;
+        if (max <= 0) return;
+        const next = window.scrollY / max;
+        setScrollFrac(prev => (Math.abs(next - prev) > 0.002 ? next : prev));
+      });
     };
     updateMax();
     window.addEventListener('scroll', onScroll, { passive: true });
@@ -468,8 +660,15 @@ export const CifraViewer: React.FC = () => {
         timeline.push({ label: marker.label, isInstrumental: marker.instrumental, repeat: marker.repeat, startTime, endTime, startY, endY });
       }
       sectionTimelineRef.current = timeline;
+      totalTimeRef.current = totalTime;
+      setTotalTime(totalTime);
+      setSections(timeline);
+      // O mapa mudou (BPM, timing contribuído, transposição, tabs): reancora o
+      // playhead na posição atual da tela para o rolamento não dar um salto.
+      syncPlayheadToScroll();
 
       // ── Diagnóstico de timing ──────────────────────────────────────────────
+      if (import.meta.env.DEV) {
       console.group(`[AutoScroll] ${cifra.title}`);
       console.log('Fonte totalTime :', dur != null ? `duration da API (${dur}s)` : `fallback BPM (bpm=${bpm}, tags=<b>×${bEls.length}) → ${totalTime.toFixed(1)}s`);
       console.log('totalTime       :', `${totalTime.toFixed(1)}s  (${(totalTime/60).toFixed(2)} min)`);
@@ -496,10 +695,11 @@ export const CifraViewer: React.FC = () => {
       });
       console.table(q);
       console.groupEnd();
+      }
       // ── fim diagnóstico ───────────────────────────────────────────────────
     });
     return () => cancelAnimationFrame(frame);
-  }, [cifra, localBpm, previewTiming, bestTiming]);
+  }, [cifra, localBpm, previewTiming, bestTiming, syncPlayheadToScroll]);
 
   // Reset BPM/scroll/loop ao trocar de música
   useEffect(() => {
@@ -510,6 +710,14 @@ export const CifraViewer: React.FC = () => {
     setCurrentSection(null);
     prevSectionRef.current = null;
     sectionTimelineRef.current = [];
+    setSections([]);
+    setTotalTime(0);
+    totalTimeRef.current = 0;
+    elapsedRef.current = 0;
+    driveYRef.current = 0;
+    appliedYRef.current = 0;
+    lastGestureRef.current = -Infinity;
+    setElapsedDisplay(0);
     window.scrollTo(0, 0);
   }, [artistSlug, songSlug]);
 
@@ -1289,9 +1497,17 @@ export const CifraViewer: React.FC = () => {
             {/* Auto-scroll */}
             <div className="flex flex-col gap-0.5">
               <label className="font-bold text-[10px] uppercase text-gray-500">Rolar Auto:</label>
-              <button onClick={handleToggleAutoScroll} className={`bevel-out px-2 py-1 text-xs font-bold w-full border border-gray-400 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${autoScroll ? 'bg-[#316ac5] text-white' : 'bg-[var(--color-winxp-panel)] text-black hover:bg-white'}`}>
-                {autoScroll ? '⏸ Parar' : '▶ Rolar'}
+              <button onClick={handleToggleAutoScroll} className={`bevel-out px-2 py-1 text-xs font-bold w-full border border-gray-400 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${autoScroll ? 'bg-[#316ac5] text-white' : 'bg-[var(--color-winxp-panel)] text-black hover:bg-white'}`} title="Espaço — retoma da posição atual da tela">
+                {autoScroll ? (userSeeking ? '✋ Ajustando' : '⏸ Parar') : '▶ Rolar'}
               </button>
+              <div className="flex gap-1">
+                <button onClick={handleRestart} className="flex-1 text-[10px] font-bold py-0.5 border border-gray-400 bg-[#ece9d8] hover:bg-white leading-tight" title="Voltar ao início (Home)">⏮</button>
+                <button onClick={() => seekBySeconds(-NUDGE_SEC)} className="flex-1 text-[10px] font-bold py-0.5 border border-gray-400 bg-[#ece9d8] hover:bg-white leading-tight" title={`Voltar ${NUDGE_SEC}s (←)`}>◀◀</button>
+                <button onClick={() => seekBySeconds(NUDGE_SEC)} className="flex-1 text-[10px] font-bold py-0.5 border border-gray-400 bg-[#ece9d8] hover:bg-white leading-tight" title={`Avançar ${NUDGE_SEC}s (→)`}>▶▶</button>
+              </div>
+              {totalTime > 0 && (
+                <span className="font-mono text-[10px] font-bold text-[#002fa7] text-center tabular-nums">{fmtTime(elapsedDisplay)} / {fmtTime(totalTime)}</span>
+              )}
               <div className="flex gap-1">
                 {([0.5, 1, 2] as const).map(m => (
                   <button key={m} onClick={() => setScrollMult(m)} className={`flex-1 text-[10px] font-bold py-0.5 border leading-tight ${scrollMult === m ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#ece9d8] border-gray-400 hover:bg-white'}`}>{m}×</button>
@@ -1412,9 +1628,15 @@ export const CifraViewer: React.FC = () => {
                   <button onClick={() => setLocalBpm(p => Math.min(300, (p ?? effectiveBpm ?? 100) + 1))} className="bevel-out bg-[var(--color-winxp-panel)] px-1.5 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white">+</button>
                   {bpmModified && <button onClick={() => setLocalBpm(null)} className="bevel-out bg-[var(--color-winxp-panel)] px-1 py-0.5 text-xs border border-gray-400 hover:bg-white" title="Restaurar BPM da API">↺</button>}
                 </div>
-                <button onClick={handleToggleAutoScroll} className={`bevel-out px-3 py-1 text-xs font-bold border border-gray-400 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${autoScroll ? 'bg-[#316ac5] text-white' : 'bg-[var(--color-winxp-panel)] text-[#002fa7]'}`}>
-                  {autoScroll ? '⏸' : '▶'} Rolar
+                <button onClick={handleRestart} className="bevel-out px-2 py-1 text-xs font-bold border border-gray-400 bg-[var(--color-winxp-panel)] text-[#002fa7] hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white" title="Voltar ao início (Home)">⏮</button>
+                <button onClick={() => seekBySeconds(-NUDGE_SEC)} className="bevel-out px-1.5 py-1 text-xs font-bold border border-gray-400 bg-[var(--color-winxp-panel)] text-[#002fa7] hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white" title={`Voltar ${NUDGE_SEC}s (←)`}>◀◀</button>
+                <button onClick={handleToggleAutoScroll} className={`bevel-out px-3 py-1 text-xs font-bold border border-gray-400 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${autoScroll ? 'bg-[#316ac5] text-white' : 'bg-[var(--color-winxp-panel)] text-[#002fa7]'}`} title="Espaço — retoma da posição atual da tela">
+                  {autoScroll ? (userSeeking ? '✋' : '⏸') : '▶'} Rolar
                 </button>
+                <button onClick={() => seekBySeconds(NUDGE_SEC)} className="bevel-out px-1.5 py-1 text-xs font-bold border border-gray-400 bg-[var(--color-winxp-panel)] text-[#002fa7] hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white" title={`Avançar ${NUDGE_SEC}s (→)`}>▶▶</button>
+                {totalTime > 0 && (
+                  <span className="font-mono text-[10px] font-bold text-[#002fa7] tabular-nums px-1">{fmtTime(elapsedDisplay)} / {fmtTime(totalTime)}</span>
+                )}
                 {([0.5, 1, 2] as const).map(m => (
                   <button key={m} onClick={() => setScrollMult(m)} className={`text-[10px] font-bold px-1.5 py-1 border leading-tight ${scrollMult === m ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#ece9d8] border-gray-400 hover:bg-white'}`}>{m}×</button>
                 ))}
@@ -1731,22 +1953,6 @@ export const CifraViewer: React.FC = () => {
               )
             )}
           </div>
-          {/* Loop strip — mostra região A→B e posição atual */}
-          {(loopA !== null || loopB !== null) && maxScroll > 0 && (
-            <div className="w-3 shrink-0 bg-[#d4d0c8] bevel-in relative">
-              <div
-                className="absolute left-0 right-0 bg-[#316ac5] opacity-75 min-h-[2px]"
-                style={{
-                  top: `${((loopA ?? 0) / maxScroll) * 100}%`,
-                  height: `${Math.max(2, (((loopB ?? maxScroll) - (loopA ?? 0)) / maxScroll) * 100)}%`,
-                }}
-              />
-              <div
-                className="absolute left-0 right-0 h-0.5 bg-[#cc3300]"
-                style={{ top: `${scrollFrac * 100}%` }}
-              />
-            </div>
-          )}
         </div>
 
         </div>{/* fim área de conteúdo */}
@@ -1857,14 +2063,81 @@ export const CifraViewer: React.FC = () => {
         );
       })()}
 
+      {/* Barra de posição — fixa na viewport para continuar alcançável durante o
+          rolamento. Clique/arraste reposiciona; os traços são as seções da cifra. */}
+      {maxScroll > 0 && (autoScroll || loopA !== null || loopB !== null) && (
+        <div
+          ref={railRef}
+          onPointerDown={handleRailPointerDown}
+          onPointerMove={handleRailPointerMove}
+          onPointerUp={handleRailPointerUp}
+          onPointerCancel={handleRailPointerUp}
+          className="fixed right-3 top-20 bottom-20 w-3.5 z-40 bg-[#d4d0c8] bevel-in cursor-pointer touch-none select-none"
+          title="Clique ou arraste para reposicionar"
+        >
+          {(loopA !== null || loopB !== null) && (
+            <div
+              className="absolute left-0 right-0 bg-[#316ac5] opacity-40 min-h-[2px] pointer-events-none"
+              style={{
+                top: `${((loopA ?? 0) / maxScroll) * 100}%`,
+                height: `${Math.max(2, (((loopB ?? maxScroll) - (loopA ?? 0)) / maxScroll) * 100)}%`,
+              }}
+            />
+          )}
+          {sections.map((s, i) => {
+            const y = Math.max(0, s.startY - window.innerHeight * READING_LINE);
+            return (
+              <div
+                key={`${s.label}-${i}`}
+                onPointerDown={(e) => { e.stopPropagation(); seekToTime(s.startTime); }}
+                className={`absolute left-0 right-0 h-[3px] -mt-[1px] ${s.isInstrumental ? 'bg-[#996600]' : 'bg-[#666]'} opacity-60 hover:opacity-100 hover:h-[5px]`}
+                style={{ top: `${Math.min(100, (y / maxScroll) * 100)}%` }}
+                title={`${s.label} — ${fmtTime(s.startTime)}`}
+              />
+            );
+          })}
+          <div
+            className="absolute -left-1 -right-1 h-1 bg-[#cc3300] border border-white/60 pointer-events-none"
+            style={{ top: `${scrollFrac * 100}%` }}
+          />
+        </div>
+      )}
+
       {/* Floating auto-scroll control — canto inferior direito, sempre visível */}
       <div className="fixed bottom-4 right-4 z-50 bevel-out bg-[var(--color-winxp-panel)] border border-gray-500 shadow-xl px-2 py-1.5 flex items-center gap-2 text-xs select-none">
         <button
+          onClick={handleRestart}
+          className="bevel-out px-2 py-1 font-bold border border-gray-400 bg-[var(--color-winxp-panel)] text-[#002fa7] hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
+          title="Voltar ao início (Home)"
+        >
+          ⏮
+        </button>
+        <button
+          onClick={() => seekBySeconds(-NUDGE_SEC)}
+          className="bevel-out px-1.5 py-1 font-bold border border-gray-400 bg-[var(--color-winxp-panel)] text-[#002fa7] hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
+          title={`Voltar ${NUDGE_SEC}s (←)`}
+        >
+          ◀◀
+        </button>
+        <button
           onClick={handleToggleAutoScroll}
           className={`bevel-out px-3 py-1 font-bold border border-gray-400 min-w-[90px] text-center active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${autoScroll ? 'bg-[#316ac5] text-white' : 'bg-[var(--color-winxp-panel)] text-[#002fa7] hover:bg-white'}`}
+          title="Tocar/pausar (Espaço) — retoma de onde a tela está"
         >
-          {autoScroll ? '⏸ Pausar' : '▶ Auto-Rolar'}
+          {autoScroll ? (userSeeking ? '✋ Ajustando' : '⏸ Pausar') : '▶ Auto-Rolar'}
         </button>
+        <button
+          onClick={() => seekBySeconds(NUDGE_SEC)}
+          className="bevel-out px-1.5 py-1 font-bold border border-gray-400 bg-[var(--color-winxp-panel)] text-[#002fa7] hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
+          title={`Avançar ${NUDGE_SEC}s (→)`}
+        >
+          ▶▶
+        </button>
+        {totalTime > 0 && (
+          <span className="font-mono text-[10px] font-bold text-[#002fa7] border-l border-gray-400 pl-1.5 tabular-nums">
+            {fmtTime(elapsedDisplay)} / {fmtTime(totalTime)}
+          </span>
+        )}
         <div className="flex gap-0.5">
           {([0.5, 1, 2] as const).map(m => (
             <button
@@ -1895,8 +2168,8 @@ export const CifraViewer: React.FC = () => {
       {/* Linha de leitura — guia visual a 30% da viewport enquanto auto-scroll está ativo */}
       {autoScroll && (
         <div
-          className="fixed left-0 right-0 pointer-events-none z-40 border-t-2 border-[#316ac5] opacity-30"
-          style={{ top: '30vh' }}
+          className={`fixed left-0 right-0 pointer-events-none z-40 border-t-2 ${userSeeking ? 'border-[#cc3300] opacity-50' : 'border-[#316ac5] opacity-30'}`}
+          style={{ top: `${READING_LINE * 100}vh` }}
         />
       )}
 
