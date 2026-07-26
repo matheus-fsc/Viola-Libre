@@ -124,8 +124,10 @@ export function detectMediaType(url: string): MediaType {
   return 'other';
 }
 
+// Cobre as formas que o seed de vídeo e os editores produzem: watch?v=, youtu.be,
+// /embed/, /shorts/ e /live/. O id do YouTube tem sempre 11 caracteres.
 export function extractYouTubeId(url: string): string | null {
-  const m = url.match(/(?:v=|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+  const m = url.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/|\/live\/)([A-Za-z0-9_-]{11})/);
   return m ? m[1] : null;
 }
 

@@ -1,16 +1,9 @@
 import { create } from 'zustand';
 import { detectMediaType, cleanYouTubeUrl, formatSeconds } from '../services/timingApi';
 import type { MediaType } from '../services/timingApi';
-
-// YT player instance — defined locally; component keeps Window extension via declare global
-interface YTPlayerInstance {
-  getCurrentTime(): number;
-  getDuration(): number;
-  seekTo(seconds: number, allowSeekAhead: boolean): void;
-  playVideo(): void;
-  pauseVideo(): void;
-  destroy(): void;
-}
+// A interface do player e a extensão de Window vivem em services/youtubeApi.ts,
+// junto do carregador que injeta a IFrame API uma única vez.
+import type { YTPlayer as YTPlayerInstance } from '../services/youtubeApi';
 
 export interface PlayerState {
   // ── Reactive ──────────────────────────────────────────────────────────────

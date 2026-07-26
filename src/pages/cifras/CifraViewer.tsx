@@ -16,6 +16,7 @@ import { FretboardDiagram } from '../../components/FretboardDiagram';
 import { ChordHoverCard, type ChordAnchor } from '../../components/ChordHoverCard';
 import { ChordEditorModal } from '../../components/ChordEditorModal';
 import { TabTransposerBlock } from '../../components/TabTransposerBlock';
+import { SourceVideoPanel } from '../../components/SourceVideoPanel';
 import { splitHtmlByTabs, TAB_POSITIONS, type ContentSegment } from '../../engine/tabTransposer';
 import '../../components/Cifras.css';
 import { fetchBestTiming, type TimingContribution } from '../../services/timingApi';
@@ -198,6 +199,10 @@ export const CifraViewer: React.FC = () => {
   const [maxScroll, setMaxScroll] = useState(0);
   const [previewTiming, setPreviewTiming] = useState<TimingContribution | null>(null);
   const [bestTiming, setBestTiming] = useState<TimingContribution | null>(null);
+  // Source em vídeo: painel aberto sob demanda e duração medida no player (só existe
+  // depois que o músico abre o vídeo — ninguém carrega um iframe do YouTube sem pedir).
+  const [showVideo, setShowVideo] = useState(false);
+  const [videoDuration, setVideoDuration] = useState<number | null>(null);
   const [scrollFrac, setScrollFrac] = useState(0);
   const [lyricsPopup, setLyricsPopup] = useState<ChordAnchor | null>(null);
   const [currentSection, setCurrentSection] = useState<string | null>(null);
@@ -226,6 +231,8 @@ export const CifraViewer: React.FC = () => {
   const lastGestureRef = useRef(-Infinity);
   const seekingRef = useRef(false);
   const totalTimeRef = useRef(0);
+  const videoDurationRef = useRef<number | null>(null);
+  videoDurationRef.current = videoDuration;
   const lastClockAtRef = useRef(0);
   const railRef = useRef<HTMLDivElement>(null);
   const railDragRef = useRef(false);
@@ -454,7 +461,7 @@ export const CifraViewer: React.FC = () => {
           // Fallback: velocidade constante por duração ou 60px/s. O alvo é
           // acumulado em float — ler window.scrollY aqui faria o rolamento lento
           // travar no arredondamento de pixel do navegador.
-          const dur = cifraForRaf.current?.duration ?? null;
+          const dur = cifraForRaf.current?.duration ?? videoDurationRef.current;
           const pxPerSec = dur ? Math.max(40, maxSc / dur) : 60;
           driveYRef.current += pxPerSec * (dt / 1000) * mult;
           targetY = driveYRef.current;
@@ -662,7 +669,15 @@ export const CifraViewer: React.FC = () => {
       }
 
       const activeTiming = previewTiming ?? bestTiming ?? null;
-      const dur = activeTiming?.duration ?? cifra.duration ?? null;
+      // Ordem das fontes de duração, da mais específica para a mais grosseira:
+      // timing da comunidade (medido nesta gravação) → duration da API (Deezer/análise
+      // de áudio da faixa) → duração do vídeo aberto pelo músico → dedução por BPM.
+      // A dedução é a única que não vem de nenhuma gravação: `(60/bpm)*4*nº de acordes`
+      // supõe um compasso por acorde e erra feio em cifras com muitos acordes por linha.
+      const dur = activeTiming?.duration ?? cifra.duration ?? videoDuration ?? null;
+      const durSource = activeTiming?.duration != null ? 'timing da comunidade'
+        : cifra.duration != null ? 'duration da API'
+        : videoDuration != null ? 'vídeo da source' : null;
       const bpm = activeTiming?.bpm ?? localBpm ?? cifra.bpm ?? 120;
       const totalTime = dur ?? (60 / bpm) * 4 * bEls.length;
 
@@ -723,7 +738,7 @@ export const CifraViewer: React.FC = () => {
       // ── Diagnóstico de timing ──────────────────────────────────────────────
       if (import.meta.env.DEV) {
       console.group(`[AutoScroll] ${cifra.title}`);
-      console.log('Fonte totalTime :', dur != null ? `duration da API (${dur}s)` : `fallback BPM (bpm=${bpm}, tags=<b>×${bEls.length}) → ${totalTime.toFixed(1)}s`);
+      console.log('Fonte totalTime :', dur != null ? `${durSource} (${dur}s)` : `dedução por BPM (bpm=${bpm}, tags=<b>×${bEls.length}) → ${totalTime.toFixed(1)}s`);
       console.log('totalTime       :', `${totalTime.toFixed(1)}s  (${(totalTime/60).toFixed(2)} min)`);
       console.log('Grupos de linhas:', n, '  Acordes totais (<b>):', bEls.length);
       console.log('Seções detectadas:', sectionMarkers.map(s => ({
@@ -752,12 +767,14 @@ export const CifraViewer: React.FC = () => {
       // ── fim diagnóstico ───────────────────────────────────────────────────
     });
     return () => cancelAnimationFrame(frame);
-  }, [cifra, localBpm, previewTiming, bestTiming, geometryToken, syncPlayheadToScroll]);
+  }, [cifra, localBpm, previewTiming, bestTiming, videoDuration, geometryToken, syncPlayheadToScroll]);
 
   // Reset BPM/scroll/loop ao trocar de música
   useEffect(() => {
     setLocalBpm(null);
     setAutoScroll(false);
+    setShowVideo(false);
+    setVideoDuration(null);
     setLoopA(null);
     setLoopB(null);
     setCurrentSection(null);
@@ -1218,9 +1235,23 @@ export const CifraViewer: React.FC = () => {
 
   const effectiveBpm = localBpm ?? (cifra?.bpm ?? null);
   const bpmModified = localBpm !== null && localBpm !== cifra?.bpm;
-  const durationStr = cifra?.duration != null
-    ? `${Math.floor(cifra.duration / 60)}:${String(cifra.duration % 60).padStart(2, '0')}`
-    : null;
+  // Mesma ordem usada pelo mapa de tempo; aqui só para exibir no painel.
+  const effectiveDuration = cifra?.duration ?? videoDuration ?? null;
+  const durationStr = effectiveDuration != null ? fmtTime(effectiveDuration) : null;
+  const durationFromVideo = cifra?.duration == null && videoDuration != null;
+
+  // Source em vídeo: o link semeado pela API tem prioridade; na falta dele,
+  // aproveita o mídia de um timing da comunidade — que já é um link de YouTube
+  // apontando para a mesma gravação.
+  const timingMedia = previewTiming ?? bestTiming ?? null;
+  const sourceVideoUrl =
+    cifra?.video_url?.trim() ||
+    (timingMedia?.mediaType === 'youtube' ? timingMedia.mediaUrl?.trim() : null) ||
+    null;
+
+  const handleVideoDuration = useCallback((seconds: number) => {
+    setVideoDuration(seconds);
+  }, []);
 
   if (loading) {
     return (
@@ -1555,8 +1586,21 @@ export const CifraViewer: React.FC = () => {
               {bpmModified && (
                 <button onClick={() => setLocalBpm(null)} className="bevel-out bg-[var(--color-winxp-panel)] px-1.5 py-0.5 text-xs w-full border border-gray-400 hover:bg-white" title="Restaurar BPM da API">↺ Restaurar</button>
               )}
-              {durationStr && <span className="text-[9px] text-gray-400 text-center">⏱ {durationStr}</span>}
+              {durationStr && (
+                <span className="text-[9px] text-gray-400 text-center" title={durationFromVideo ? 'Duração medida no vídeo da source' : 'Duração vinda da API'}>
+                  ⏱ {durationStr}{durationFromVideo && ' 📺'}
+                </span>
+              )}
               <button disabled className="bevel-out bg-[#f0f0f0] px-2 py-0.5 text-[9px] w-full border border-gray-300 text-gray-400 cursor-not-allowed" title="Em breve: contribua com BPM e duração para a comunidade">↑ Enviar BPM</button>
+              {sourceVideoUrl && (
+                <button
+                  onClick={() => setShowVideo(v => !v)}
+                  className={`bevel-out px-2 py-0.5 text-[9px] w-full border border-gray-400 font-bold ${showVideo ? 'bg-[#316ac5] text-white' : 'bg-[var(--color-winxp-panel)] text-black hover:bg-white'}`}
+                  title="Ver o vídeo da música (source)"
+                >
+                  📺 {showVideo ? 'Fechar vídeo' : 'Ver vídeo'}
+                </button>
+              )}
               <button onClick={() => navigate(`/cifras/${artistSlug}/${songSlug}/timing`)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-[9px] w-full border border-gray-400 font-bold hover:bg-white text-black">
                 ✏️ Timing
               </button>
@@ -1733,6 +1777,15 @@ export const CifraViewer: React.FC = () => {
                 <button onClick={() => navigate(`/cifras/${artistSlug}/${songSlug}/timing`)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-1 sm:px-3 text-xs font-bold border border-gray-400 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white text-black hover:bg-white" title="Contribuir timing">
                   ✏️ <span className="hidden sm:inline">Contribuir timing</span>
                 </button>
+                {sourceVideoUrl && (
+                  <button
+                    onClick={() => setShowVideo(v => !v)}
+                    className={`bevel-out px-2 py-1 sm:px-3 text-xs font-bold border border-gray-400 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${showVideo ? 'bg-[#316ac5] text-white' : 'bg-[var(--color-winxp-panel)] text-black hover:bg-white'}`}
+                    title="Ver o vídeo da música (source)"
+                  >
+                    📺 <span className="hidden sm:inline">{showVideo ? 'Fechar vídeo' : 'Ver vídeo'}</span>
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -2042,6 +2095,18 @@ export const CifraViewer: React.FC = () => {
             const next = lyricsVoicings[newIdx];
             if (next) playLyricsChordSound(next);
           }}
+        />
+      )}
+
+      {/* Source em vídeo — só monta o iframe depois que o músico pede. Além de ver
+          a gravação, o player entrega a duração REAL, que substitui a dedução por
+          BPM no mapa de tempo do auto-scroll. */}
+      {showVideo && sourceVideoUrl && (
+        <SourceVideoPanel
+          videoUrl={sourceVideoUrl}
+          title={cifra.title}
+          onClose={() => setShowVideo(false)}
+          onDurationDetected={handleVideoDuration}
         />
       )}
 

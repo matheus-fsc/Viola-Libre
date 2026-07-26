@@ -33,6 +33,14 @@ export interface CifraDetail {
   version_name: string;
   bpm?: number | null;
   duration?: number | null;
+  /**
+   * Link da source em vídeo (YouTube), semeado pelo worker de vídeo
+   * (/api/internal/video/*). Opcional: a rota pública só devolve o campo para as
+   * músicas já cobertas pelo seed — nas demais vem ausente/null.
+   */
+  video_url?: string | null;
+  /** Quem achou a source ('cifraclub', 'youtube_search', …). Só para diagnóstico. */
+  video_source?: string | null;
 }
 
 const cache = {

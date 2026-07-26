@@ -20,20 +20,7 @@ import { LoopSaltoWizardOverlay } from './timing/assisted/LoopSaltoWizardOverlay
 import { useLineLinkWizardStore } from '../stores/useLineLinkWizardStore';
 import { LineLinkWizardOverlay } from './timing/assisted/LineLinkWizardOverlay';
 import { AutoScrollPreview } from './timing/AutoScrollPreview';
-
-// YT IFrame API — only the Window extension stays here; YTPlayerInstance lives in usePlayerStore
-interface YTPlayerOptions {
-  videoId: string;
-  height: string | number;
-  width: string | number;
-  events?: { onReady?: () => void };
-}
-declare global {
-  interface Window {
-    YT?: { Player: new (el: HTMLElement | string, opts: YTPlayerOptions) => ReturnType<typeof Object> };
-    onYouTubeIframeAPIReady?: () => void;
-  }
-}
+import { loadYouTubeApi } from '../services/youtubeApi';
 
 const SECTION_LINE_RE = /^\[([^\]]+)\]$/;
 
@@ -236,10 +223,10 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
 
     clearYtPlayer();
 
-    const createPlayer = () => {
-      if (!ytContainerRef.current) return;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const player: any = new window.YT!.Player(ytContainerRef.current, {
+    let cancelled = false;
+    loadYouTubeApi().then(YT => {
+      if (cancelled || !ytContainerRef.current) return;
+      const player = new YT.Player(ytContainerRef.current, {
         videoId,
         height: 180,
         width: '100%',
@@ -251,21 +238,9 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
           },
         },
       });
-    };
+    }).catch(() => { /* sem player: o editor segue com a duração digitada à mão */ });
 
-    if (window.YT?.Player) {
-      createPlayer();
-    } else {
-      window.onYouTubeIframeAPIReady = createPlayer;
-      if (!document.getElementById('yt-api-script')) {
-        const tag = document.createElement('script');
-        tag.id = 'yt-api-script';
-        tag.src = 'https://www.youtube.com/iframe_api';
-        document.head.appendChild(tag);
-      }
-    }
-
-    return () => { clearYtPlayer(); };
+    return () => { cancelled = true; clearYtPlayer(); };
   }, [mediaUrl, mediaType]);
 
   // ── Audio polling (tick delegated to store) ────────────────────────────────
