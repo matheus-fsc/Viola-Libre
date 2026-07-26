@@ -511,26 +511,120 @@ export function transposeTab(
   return outputRows.join('\n');
 }
 
+const stripTags = (s: string) => s.replace(/<[^>]+>/g, '');
+
+// Legenda que o CifraClub imprime acima de cada pedaço de tab ("Parte 3 de 9").
+// Fica FORA do <span class="tablatura">, então precisa ser adotada pelo bloco —
+// senão sobra na letra quando o músico oculta as tabs.
+const TAB_CAPTION_RE = /^\[?\s*parte\s+\d+\s*(?:de|\/)\s*\d+\s*\]?$/i;
+
+// Linha de tab solta, fora de qualquer <span>. Acontece quando a marcação da
+// fonte quebra no meio do bloco (ex.: "<b>E</b>\------------|", com barra
+// invertida no lugar do pipe). Exige 4+ traços para não confundir com letra.
+const isLooseTabLine = (l: string) =>
+  (/^[A-Ga-g#b]{1,3}\s*[|\\/]/.test(l) || /^\|+[-x0-9]/.test(l) || isBareTabLine(l)) &&
+  /-{4,}/.test(l);
+
+// Acha o fechamento REAL da tag aberta em `fromIdx`, contando aninhamento: um
+// <span class="tablatura"> quase sempre embrulha um <span class="cnt">, e parar
+// no primeiro </span> deixaria o externo órfão no meio da cifra.
+function findElementEnd(html: string, tag: string, fromIdx: number): { innerEnd: number; elEnd: number } | null {
+  const re = new RegExp(`<(/?)${tag}\\b[^>]*>`, 'gi');
+  re.lastIndex = fromIdx;
+  let depth = 1;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) !== null) {
+    depth += m[1] ? -1 : 1;
+    if (depth === 0) return { innerEnd: m.index, elEnd: m.index + m[0].length };
+  }
+  return null;
+}
+
+// Do começo do trecho de html, arranca as linhas de tab órfãs (com as linhas em
+// branco entre elas) para devolvê-las ao bloco de tab que acabou de fechar.
+function takeLeadingTabLines(gap: string): { tail: string; rest: string } {
+  const lines = gap.split('\n');
+  let cut = 0;
+  let found = false;
+  for (let i = 0; i < lines.length; i++) {
+    const t = stripTags(lines[i]).trim();
+    if (t === '') continue;
+    if (!isLooseTabLine(t)) break;
+    cut = i + 1;
+    found = true;
+  }
+  if (!found) return { tail: '', rest: gap };
+  const tailLines = lines.slice(0, cut).map(stripTags);
+  while (tailLines.length > 0 && tailLines[0].trim() === '') tailLines.shift();
+  return { tail: tailLines.join('\n'), rest: lines.slice(cut).join('\n') };
+}
+
+// Do fim do trecho de html, arranca as legendas de parte que pertencem à tab que
+// vem logo a seguir. As linhas em branco ficam no html para o CifraViewer ainda
+// enxergar "tabs coladas" e mesclá-las num bloco só.
+function takeTrailingCaption(gap: string): { lead: string; rest: string } {
+  const lines = gap.split('\n');
+  let cut = lines.length;
+  let found = false;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const t = stripTags(lines[i]).trim();
+    if (t === '') continue;
+    if (!TAB_CAPTION_RE.test(t) && !isLooseTabLine(t)) break;
+    cut = i;
+    found = true;
+  }
+  if (!found) return { lead: '', rest: gap };
+  const leadLines = lines.slice(cut).map(stripTags);
+  while (leadLines.length > 0 && leadLines[leadLines.length - 1].trim() === '') leadLines.pop();
+  return { lead: leadLines.join('\n'), rest: lines.slice(0, cut).join('\n') };
+}
+
 // Main function: split HTML into html/tab segments
 export function splitHtmlByTabs(html: string): ContentSegment[] {
   const segments: ContentSegment[] = [];
 
   // Match <span class="tablatura"> or <div class="tablatura"> elements
   // Also match <span class="cnt"> used for tab-like content
-  const tabElRe = /<(span|div)[^>]+class="([^"]*)"[^>]*>([\s\S]*?)<\/\1>/gi;
+  const openTagRe = /<(span|div)\b[^>]*class="([^"]*)"[^>]*>/gi;
 
   let lastIdx = 0;
   let match: RegExpExecArray | null;
 
-  while ((match = tabElRe.exec(html)) !== null) {
+  // Fecha o trecho de html anterior à tab, devolvendo a ela tudo que é dela:
+  // linhas soltas que ficaram depois do bloco anterior e a legenda da próxima.
+  const flushGap = (until: number, nextIsTab: boolean): string => {
+    let gap = html.slice(lastIdx, until);
+    const prev = segments[segments.length - 1];
+    if (prev?.type === 'tab') {
+      const { tail, rest } = takeLeadingTabLines(gap);
+      if (tail) {
+        prev.content += '\n' + tail;
+        gap = rest;
+      }
+    }
+    let lead = '';
+    if (nextIsTab) {
+      const taken = takeTrailingCaption(gap);
+      lead = taken.lead;
+      gap = taken.rest;
+    }
+    if (gap) segments.push({ type: 'html', content: gap });
+    return lead;
+  };
+
+  while ((match = openTagRe.exec(html)) !== null) {
+    const tag = match[1];
     const classes = match[2];
-    const innerHtml = match[3];
 
     // Only treat as tab if the class includes tablatura or cnt
     if (!/(^|\s)(tablatura|cnt)(\s|$)/.test(classes)) continue;
 
+    const openEnd = match.index + match[0].length;
+    const bounds = findElementEnd(html, tag, openEnd);
+    if (!bounds) continue;
+
     // Strip HTML tags from inner content to get raw text
-    const innerText = innerHtml.replace(/<[^>]+>/g, '');
+    const innerText = stripTags(html.slice(openEnd, bounds.innerEnd));
 
     // Verify it actually looks like a tab (has at least 2 tab lines).
     // Accepts labeled (E|---), pipe-anonymous (|---), and bare (---3---).
@@ -541,15 +635,16 @@ export function splitHtmlByTabs(html: string): ContentSegment[] {
 
     if (tabLineCount < 2) continue;
 
-    if (match.index > lastIdx) {
-      segments.push({ type: 'html', content: html.slice(lastIdx, match.index) });
-    }
-    segments.push({ type: 'tab', content: innerText });
-    lastIdx = match.index + match[0].length;
+    const lead = flushGap(match.index, true);
+    // A legenda vira um "sistema" próprio dentro do bloco (separada por linha em
+    // branco), então continua visível — só que agora some junto com a tab.
+    segments.push({ type: 'tab', content: lead ? `${lead}\n\n${innerText.replace(/^\n+/, '')}` : innerText });
+    lastIdx = bounds.elEnd;
+    openTagRe.lastIndex = bounds.elEnd;
   }
 
   if (lastIdx < html.length) {
-    segments.push({ type: 'html', content: html.slice(lastIdx) });
+    flushGap(html.length, false);
   }
 
   // Fallback: no tablatura elements found → try raw tab line detection
