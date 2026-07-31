@@ -174,19 +174,49 @@ const BARE_TAB_RE = /^[-0-9xhpb/\\~^.]+$/;
 const isBareTabLine = (l: string) =>
   BARE_TAB_RE.test(l) && l.length >= 4 && /[0-9x]/.test(l) && /-/.test(l);
 
+// Accept: labeled (E|---), pipe-anonymous (|--- or ||--- or |||---), or bare (---3---)
+const LABELED_RE = /^([A-Ga-g#b♭]{1,3})\|(.*?)$/;
+const ANON_RE    = /^\|+(.*?)$/;
+const hasMeaningfulContent = (s: string) => /[-x0-9hpb/\\~^.]/.test(s);
+const isTabLine = (l: string) => {
+  if (LABELED_RE.test(l)) return true;
+  const am = ANON_RE.exec(l);
+  if (am) return hasMeaningfulContent(am[1].trim().replace(/\|$/, ''));
+  return isBareTabLine(l);
+};
+
+// Quebra um bloco de tab nos "sistemas" que o músico lê como pautas separadas.
+// Linha em branco é o separador óbvio, mas o CifraClub também cola a continuação
+// de um sistema logo abaixo da metade anterior, separada só pela linha de acordes
+// da metade seguinte (a "Primeira Parte" de Mistério do Planeta faz isso).
+// Sem cortar aí, parseTabText enxerga 12 cordas num sistema só, não reconhece a
+// afinação e chuta a oitava de cada corda — a transposição inteira sai errada.
+export function splitTabSystems(text: string): string[] {
+  const systems: string[] = [];
+  let current: string[] = [];
+  let sawTabLine = false;
+
+  const flush = () => {
+    const joined = current.join('\n').replace(/\s+$/, '');
+    if (joined.trim().length > 0) systems.push(joined);
+    current = [];
+    sawTabLine = false;
+  };
+
+  for (const line of text.split('\n')) {
+    const trimmed = line.trim();
+    if (trimmed === '') { flush(); continue; }
+    if (isTabLine(trimmed)) sawTabLine = true;
+    else if (sawTabLine) flush(); // cabeçalho da próxima metade, colado na anterior
+    current.push(line);
+  }
+  flush();
+
+  return systems;
+}
+
 export function parseTabText(text: string): ParsedTab | null {
   const rawLines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-
-  // Accept: labeled (E|---), pipe-anonymous (|--- or ||--- or |||---), or bare (---3---)
-  const LABELED_RE = /^([A-Ga-g#b♭]{1,3})\|(.*?)$/;
-  const ANON_RE    = /^\|+(.*?)$/;
-  const hasMeaningfulContent = (s: string) => /[-x0-9hpb/\\~^.]/.test(s);
-  const isTabLine  = (l: string) => {
-    if (LABELED_RE.test(l)) return true;
-    const am = ANON_RE.exec(l);
-    if (am) return hasMeaningfulContent(am[1].trim().replace(/\|$/, ''));
-    return isBareTabLine(l);
-  };
 
   const tabLines = rawLines.filter(isTabLine);
   if (tabLines.length < 2) return null;
