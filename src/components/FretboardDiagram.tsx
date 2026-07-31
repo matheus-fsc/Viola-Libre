@@ -101,6 +101,9 @@ interface FretboardDiagramProps {
   chordName: string;
   isFavorite?: boolean;
   onToggleFavorite?: () => void;
+  /** Quantos favoritaram esta posição. Ausente = sem dado público (não é o mesmo que zero). */
+  favoriteCount?: number;
+  favoriteBusy?: boolean;
   isInCifra?: boolean;
   onToggleCifra?: () => void;
   useFlats?: boolean;
@@ -129,6 +132,8 @@ export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
   chordName,
   isFavorite = false,
   onToggleFavorite,
+  favoriteCount,
+  favoriteBusy = false,
   isInCifra = false,
   onToggleCifra,
   useFlats = false,
@@ -291,10 +296,18 @@ export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
           {onToggleFavorite && (
             <button
               onClick={onToggleFavorite}
-              className={`cursor-pointer focus:outline-none hover:scale-110 transition-transform flex items-center justify-center ${isFavorite ? 'text-[#ff7f27]' : 'text-gray-500 hover:text-gray-700'}`}
+              disabled={favoriteBusy}
+              className={`cursor-pointer focus:outline-none hover:scale-110 transition-transform flex items-center justify-center gap-0.5 disabled:opacity-50 ${isFavorite ? 'text-[#ff7f27]' : 'text-gray-500 hover:text-gray-700'}`}
               title={isFavorite ? "Remover dos favoritos" : "Favoritar posição"}
             >
               <StarIcon className="w-4 h-4" fill={isFavorite ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.5" />
+              {/* Só aparece com voto de verdade: "0" sugeriria posição rejeitada, quando na
+                  verdade é posição que ninguém votou ainda (ou backend sem resposta). */}
+              {favoriteCount !== undefined && favoriteCount > 0 && (
+                <span className="text-[9px] font-bold leading-none tabular-nums" title={`${favoriteCount} favoritaram esta posição`}>
+                  {favoriteCount > 99 ? '99+' : favoriteCount}
+                </span>
+              )}
             </button>
           )}
         </div>

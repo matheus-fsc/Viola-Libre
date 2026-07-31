@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState, useMemo, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom';
 import { FileText, Eye, Heart, Pin, Save } from 'lucide-react';
 import {
-  getCifra, incrementView, favoriteCifra, type CifraDetail,
+  getCifra, incrementView, type CifraDetail,
   saveSequencia, loadSequencia, updateSequencia, deleteSequencia,
   addRecentSequencia, removeRecentSequencia, getRecentSequencias,
   getSongs, type Song,
@@ -33,6 +33,26 @@ import {
   applyCurationOrder,
   rankChord,
 } from '../../services/authApi';
+import {
+  type ChordFavoriteEntry,
+  type MyFavoritesMap,
+  countFor,
+  fetchChordFavoritesBatch,
+  fretsKey,
+  isFavoritedIn,
+  pickPopularVoicings,
+  readAllMyFavorites,
+  toggleChordFavorite,
+} from '../../services/chordFavoritesApi';
+import { toggleCifraFavorite, isFavorited as isCifraFavorited } from '../../services/cifraFavorites';
+import { useCifraFavorites } from '../../hooks/useCifraFavorites';
+import {
+  frontShapesFor,
+  readVoicingOrderMode,
+  writeVoicingOrderMode,
+  VOICING_ORDER_MODES,
+  type VoicingOrderMode,
+} from '../../services/voicingOrder';
 
 
 interface VoicingFilter {
@@ -142,6 +162,11 @@ export const CifraViewer: React.FC = () => {
   const [isFavoriting, setIsFavoriting] = useState(false);
   const navigate = useNavigate();
 
+  // A estante local é a fonte da verdade do coração. Vem por store externa (localStorage)
+  // para que favoritar aqui e abrir /favoritos concordem sem F5 — e vice-versa.
+  const favoritesStore = useCifraFavorites();
+  const isFavorited = Boolean(artistSlug && songSlug && isCifraFavorited(favoritesStore, artistSlug, songSlug));
+
   // Transpose states
   const [transposeOffset, setTransposeOffset] = useState<number>(0);
   const [tabPosIdx, setTabPosIdx] = useState<number>(0);
@@ -157,7 +182,6 @@ export const CifraViewer: React.FC = () => {
   // New features
   const [songKey, setSongKey] = useState<string>('');
   const [variationIndices, setVariationIndices] = useState<Record<string, number>>({});
-  const [favoriteChords, setFavoriteChords] = useState<Record<string, boolean>>({});
   const [infoPopupChord, setInfoPopupChord] = useState<string | null>(null);
   const [voicingFilter, setVoicingFilter] = useState<VoicingFilter>(DEFAULT_FILTER);
   const [filterPopupOpen, setFilterPopupOpen] = useState(false);
@@ -169,6 +193,17 @@ export const CifraViewer: React.FC = () => {
   const editorSession = useEditorSession();
   const [chordRankingsById, setChordRankingsById] = useState<Record<string, ChordRankEntry[]>>({});
   const [curatingChordId, setCuratingChordId] = useState<string | null>(null);
+
+  // Favoritos de voicing (voto do público). Duas metades independentes:
+  //   • favoritesById — contagem pública, vinda do servidor, some se o backend não responde
+  //   • myFavoriteKeys — o que ESTE navegador votou, do localStorage, sempre disponível
+  // A estrela acende pela segunda; o número ao lado vem da primeira.
+  const [favoritesById, setFavoritesById] = useState<Record<string, ChordFavoriteEntry[]>>({});
+  // Um mapa só cobre todos os acordes e todas as músicas, então nada precisa ser recarregado
+  // ao trocar de cifra: o toggle devolve o mapa novo e é o único que escreve aqui.
+  const [myFavorites, setMyFavorites] = useState<MyFavoritesMap>(() => readAllMyFavorites());
+  const [favoritingChordId, setFavoritingChordId] = useState<string | null>(null);
+  const [voicingOrderMode, setVoicingOrderMode] = useState<VoicingOrderMode>(() => readVoicingOrderMode());
 
   // Sequence save/load states
   const [seqModalOpen, setSeqModalOpen] = useState<'save' | 'load' | null>(null);
@@ -310,12 +345,35 @@ export const CifraViewer: React.FC = () => {
       .catch(() => setSongVersions([]));
   }, [artistSlug, cifra?.title]);
 
+  /**
+   * Favoritar é um toggle: o mesmo botão tira da estante.
+   *
+   * O coração agora acende pelo estado DESTE usuário (a lista local), não mais por
+   * `cifra.favorited > 0` — aquele é o contador público, e mostrava coração cheio em
+   * qualquer música popular mesmo para quem nunca a favoritou.
+   *
+   * A gravação local acontece dentro de `toggleCifraFavorite`, antes da rede: a estante é
+   * do navegador e não pode ficar esperando um servidor para responder a um clique.
+   */
   const handleFavorite = async () => {
     if (!artistSlug || !songSlug || isFavoriting || !cifra) return;
     setIsFavoriting(true);
+    const wasFavorited = isFavorited;
     try {
-      await favoriteCifra(artistSlug, songSlug);
-      setCifra({ ...cifra, favorited: (cifra.favorited || 0) + 1 });
+      const result = await toggleCifraFavorite({
+        artistSlug,
+        songSlug,
+        title: cifra.title,
+        artistName: null,
+        versionName: cifra.version_name ?? null,
+      });
+      // O contador na tela é público; só faz sentido mexer nele quando o servidor confirmou.
+      if (!result.offline) {
+        setCifra(prev => prev && {
+          ...prev,
+          favorited: result.count ?? Math.max(0, (prev.favorited || 0) + (wasFavorited ? -1 : 1)),
+        });
+      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -988,6 +1046,19 @@ export const CifraViewer: React.FC = () => {
     });
     return () => { cancelled = true; };
   }, [distinctChordIds, songSlug]);
+
+  // Favoritos do público: uma requisição para a cifra inteira, sem cache de cliente.
+  // Curadoria pode ficar horas obsoleta (é rara e deliberada); contagem de voto, não —
+  // o músico que acabou de favoritar precisa ver o número mudar ao voltar para a página.
+  useEffect(() => {
+    if (distinctChordIds.length === 0) return;
+    let cancelled = false;
+    fetchChordFavoritesBatch(distinctChordIds, songSlug ?? null).then(byId => {
+      if (!cancelled) setFavoritesById(prev => ({ ...prev, ...byId }));
+    });
+    return () => { cancelled = true; };
+  }, [distinctChordIds, songSlug]);
+
 
   const isVertical = panelPosition === 'left' || panelPosition === 'right';
   const PANEL_ICONS: Record<typeof panelPosition, string> = { left: '◧', top: '▀', right: '◨', bottom: '▄' };
@@ -1673,9 +1744,9 @@ export const CifraViewer: React.FC = () => {
               {showTabs ? 'Ocultar Tabs' : '▶ Mostrar Tabs'}
             </button>
 
-            <button onClick={handleFavorite} disabled={isFavoriting} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-1 text-xs font-bold flex items-center gap-1 w-full border border-gray-400 hover:bg-white disabled:opacity-50 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white text-black">
-              <Heart size={12} className={`${isFavoriting ? 'opacity-50' : ''} ${cifra.favorited && cifra.favorited > 0 ? "fill-red-500 text-red-500" : "text-gray-600"}`} />
-              <span className={isFavoriting ? 'opacity-50' : ''}>Favoritar</span>
+            <button onClick={handleFavorite} disabled={isFavoriting} title={isFavorited ? 'Remover dos favoritos' : 'Favoritar'} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-1 text-xs font-bold flex items-center gap-1 w-full border border-gray-400 hover:bg-white disabled:opacity-50 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white text-black">
+              <Heart size={12} className={`${isFavoriting ? 'opacity-50' : ''} ${isFavorited ? 'fill-red-500 text-red-500' : 'text-gray-600'}`} />
+              <span className={isFavoriting ? 'opacity-50' : ''}>{isFavorited ? 'Favoritado' : 'Favoritar'}</span>
             </button>
 
             <button onClick={() => setSeqModalOpen('save')} className={`bevel-out px-2 py-1 text-xs font-bold flex items-center gap-1 w-full border border-gray-400 hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white text-black ${savedHash ? 'bg-[#d4edda] border-green-500' : 'bg-[var(--color-winxp-panel)]'}`}>
@@ -1792,9 +1863,9 @@ export const CifraViewer: React.FC = () => {
             <div className="flex flex-col gap-0.5 min-w-0">
               <span className="text-[8px] font-bold uppercase tracking-wider text-gray-500 leading-none">Ações</span>
               <div className="flex items-center gap-1.5 sm:gap-2 flex-nowrap sm:flex-wrap overflow-x-auto no-scrollbar [&>*]:shrink-0">
-                <button onClick={handleFavorite} disabled={isFavoriting} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-1 sm:px-3 text-xs font-bold flex items-center gap-1 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white text-black" title="Favoritar">
-                  <Heart size={14} className={`${isFavoriting ? 'opacity-50' : ''} ${cifra.favorited && cifra.favorited > 0 ? "fill-red-500 text-red-500" : "text-gray-600"}`} />
-                  <span className={`hidden sm:inline ${isFavoriting ? 'opacity-50' : ''}`}>Favoritar</span>
+                <button onClick={handleFavorite} disabled={isFavoriting} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-1 sm:px-3 text-xs font-bold flex items-center gap-1 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white text-black" title={isFavorited ? 'Remover dos favoritos' : 'Favoritar'}>
+                  <Heart size={14} className={`${isFavoriting ? 'opacity-50' : ''} ${isFavorited ? 'fill-red-500 text-red-500' : 'text-gray-600'}`} />
+                  <span className={`hidden sm:inline ${isFavoriting ? 'opacity-50' : ''}`}>{isFavorited ? 'Favoritado' : 'Favoritar'}</span>
                 </button>
                 <button onClick={() => setSeqModalOpen('save')} className={`bevel-out px-2 py-1 sm:px-3 text-xs font-bold flex items-center gap-1 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white text-black ${savedHash ? 'bg-[#d4edda] border border-green-500' : 'bg-[var(--color-winxp-panel)]'}`} title="Salvar ou carregar sequência de acordes">
                   <Save size={13} className={savedHash ? 'text-green-700' : 'text-gray-600'} />
@@ -1828,6 +1899,24 @@ export const CifraViewer: React.FC = () => {
                 Acordes ({currentChords.length}) - {currentTuning.name}
               </span>
               <div className="flex gap-1 items-center relative">
+                <select
+                  value={voicingOrderMode}
+                  onChange={e => {
+                    const mode = e.target.value as VoicingOrderMode;
+                    setVoicingOrderMode(mode);
+                    writeVoicingOrderMode(mode);
+                    // A posição escolhida à mão é um índice na lista antiga; com outra ordem
+                    // ela apontaria para outra forma. Zerar devolve todo mundo para o #1 do
+                    // novo modo, que é justamente o que o músico pediu ao trocar.
+                    setVariationIndices({});
+                  }}
+                  className="text-[10px] font-bold border border-gray-400 bg-[#ece9d8] text-black px-1 py-0.5 hover:bg-white cursor-pointer max-w-[104px]"
+                  title="Qual fonte decide a primeira variação de cada acorde"
+                >
+                  {VOICING_ORDER_MODES.map(m => (
+                    <option key={m.value} value={m.value} title={m.hint}>{m.label}</option>
+                  ))}
+                </select>
                 {isFilterActive && (
                   <button
                     onClick={() => { setVoicingFilter(DEFAULT_FILTER); setVariationIndices({}); setLockedVariations({}); setExcludedFromFilter({}); }}
@@ -1909,18 +1998,21 @@ export const CifraViewer: React.FC = () => {
               {currentChords.map((chordName, idx) => {
                 const isChordLocked = chordName in lockedVariations;
 
-                // Curadoria de editores para este acorde (instrumento+afinação). Curadorias
-                // desta música vêm primeiro, seguidas das do dicionário que a música não
-                // repetiu — mescladas, não substituídas. Todas ganham as primeiras posições,
-                // inclusive furando os demais filtros: se um deles tiver excluído alguma,
-                // ela é reinserida na frente mesmo assim.
+                // Quem ocupa as primeiras posições depende do modo escolhido (favoritos do
+                // público, curadoria dos Editores, ou nenhum dos dois). Nas duas fontes vale
+                // a mesma precedência: o que foi escolhido NESTA música vem primeiro, seguido
+                // do que foi escolhido globalmente e a música não repetiu — mesclados, não
+                // substituídos. As formas da frente furam os demais filtros: se um deles tiver
+                // excluído alguma, ela é reinserida na frente mesmo assim.
                 const chordId = buildChordId(currentInst.id, currentTuning.id, chordName);
                 const rankEntries = chordRankingsById[chordId] ?? [];
                 const curatedList = pickCuratedVoicings(rankEntries, songSlug);
+                const favoriteEntries = favoritesById[chordId] ?? [];
+                const popularList = pickPopularVoicings(favoriteEntries, songSlug);
                 const rawVoicings = displayedVoicings[idx] ?? [];
                 const voicings = applyCurationOrder(
                   rawVoicings,
-                  curatedList.map(c => c.fretsArray),
+                  frontShapesFor(voicingOrderMode, popularList, curatedList),
                   (fretsArray) => buildVoicingFromFrets(fretsArray, currentTuning, false)
                 );
 
@@ -1962,8 +2054,35 @@ export const CifraViewer: React.FC = () => {
                   }));
                 };
 
-                const isFav = !!favoriteChords[chordName];
-                const toggleFav = () => setFavoriteChords(prev => ({ ...prev, [chordName]: !prev[chordName] }));
+                // O favorito é da FORMA exibida, não do acorde: favoritar "Am" sem dizer qual
+                // das variações não ajuda ninguém a decidir qual delas deve vir primeiro.
+                const isFav = !!bestVoicing && isFavoritedIn(myFavorites, chordId, songSlug ?? null, bestVoicing.frets);
+                const favCount = bestVoicing ? countFor(favoriteEntries, bestVoicing.frets) : 0;
+                const toggleFav = async () => {
+                  if (!bestVoicing) return;
+                  setFavoritingChordId(chordId);
+                  try {
+                    const res = await toggleChordFavorite(chordId, bestVoicing.frets, songSlug ?? null);
+                    setMyFavorites(res.mine);
+                    // Sem confirmação do servidor a contagem fica como está: preferimos um
+                    // número momentaneamente defasado a um número inventado no cliente.
+                    if (res.count !== null) {
+                      const shape = bestVoicing.frets;
+                      setFavoritesById(prev => {
+                        const list = prev[chordId] ?? [];
+                        const key = fretsKey(shape);
+                        const scoped = songSlug ?? null;
+                        const hit = list.find(e => fretsKey(e.fretsArray) === key && e.songSlug === scoped);
+                        const next = hit
+                          ? list.map(e => (e === hit ? { ...e, count: res.count as number } : e))
+                          : [...list, { fretsArray: shape, count: res.count as number, songSlug: scoped }];
+                        return { ...prev, [chordId]: next };
+                      });
+                    }
+                  } finally {
+                    setFavoritingChordId(null);
+                  }
+                };
 
                 const isChordExcluded = chordName in excludedFromFilter;
 
@@ -2023,6 +2142,8 @@ export const CifraViewer: React.FC = () => {
                         compact={true}
                         isFavorite={isFav}
                         onToggleFavorite={toggleFav}
+                        favoriteCount={favCount}
+                        favoriteBusy={favoritingChordId === chordId}
                         isInCifra={false}
                         useFlats={false}
                         variationCurrentIndex={effectiveIdx}
