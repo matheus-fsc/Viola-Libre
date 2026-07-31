@@ -156,14 +156,60 @@ export const incrementView = async (artistSlug: string, songSlug: string): Promi
   });
 };
 
-// User Hash Local Generator
+// ---------------------------------------------------------------------------
+// Identidade sem login
+// ---------------------------------------------------------------------------
+//
+// O site não tem cadastro: este hash de 32 hex É o usuário, para o servidor. Ele é a
+// única chave que liga alguém aos favoritos gravados lá (`/api/usuario/{hash}/favoritos`),
+// e não existe nenhum jeito de recuperá-lo depois de perdido — não há e-mail para
+// reenviar. Por isso duas coisas passaram a valer aqui:
+//
+//   1. A leitura valida antes de reaproveitar. Um valor truncado ou corrompido por outra
+//      aba geraria requisições que o servidor recusa em silêncio (o `user_hash` cai no
+//      422 do Pydantic), e o usuário veria favoritos sumindo sem motivo aparente.
+//   2. `setUserHash` existe para a importação de backup restaurar a identidade antiga.
+//      Sem isso, limpar o localStorage seria irreversível: a lista voltaria do arquivo,
+//      mas o vínculo com o que está no servidor ficaria órfão para sempre.
+
+const USER_HASH_KEY = 'viola_user_hash';
+
+/** 32 caracteres hexadecimais — o mesmo formato que `actionSchema` exige no envio. */
+export const userHashSchema = z.string().regex(/^[0-9a-f]{32}$/, 'Hash de usuário deve ter 32 caracteres hexadecimais');
+
+export const isValidUserHash = (value: unknown): value is string => userHashSchema.safeParse(value).success;
+
+const randomUserHash = (): string =>
+  Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+
 export const getUserHash = (): string => {
-  let hash = localStorage.getItem('viola_user_hash');
-  if (!hash || hash.length !== 32) {
-    hash = Array.from({length: 32}, () => Math.floor(Math.random() * 16).toString(16)).join('');
-    localStorage.setItem('viola_user_hash', hash);
+  let stored: string | null = null;
+  try {
+    stored = localStorage.getItem(USER_HASH_KEY);
+  } catch {
+    // Modo privado / storage bloqueado: a identidade vira sessão-only.
   }
+  if (isValidUserHash(stored)) return stored;
+
+  const hash = randomUserHash();
+  try {
+    localStorage.setItem(USER_HASH_KEY, hash);
+  } catch { /* idem */ }
   return hash;
+};
+
+/**
+ * Assume uma identidade vinda de um backup. Recusa hash malformado em vez de gravar
+ * lixo: um arquivo adulterado não pode desligar o usuário dos próprios favoritos.
+ */
+export const setUserHash = (hash: string): boolean => {
+  if (!isValidUserHash(hash)) return false;
+  try {
+    localStorage.setItem(USER_HASH_KEY, hash);
+  } catch {
+    return false;
+  }
+  return true;
 };
 
 // Zod Schemas
@@ -173,7 +219,39 @@ const actionSchema = z.object({
   user_hash: z.string().length(32, "O Hash do usuário deve ter exatamente 32 caracteres")
 });
 
-export const favoriteCifra = async (artistSlug: string, songSlug: string): Promise<void> => {
+/**
+ * Estado da cifra no servidor depois do toggle.
+ *
+ * `favorited` é `null` quando o servidor respondeu mas não deu para saber o estado — ver
+ * `readFavoritedFlag`. Nesse caso quem manda é o espelho local.
+ */
+export interface CifraFavoriteResult {
+  favorited: boolean | null;
+  count: number | null;
+}
+
+/**
+ * A rota é um toggle de verdade (POST no mesmo par adiciona, o seguinte remove), mas hoje
+ * responde só `{ message: "Favorito adicionado com sucesso" }` — uma frase em português.
+ *
+ * Ler o estado de uma string de UI é frágil (qualquer ajuste de texto no backend quebra o
+ * coração do usuário), então: se vier o campo booleano `favorited`, ele manda; senão
+ * caímos na frase; se nem isso, devolvemos `null` e deixamos o espelho local decidir.
+ * O prompt em `docs/backend/prompt-favoritos.md` pede o campo estruturado — quando ele
+ * existir, o ramo da frase vira código morto e pode sair.
+ */
+const readFavoritedFlag = (data: unknown): boolean | null => {
+  const body = data as { favorited?: unknown; message?: unknown } | null;
+  if (typeof body?.favorited === 'boolean') return body.favorited;
+  if (typeof body?.message === 'string') {
+    const msg = body.message.toLowerCase();
+    if (msg.includes('remov')) return false;
+    if (msg.includes('adicion')) return true;
+  }
+  return null;
+};
+
+export const favoriteCifra = async (artistSlug: string, songSlug: string): Promise<CifraFavoriteResult> => {
   const safeSongSlug = songSlug.startsWith('/') ? songSlug.slice(1) : songSlug;
   const hash = getUserHash();
 
@@ -188,11 +266,30 @@ export const favoriteCifra = async (artistSlug: string, songSlug: string): Promi
     throw new Error("Dados inválidos. Não foi possível favoritar.", { cause: validationError });
   }
 
-  await api.post(`/api/cifra/${artistSlug}/${safeSongSlug}/favorite`, { user_hash: hash }, {
+  const { data } = await api.post(`/api/cifra/${artistSlug}/${safeSongSlug}/favorite`, { user_hash: hash }, {
     headers: {
       'X-API-Key': import.meta.env.VITE_API_KEY ?? ''
     }
   });
+
+  const count = (data as { count?: unknown })?.count;
+  return {
+    favorited: readFavoritedFlag(data),
+    count: typeof count === 'number' ? count : null,
+  };
+};
+
+/**
+ * As cifras que este `user_hash` favoritou, direto do servidor.
+ *
+ * É a única via de recuperação quando o localStorage some: por isso a importação de
+ * backup restaura o hash *antes* de chamar aqui.
+ */
+export const getUserFavorites = async (userHash?: string): Promise<GlobalSearchResult[]> => {
+  const hash = userHash ?? getUserHash();
+  if (!isValidUserHash(hash)) return [];
+  const { data } = await api.get<GlobalSearchResult[]>(`/api/usuario/${hash}/favoritos`);
+  return Array.isArray(data) ? data : [];
 };
 
 export const updateDifficulty = async (artistSlug: string, songSlug: string, difficulty: string): Promise<void> => {

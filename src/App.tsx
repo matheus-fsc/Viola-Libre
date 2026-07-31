@@ -4,7 +4,7 @@
  * Licenciado sob a GNU AGPL-3.0 — veja o arquivo LICENSE na raiz do projeto.
  */
 import React, { useState, useEffect, useMemo } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import type { Instrument, Tuning, Voicing } from './engine/types';
 import { PRESET_INSTRUMENTS, NOTE_NAMES_SHARP, NOTE_NAMES_FLAT } from './engine/tunings';
 import { buildChord, buildVoicingFromFrets, calculateVoicings, shouldUseFlats, noteNameToPitchClass, evaluatePlayability } from './engine/chordCalculator';
@@ -32,6 +32,9 @@ import {
 } from './services/authApi';
 import { getPreferredInstrumentId, setPreferredInstrumentId } from './utils/instrumentPreference';
 import { preloadSoundfont } from './engine/AudioEngine';
+import { useTabNavigation } from './hooks/useTabNavigation';
+import { useCifraFavorites } from './hooks/useCifraFavorites';
+import { FavoritosDashboard } from './pages/favoritos/FavoritosDashboard';
 import { CifrasApp } from './pages/cifras/CifrasApp';
 import { MinhasCifras } from './pages/minhasCifras/MinhasCifras';
 import { TermosDeUso } from './pages/termos/TermosDeUso';
@@ -159,7 +162,12 @@ function App() {
   // Interactive Neck load state
   const [interactiveLoadedFrets, setInteractiveLoadedFrets] = useState<number[]>([]);
   
-  // Favorites State (persisted in localStorage)
+  // A aba "Favoritos" agora é a estante de CIFRAS (ver pages/favoritos). O contador no
+  // rótulo tem de ser o dela — as posições de acorde abaixo mudaram de casa e passaram a
+  // viver na aba Dicionário de Acordes, junto do lugar onde são criadas.
+  const cifraFavorites = useCifraFavorites();
+
+  // Posições de acorde favoritadas (persistidas em localStorage)
   const [favorites, setFavorites] = useState<FavoriteVoicing[]>(() => {
     const stored = localStorage.getItem('viola_libre_favs');
     if (stored) {
@@ -191,19 +199,10 @@ function App() {
   const [showEditorLogin, setShowEditorLogin] = useState<boolean>(false);
   const [editorSession, setEditorSession] = useState<EditorSession | null>(() => getStoredEditorSession());
 
-  // Tab switcher — derived from URL
+  // Tab switcher — aba derivada da URL, com memória do ponto em que o usuário
+  // parou em cada aba (goToTab volta pra lá em vez da raiz).
   const { pathname } = useLocation();
-  const navigate = useNavigate();
-  const activeTab = ((): 'cifras' | 'minhascifras' | 'chords' | 'train' | 'ear' | 'favorites' | 'termos' => {
-    if (pathname === '/termos') return 'termos';
-    if (pathname.startsWith('/cifras')) return 'cifras';
-    if (pathname === '/minhascifras') return 'minhascifras';
-    if (pathname === '/chords') return 'chords';
-    if (pathname === '/treinos') return 'train';
-    if (pathname === '/ouvido') return 'ear';
-    if (pathname === '/favoritos') return 'favorites';
-    return 'cifras';
-  })();
+  const { activeTab, goToTab } = useTabNavigation();
   const isTimingRoute = /\/cifras\/[^/]+\/[^/]+\/timing$/.test(pathname);
 
   // Taskbar collapse state
@@ -565,7 +564,7 @@ function App() {
                 _
               </button>
               <button 
-                onClick={() => navigate('/favoritos')}
+                onClick={() => goToTab('favorites')}
                 className={`w-[21px] h-[21px] rounded border flex items-center justify-center font-bold text-xs focus:outline-none cursor-pointer ${activeTab === 'favorites' ? 'bg-[#ff7f27] border-white text-white' : 'bg-[#0058e6] border-white hover:bg-[#3a8bfb]'}`}
                 title="Abrir Favoritos"
               >
@@ -586,7 +585,7 @@ function App() {
           {/* XP Dialog Tabs (under menu bar) */}
           <div className="flex pl-2 gap-1 bg-[#ece9d8] border-b border-[#d4d0c8] select-none pt-2 z-10 overflow-x-auto no-scrollbar whitespace-nowrap">
             <button
-              onClick={() => navigate('/cifras')}
+              onClick={() => goToTab('cifras')}
               className={`shrink-0 px-2 sm:px-4 py-1.5 font-mono text-[10px] sm:text-xs font-bold rounded-t border-2 border-b-0 cursor-pointer ${
                 activeTab === 'cifras'
                   ? 'bg-[#ece9d8] border-white border-t-[#0058e6] border-x-[#808080] translate-y-[2px] z-10 text-black'
@@ -596,7 +595,7 @@ function App() {
               <span>Explore Cifras</span>
             </button>
             <button
-              onClick={() => navigate('/minhascifras')}
+              onClick={() => goToTab('minhascifras')}
               className={`shrink-0 px-2 sm:px-4 py-1.5 font-mono text-[10px] sm:text-xs font-bold rounded-t border-2 border-b-0 cursor-pointer ${
                 activeTab === 'minhascifras'
                   ? 'bg-[#ece9d8] border-white border-t-[#0058e6] border-x-[#808080] translate-y-[2px] z-10 text-black'
@@ -607,7 +606,7 @@ function App() {
               <span className="inline sm:hidden">Minhas</span>
             </button>
             <button
-              onClick={() => navigate('/chords')}
+              onClick={() => goToTab('chords')}
               className={`shrink-0 px-2 sm:px-4 py-1.5 font-mono text-[10px] sm:text-xs font-bold rounded-t border-2 border-b-0 cursor-pointer ${
                 activeTab === 'chords'
                   ? 'bg-[#ece9d8] border-white border-t-[#0058e6] border-x-[#808080] translate-y-[2px] z-10 text-black' 
@@ -617,7 +616,7 @@ function App() {
               <span>Dicionário de Acordes</span>
             </button>
             <button 
-              onClick={() => navigate('/treinos')}
+              onClick={() => goToTab('train')}
               className={`shrink-0 px-2 sm:px-4 py-1.5 font-mono text-[10px] sm:text-xs font-bold rounded-t border-2 border-b-0 cursor-pointer ${
                 activeTab === 'train'
                   ? 'bg-[#ece9d8] border-white border-t-[#0058e6] border-x-[#808080] translate-y-[2px] z-10 text-black' 
@@ -628,7 +627,7 @@ function App() {
               <span className="inline sm:hidden">Treinos</span>
             </button>
             <button 
-              onClick={() => navigate('/ouvido')}
+              onClick={() => goToTab('ear')}
               className={`shrink-0 px-2 sm:px-4 py-1.5 font-mono text-[10px] sm:text-xs font-bold rounded-t border-2 border-b-0 cursor-pointer ${
                 activeTab === 'ear'
                   ? 'bg-[#ece9d8] border-white border-t-[#0058e6] border-x-[#808080] translate-y-[2px] z-10 text-black' 
@@ -639,7 +638,7 @@ function App() {
               <span className="inline sm:hidden">Ouvido</span>
             </button>
             <button 
-              onClick={() => navigate('/favoritos')}
+              onClick={() => goToTab('favorites')}
               className={`shrink-0 px-2 sm:px-4 py-1.5 font-mono text-[10px] sm:text-xs font-bold rounded-t border-2 border-b-0 cursor-pointer ${
                 activeTab === 'favorites'
                   ? 'bg-[#ece9d8] border-white border-t-[#0058e6] border-x-[#808080] translate-y-[2px] z-10 text-black' 
@@ -648,11 +647,11 @@ function App() {
             >
               <span className="hidden sm:inline-flex items-center gap-1">
                 <StarIcon className="w-3.5 h-3.5 text-[#ff7f27]" fill={activeTab === 'favorites' ? '#ff7f27' : 'none'} stroke="currentColor" strokeWidth="1.5" />
-                <span>Meus Favoritos ({favorites.length})</span>
+                <span>Meus Favoritos ({cifraFavorites.entries.length})</span>
               </span>
               <span className="inline-flex sm:hidden items-center gap-1">
                 <StarIcon className="w-3 h-3 text-[#ff7f27]" fill={activeTab === 'favorites' ? '#ff7f27' : 'none'} stroke="currentColor" strokeWidth="1.5" />
-                <span>Favoritos ({favorites.length})</span>
+                <span>Favoritos ({cifraFavorites.entries.length})</span>
               </span>
             </button>
           </div>
@@ -853,6 +852,82 @@ function App() {
                   loadedFrets={interactiveLoadedFrets}
                 />
               </div>
+
+              {/* POSIÇÕES FAVORITADAS
+                  Mora aqui, e não mais em /favoritos, porque é aqui que elas nascem: a
+                  estrela que as cria está nos diagramas logo acima. Ficavam a uma aba de
+                  distância do próprio botão que as salva, e /favoritos passou a ser a
+                  estante de cifras. */}
+              <div className="p-4 border-t-2 border-[#d4d0c8]">
+                <div className="bg-white border-2 border-[#808080] border-r-white border-bottom-white p-4 flex flex-col font-mono">
+                  <div className="flex justify-between items-center border-b border-dashed border-[#808080] pb-2 mb-4 select-none">
+                    <span className="text-sm font-bold text-[#002fa7] flex items-center gap-1.5">
+                      <StarIcon className="w-4 h-4 text-[#ff7f27]" fill="currentColor" />
+                      <span>Minhas Posições Favoritadas ({favorites.length})</span>
+                    </span>
+                    <button
+                      onClick={clearFavorites}
+                      disabled={favorites.length === 0}
+                      className="px-3 py-1 text-xs font-bold bg-[#ece9d8] border border-white border-r-[#808080] border-bottom-[#808080] active:border-t-[#808080] active:border-l-[#808080] hover:bg-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed select-none"
+                    >
+                      Limpar Todas
+                    </button>
+                  </div>
+
+                  {favorites.length === 0 ? (
+                    <div className="text-center text-gray-400 py-10 italic text-sm select-none">
+                      Nenhuma posição favoritada. Clique no ícone da estrela em qualquer diagrama acima para guardar a digitação aqui.
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto no-scrollbar w-full min-w-0">
+                      <table className="w-full text-xs text-left border-collapse select-none min-w-[600px]">
+                        <thead>
+                          <tr className="bg-[#d4d0c8] border-b border-[#808080] font-bold text-gray-700">
+                            <th className="p-2.5 border-r border-[#808080]">Acorde</th>
+                            <th className="p-2.5 border-r border-[#808080]">Instrumento</th>
+                            <th className="p-2.5 border-r border-[#808080]">Afinação</th>
+                            <th className="p-2.5 border-r border-[#808080]">Digitação (Cordas)</th>
+                            <th className="p-2.5 text-center">Ações</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {favorites.map((fav) => (
+                            <tr key={fav.id} className="border-b border-[#d4d0c8] hover:bg-[#c2d7f2]">
+                              <td className="p-2.5 border-r border-[#d4d0c8] font-bold text-[#002fa7]">{fav.chordName}</td>
+                              <td className="p-2.5 border-r border-[#d4d0c8]">{fav.instrumentName}</td>
+                              <td className="p-2.5 border-r border-[#d4d0c8] text-gray-600 font-mono text-[10px]">{fav.tuningName}</td>
+                              <td className="p-2.5 border-r border-[#d4d0c8] font-mono text-[11px] font-bold text-[#228b22]">
+                                {fav.frets.map(f => f === -1 ? 'X' : f).join('-')}
+                              </td>
+                              <td className="p-2.5 text-center">
+                                {/* Sem navigate: o Localizador está nesta mesma aba agora. */}
+                                <button
+                                  onClick={() => loadFavorite(fav)}
+                                  className="px-3 py-1 bg-[#ece9d8] border border-white border-r-[#808080] border-bottom-[#808080] active:border-t-[#808080] active:border-l-[#808080] font-bold text-xs mr-2 hover:bg-white cursor-pointer"
+                                  title="Carregar no Localizador de Acordes"
+                                >
+                                  Carregar
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    const updated = favorites.filter(f => f.id !== fav.id);
+                                    setFavorites(updated);
+                                    localStorage.setItem('viola_libre_favs', JSON.stringify(updated));
+                                  }}
+                                  className="px-3 py-1 bg-[#ff7f27] border border-white border-r-[#808080] border-bottom-[#808080] active:border-t-[#808080] active:border-l-[#808080] text-white font-bold text-xs hover:bg-orange-600 cursor-pointer"
+                                  title="Excluir"
+                                >
+                                  Remover
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
             </>
           )}
 
@@ -921,82 +996,7 @@ function App() {
             </div>
           )}
 
-          {activeTab === 'favorites' && (
-            <div className="p-4">
-              <div className="bg-white border-2 border-[#808080] border-r-white border-bottom-white p-4 flex flex-col min-h-[350px] font-mono">
-                <div className="flex justify-between items-center border-b border-dashed border-[#808080] pb-2 mb-4 select-none">
-                  <span className="text-sm font-bold text-[#002fa7] flex items-center gap-1.5">
-                    <StarIcon className="w-4 h-4 text-[#ff7f27]" fill="currentColor" />
-                    <span>Minhas Posições Favoritadas</span>
-                  </span>
-                  <button 
-                    onClick={clearFavorites}
-                    disabled={favorites.length === 0}
-                    className="px-3 py-1 text-xs font-bold bg-[#ece9d8] border border-white border-r-[#808080] border-bottom-[#808080] active:border-t-[#808080] active:border-l-[#808080] hover:bg-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed select-none"
-                  >
-                    Limpar Todos os Favoritos
-                  </button>
-                </div>
-                
-                <div className="flex-1 overflow-y-auto">
-                  {favorites.length === 0 ? (
-                    <div className="text-center text-gray-400 py-20 italic text-sm select-none">
-                      Nenhuma posição favoritada. Vá na aba "Dicionário de Acordes" e clique no ícone da estrela para salvar posições favoritas!
-                    </div>
-                  ) : (
-                    <div className="overflow-x-auto no-scrollbar w-full min-w-0">
-                      <table className="w-full text-xs text-left border-collapse select-none min-w-[600px]">
-                        <thead>
-                          <tr className="bg-[#d4d0c8] border-b border-[#808080] font-bold text-gray-700">
-                            <th className="p-2.5 border-r border-[#808080]">Acorde</th>
-                            <th className="p-2.5 border-r border-[#808080]">Instrumento</th>
-                            <th className="p-2.5 border-r border-[#808080]">Afinação</th>
-                            <th className="p-2.5 border-r border-[#808080]">Digitação (Cordas)</th>
-                            <th className="p-2.5 text-center">Ações</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {favorites.map((fav) => (
-                            <tr key={fav.id} className="border-b border-[#d4d0c8] hover:bg-[#c2d7f2]">
-                              <td className="p-2.5 border-r border-[#d4d0c8] font-bold text-[#002fa7]">{fav.chordName}</td>
-                              <td className="p-2.5 border-r border-[#d4d0c8]">{fav.instrumentName}</td>
-                              <td className="p-2.5 border-r border-[#d4d0c8] text-gray-600 font-mono text-[10px]">{fav.tuningName}</td>
-                              <td className="p-2.5 border-r border-[#d4d0c8] font-mono text-[11px] font-bold text-[#228b22]">
-                                {fav.frets.map(f => f === -1 ? 'X' : f).join('-')}
-                              </td>
-                              <td className="p-2.5 text-center">
-                                <button
-                                  onClick={() => {
-                                    loadFavorite(fav);
-                                    navigate('/chords');
-                                  }}
-                                  className="px-3 py-1 bg-[#ece9d8] border border-white border-r-[#808080] border-bottom-[#808080] active:border-t-[#808080] active:border-l-[#808080] font-bold text-xs mr-2 hover:bg-white cursor-pointer"
-                                  title="Carregar no Localizador de Acordes"
-                                >
-                                  Carregar no Localizador
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    const updated = favorites.filter(f => f.id !== fav.id);
-                                    setFavorites(updated);
-                                    localStorage.setItem('viola_libre_favs', JSON.stringify(updated));
-                                  }}
-                                  className="px-3 py-1 bg-[#ff7f27] border border-white border-r-[#808080] border-bottom-[#808080] active:border-t-[#808080] active:border-l-[#808080] text-white font-bold text-xs hover:bg-orange-600 cursor-pointer"
-                                  title="Excluir"
-                                >
-                                  Remover
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
+          {activeTab === 'favorites' && <FavoritosDashboard />}
 
           {activeTab === 'termos' && (
             <div className="w-full" style={{ minHeight: '400px' }}>
@@ -1013,7 +1013,7 @@ function App() {
           discreto aos Termos de Uso em telas pequenas. */}
       <div className="md:hidden w-full flex justify-center py-3 z-10">
         <button
-          onClick={() => navigate('/termos')}
+          onClick={() => goToTab('termos')}
           className={`text-[11px] font-mono underline underline-offset-2 cursor-pointer select-none transition-colors ${
             activeTab === 'termos' ? 'text-white font-bold' : 'text-white/75 hover:text-white'
           }`}
@@ -1232,7 +1232,7 @@ function App() {
             </button>
 
             <button 
-              onClick={() => navigate('/cifras')}
+              onClick={() => goToTab('cifras')}
               className={`h-[28px] px-3 border text-xs font-mono font-bold rounded flex items-center gap-1.5 select-none cursor-pointer ${
                 activeTab === 'cifras'
                   ? 'bg-[#3a8bfb] text-white border-[#002fa7] border-t-white border-l-white shadow-[inset_1px_1px_0_#ffffff50]'
@@ -1243,7 +1243,7 @@ function App() {
             </button>
 
             <button 
-              onClick={() => navigate('/chords')}
+              onClick={() => goToTab('chords')}
               className={`h-[28px] px-3 border text-xs font-mono font-bold rounded flex items-center gap-1.5 select-none cursor-pointer ${
                 activeTab === 'chords'
                   ? 'bg-[#3a8bfb] text-white border-[#002fa7] border-t-white border-l-white shadow-[inset_1px_1px_0_#ffffff50]'
@@ -1254,14 +1254,14 @@ function App() {
             </button>
             
             <button 
-              onClick={() => navigate('/favoritos')}
+              onClick={() => goToTab('favorites')}
               className={`h-[28px] px-3 border text-xs font-mono font-bold rounded flex items-center gap-1.5 select-none cursor-pointer ${
                 activeTab === 'favorites'
                   ? 'bg-[#3a8bfb] text-white border-[#002fa7] border-t-white border-l-white shadow-[inset_1px_1px_0_#ffffff50]'
                   : 'bg-[#ece9d8] text-black border-white border-r-[#808080] border-bottom-[#808080] hover:bg-white'
               }`}
             >
-              <span>Favoritos ({favorites.length})</span>
+              <span>Favoritos ({cifraFavorites.entries.length})</span>
             </button>
 
             <button 
@@ -1288,7 +1288,7 @@ function App() {
             </button>
             <div className="w-[1.5px] h-4 bg-white/30 mx-1"></div>
             <button
-              onClick={() => navigate('/termos')}
+              onClick={() => goToTab('termos')}
               className={`cursor-pointer hover:bg-white/20 px-1 rounded transition-colors ${activeTab === 'termos' ? 'text-[#ddffdd] font-bold' : ''}`}
               title="Termos de Uso"
             >
