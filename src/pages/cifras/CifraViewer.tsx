@@ -19,7 +19,8 @@ import { TabTransposerBlock } from '../../components/TabTransposerBlock';
 import { SourceVideoPanel } from '../../components/SourceVideoPanel';
 import { splitHtmlByTabs, TAB_POSITIONS, type ContentSegment } from '../../engine/tabTransposer';
 import '../../components/Cifras.css';
-import { fetchBestTiming, type TimingContribution } from '../../services/timingApi';
+import { extractYouTubeId, fetchBestTiming, type TimingContribution } from '../../services/timingApi';
+import { fetchYouTubeDuration } from '../../services/youtubeApi';
 import { getIsMobile } from '../../hooks/useIsMobile';
 import { reflowCifraHtml } from '../../services/cifraUtils';
 import { getPreferredInstrumentId, setPreferredInstrumentId } from '../../utils/instrumentPreference';
@@ -1252,6 +1253,31 @@ export const CifraViewer: React.FC = () => {
   const handleVideoDuration = useCallback((seconds: number) => {
     setVideoDuration(seconds);
   }, []);
+
+  // Pré-busca da duração ao ligar a rolagem.
+  //
+  // Quando nenhuma fonte medida cobre a música (sem timing da comunidade, sem
+  // duration no banco), o mapa cai na dedução por BPM — que erra feio. O tempo
+  // exato existia, mas só chegava se o músico abrisse o painel de vídeo: o
+  // player era o único que sabia perguntar ao YouTube. Aqui a pergunta é feita
+  // sozinha, num player fora da tela, assim que ele aperta "Rolar".
+  //
+  // O mapa se refaz quando a resposta chega e reancora o playhead na tela, então
+  // a rolagem já em curso muda de ritmo sem dar salto.
+  useEffect(() => {
+    if (!autoScroll || videoDuration != null) return;
+    // Com o painel aberto, o próprio player já vai reportar a duração.
+    if (showVideo) return;
+    if (cifra?.duration != null || timingMedia?.duration != null) return;
+    const videoId = sourceVideoUrl ? extractYouTubeId(sourceVideoUrl) : null;
+    if (!videoId) return;
+
+    let cancelled = false;
+    fetchYouTubeDuration(videoId).then(seconds => {
+      if (!cancelled && seconds > 0) setVideoDuration(seconds);
+    });
+    return () => { cancelled = true; };
+  }, [autoScroll, videoDuration, showVideo, cifra?.duration, timingMedia?.duration, sourceVideoUrl]);
 
   if (loading) {
     return (
