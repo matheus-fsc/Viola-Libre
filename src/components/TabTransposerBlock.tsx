@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import {
   parseTabText,
+  splitTabSystems,
   transposeTab,
   getTuningLabelsHighToLow,
   getTuningMidiHighToLow,
@@ -25,13 +26,10 @@ export const TabTransposerBlock: React.FC<Props> = ({
   const targetMidi      = useMemo(() => getTuningMidiHighToLow(targetStrings), [targetStrings]);
   const targetLabelsHtL = useMemo(() => getTuningLabelsHighToLow(targetStrings), [targetStrings]);
 
-  // Divide o texto em "sistemas" (grupos de linhas separados por linha em branco).
-  // Uma tab quebrada em 2 partes (mescladas pelo CifraViewer) vira 2 sistemas
-  // exibidos sob um único cabeçalho, ocupando bem menos espaço.
-  const systems = useMemo(
-    () => originalText.split(/\n[ \t]*\n/).map(s => s.replace(/\s+$/, '')).filter(s => s.trim().length > 0),
-    [originalText]
-  );
+  // Divide o texto em "sistemas" (uma pauta cada). Uma tab quebrada em 2 partes
+  // (mescladas pelo CifraViewer) vira 2 sistemas exibidos sob um único cabeçalho,
+  // ocupando bem menos espaço.
+  const systems = useMemo(() => splitTabSystems(originalText), [originalText]);
 
   const parsed = useMemo(
     () => systems.map(text => ({ text, tab: parseTabText(text) })),

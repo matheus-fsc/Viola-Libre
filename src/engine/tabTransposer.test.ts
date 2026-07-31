@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { splitHtmlByTabs } from './tabTransposer';
+import { parseTabText, splitHtmlByTabs, splitTabSystems } from './tabTransposer';
 
 // A marcação que vem do CifraClub encosta partes da tab FORA do elemento da tab:
 // o <span class="tablatura"> embrulha um <span class="cnt">, a legenda "Parte N de M"
@@ -60,5 +60,46 @@ describe('splitHtmlByTabs', () => {
 
     expect(entre.type).toBe('html');
     expect(entre.content.trim()).toBe('');
+  });
+});
+
+// A fonte quebra a tab em 32 colunas. Quando a continuação vem separada por uma
+// linha em branco tudo funciona, mas quando vem separada só pela linha de acordes
+// da metade seguinte as duas metades viravam UM sistema de 12 cordas — aí a
+// detecção de afinação falhava ("Instrumento detectado") e a transposição chutava
+// a oitava das cordas graves. Caso real: [Primeira Parte] de "Mistério do Planeta".
+describe('splitTabSystems', () => {
+  const meiaTab = (marca: string) =>
+    `E|-----------------${marca}-----------------|\n` +
+    `B|-2-----2-----0---5-----5-----5-----------|\n` +
+    `G|-2-----2-----2---4-----3-----6-----------|\n` +
+    `D|-2-----1-----1---------------5-----------|\n` +
+    `A|-------2-----2---4-----4-----------------|\n` +
+    `E|-2---------------------------5-----------|`;
+
+  it('corta o sistema na linha de acordes que cola as duas metades', () => {
+    const bloco = `Parte 1 de 4\n   F#m7  B7(9) B7\n${meiaTab('4')}\n  B7  A7  G#7\n${meiaTab('7')}`;
+    const sistemas = splitTabSystems(bloco);
+
+    expect(sistemas).toHaveLength(2);
+    expect(sistemas[0]).toContain('Parte 1 de 4');
+    expect(sistemas[1]).toMatch(/^ {2}B7 {2}A7 {2}G#7\n/);
+    for (const s of sistemas) {
+      const tab = parseTabText(s);
+      expect(tab?.rows).toHaveLength(6);
+      expect(tab?.sourceName).toBe('Violão Padrão (EADGBE)');
+      expect(tab?.rows.map(r => r.midiOpen)).toEqual([64, 59, 55, 50, 45, 40]);
+    }
+  });
+
+  it('continua cortando na linha em branco', () => {
+    expect(splitTabSystems(`${meiaTab('4')}\n\n${meiaTab('7')}`)).toHaveLength(2);
+  });
+
+  it('mantém o cabeçalho de várias linhas junto do sistema', () => {
+    const sistemas = splitTabSystems(`Parte 1 de 3\n  A7M       C#m7\n${meiaTab('4')}`);
+
+    expect(sistemas).toHaveLength(1);
+    expect(sistemas[0].split('\n').slice(0, 2)).toEqual(['Parte 1 de 3', '  A7M       C#m7']);
   });
 });
