@@ -6,7 +6,7 @@
  * rede. O servidor entra só como espelho — o sync no primeiro render acrescenta o que
  * está lá e nunca remove o que é local.
  */
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Heart, Download, Upload, RefreshCw, Search, FolderPlus, Trash2, Pencil, X, ShieldAlert } from 'lucide-react';
 import { useCifraFavorites } from '../../hooks/useCifraFavorites';
@@ -63,12 +63,8 @@ export function FavoritosDashboard() {
   const [pendingImport, setPendingImport] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Espelho do servidor no primeiro render: se o usuário favoritou de outro aparelho com
-  // o mesmo hash (ou restaurou um backup), a lista aparece sem ele pedir. Falha em
-  // silêncio de propósito — a estante local já está na tela e não depende disso.
-  useEffect(() => {
-    void syncFavoritesFromServer();
-  }, []);
+  // A reconciliação de abertura agora roda no App (useFavoritesBootSync), valendo para
+  // qualquer rota. Aqui sobrou só o botão "Sincronizar", para quem quiser forçar.
 
   const counts = useMemo(() => countByCategory(store), [store]);
   const looseCount = useMemo(() => uncategorizedCount(store), [store]);

@@ -1,5 +1,24 @@
-import { useSyncExternalStore } from 'react';
-import { getStore, subscribe, type FavoritesStore } from '../services/cifraFavorites';
+import { useEffect, useSyncExternalStore } from 'react';
+import { getStore, subscribe, syncFavoritesFromServer, type FavoritesStore } from '../services/cifraFavorites';
+
+/**
+ * Reconcilia com o servidor uma vez por carregamento de página.
+ *
+ * O sync morava só na dashboard, então dar Ctrl+R numa cifra deixava o coração apagado até
+ * o usuário abrir /favoritos — mesmo com a identidade intacta e a música lá no servidor.
+ *
+ * O guarda é de módulo, não de componente: a dashboard e o CifraViewer usam o mesmo hook e
+ * podem montar juntos, e duas reconciliações simultâneas disputariam as remoções pendentes.
+ */
+let syncStarted = false;
+
+export function useFavoritesBootSync(): void {
+  useEffect(() => {
+    if (syncStarted) return;
+    syncStarted = true;
+    void syncFavoritesFromServer();
+  }, []);
+}
 
 /**
  * A estante de cifras favoritadas, viva.

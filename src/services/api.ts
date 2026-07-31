@@ -219,37 +219,23 @@ const actionSchema = z.object({
   user_hash: z.string().length(32, "O Hash do usuário deve ter exatamente 32 caracteres")
 });
 
-/**
- * Estado da cifra no servidor depois do toggle.
- *
- * `favorited` é `null` quando o servidor respondeu mas não deu para saber o estado — ver
- * `readFavoritedFlag`. Nesse caso quem manda é o espelho local.
- */
+/** Estado da cifra no servidor depois do toggle. */
 export interface CifraFavoriteResult {
-  favorited: boolean | null;
+  favorited: boolean;
   count: number | null;
 }
 
 /**
- * A rota é um toggle de verdade (POST no mesmo par adiciona, o seguinte remove), mas hoje
- * responde só `{ message: "Favorito adicionado com sucesso" }` — uma frase em português.
+ * O toggle responde `{ favorited, count, message }`.
  *
- * Ler o estado de uma string de UI é frágil (qualquer ajuste de texto no backend quebra o
- * coração do usuário), então: se vier o campo booleano `favorited`, ele manda; senão
- * caímos na frase; se nem isso, devolvemos `null` e deixamos o espelho local decidir.
- * O prompt em `docs/backend/prompt-favoritos.md` pede o campo estruturado — quando ele
- * existir, o ramo da frase vira código morto e pode sair.
+ * Só o booleano é lido: a `message` existe para humano, e derivar estado de uma frase em
+ * português (era o que se fazia antes de o campo existir) quebrava o coração do usuário a
+ * cada ajuste de copy no backend, sem erro em lugar nenhum.
  */
-const readFavoritedFlag = (data: unknown): boolean | null => {
-  const body = data as { favorited?: unknown; message?: unknown } | null;
-  if (typeof body?.favorited === 'boolean') return body.favorited;
-  if (typeof body?.message === 'string') {
-    const msg = body.message.toLowerCase();
-    if (msg.includes('remov')) return false;
-    if (msg.includes('adicion')) return true;
-  }
-  return null;
-};
+const toggleResponseSchema = z.object({
+  favorited: z.boolean(),
+  count: z.number().nullable().catch(null),
+});
 
 export const favoriteCifra = async (artistSlug: string, songSlug: string): Promise<CifraFavoriteResult> => {
   const safeSongSlug = songSlug.startsWith('/') ? songSlug.slice(1) : songSlug;
@@ -272,24 +258,79 @@ export const favoriteCifra = async (artistSlug: string, songSlug: string): Promi
     }
   });
 
-  const count = (data as { count?: unknown })?.count;
-  return {
-    favorited: readFavoritedFlag(data),
-    count: typeof count === 'number' ? count : null,
-  };
+  const parsed = toggleResponseSchema.safeParse(data);
+  if (!parsed.success) {
+    // Resposta fora do contrato é indistinguível de sucesso pela ótica do HTTP 200, mas
+    // agir sobre ela seria pior que não agir: quem chama trata a exceção mantendo o
+    // espelho local, que é a fonte da verdade de qualquer forma.
+    throw new Error('Resposta inesperada do servidor ao favoritar.', { cause: parsed.error });
+  }
+  return parsed.data;
 };
+
+/** Uma cifra favoritada, como o servidor a devolve. */
+export interface FavoritedSong extends GlobalSearchResult {
+  /** ISO 8601 UTC. `null` em linhas antigas anteriores à coluna de data. */
+  favorited_at?: string | null;
+}
 
 /**
  * As cifras que este `user_hash` favoritou, direto do servidor.
  *
  * É a única via de recuperação quando o localStorage some: por isso a importação de
  * backup restaura o hash *antes* de chamar aqui.
+ *
+ * Usa a rota com o hash no CORPO. A versão com o hash no path está deprecada porque path
+ * vaza para access log, histórico do navegador e `Referer` — e aqui o hash é a credencial
+ * inteira, já que não há login.
  */
-export const getUserFavorites = async (userHash?: string): Promise<GlobalSearchResult[]> => {
+export const getUserFavorites = async (userHash?: string): Promise<FavoritedSong[]> => {
   const hash = userHash ?? getUserHash();
   if (!isValidUserHash(hash)) return [];
-  const { data } = await api.get<GlobalSearchResult[]>(`/api/usuario/${hash}/favoritos`);
+  const { data } = await api.post<FavoritedSong[]>('/api/usuario/favoritos', { user_hash: hash });
   return Array.isArray(data) ? data : [];
+};
+
+export interface FavoriteRef {
+  artist_slug: string;
+  song_slug: string;
+}
+
+export interface SyncFavoritesResult {
+  added: number;
+  already_present: number;
+  not_found: number;
+}
+
+/** O servidor recusa lotes acima disso com 422; fatiar aqui poupa a viagem. */
+const SYNC_BATCH_LIMIT = 200;
+
+/**
+ * Empurra favoritos locais para o servidor. União idempotente: nunca remove nada lá.
+ *
+ * É o que fecha os dois buracos em que o favorito ficava só no navegador para sempre:
+ * favoritar sem rede (o POST do toggle morre e não há retentativa) e importar um backup
+ * cuja identidade já é a deste navegador. Sem esta rota o sync só puxava.
+ */
+export const syncFavoritesToServer = async (
+  favorites: FavoriteRef[],
+  userHash?: string
+): Promise<SyncFavoritesResult> => {
+  const hash = userHash ?? getUserHash();
+  const total: SyncFavoritesResult = { added: 0, already_present: 0, not_found: 0 };
+  if (!isValidUserHash(hash) || favorites.length === 0) return total;
+
+  for (let i = 0; i < favorites.length; i += SYNC_BATCH_LIMIT) {
+    const { data } = await api.post<SyncFavoritesResult>(
+      `/api/usuario/${hash}/favoritos/sync`,
+      { favorites: favorites.slice(i, i + SYNC_BATCH_LIMIT) },
+      { headers: { 'X-API-Key': import.meta.env.VITE_API_KEY ?? '' } }
+    );
+    total.added += data?.added ?? 0;
+    total.already_present += data?.already_present ?? 0;
+    total.not_found += data?.not_found ?? 0;
+  }
+  return total;
 };
 
 export const updateDifficulty = async (artistSlug: string, songSlug: string, difficulty: string): Promise<void> => {

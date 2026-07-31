@@ -33,7 +33,7 @@ import {
 import { getPreferredInstrumentId, setPreferredInstrumentId } from './utils/instrumentPreference';
 import { preloadSoundfont } from './engine/AudioEngine';
 import { useTabNavigation } from './hooks/useTabNavigation';
-import { useCifraFavorites } from './hooks/useCifraFavorites';
+import { useCifraFavorites, useFavoritesBootSync } from './hooks/useCifraFavorites';
 import { FavoritosDashboard } from './pages/favoritos/FavoritosDashboard';
 import { CifrasApp } from './pages/cifras/CifrasApp';
 import { MinhasCifras } from './pages/minhasCifras/MinhasCifras';
@@ -166,6 +166,9 @@ function App() {
   // rótulo tem de ser o dela — as posições de acorde abaixo mudaram de casa e passaram a
   // viver na aba Dicionário de Acordes, junto do lugar onde são criadas.
   const cifraFavorites = useCifraFavorites();
+  // Uma reconciliação por carregamento, valendo para o app inteiro — e não só para quem
+  // abre /favoritos.
+  useFavoritesBootSync();
 
   // Posições de acorde favoritadas (persistidas em localStorage)
   const [favorites, setFavorites] = useState<FavoriteVoicing[]>(() => {

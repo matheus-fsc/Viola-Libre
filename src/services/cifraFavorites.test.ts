@@ -19,10 +19,11 @@ import {
   MAX_CATEGORIES,
   MAX_ENTRIES,
   MAX_FILE_BYTES,
+  favoritesStoreSchema,
   type FavoriteEntry,
   type FavoritesStore,
 } from './cifraFavorites';
-import type { GlobalSearchResult } from './api';
+import type { FavoritedSong } from './api';
 
 const entry = (artistSlug: string, songSlug: string, over: Partial<FavoriteEntry> = {}): FavoriteEntry => ({
   artistSlug,
@@ -35,7 +36,7 @@ const entry = (artistSlug: string, songSlug: string, over: Partial<FavoriteEntry
   ...over,
 });
 
-const song = (over: Partial<GlobalSearchResult> = {}): GlobalSearchResult => ({
+const song = (over: Partial<FavoritedSong> = {}): FavoritedSong => ({
   id: 1,
   title: 'O Bêbado e a Equilibrista',
   slug: 'o-bebado-a-equilibrista',
@@ -146,6 +147,18 @@ describe('mergeServerList', () => {
   it('ignora linha do servidor sem slug', () => {
     const merged = mergeServerList(emptyStore(), [song({ artist_slug: '', slug: '' })]);
     expect(merged.entries).toHaveLength(0);
+  });
+
+  // Carimbar `now()` amontoava tudo que veio do servidor no topo da ordem cronológica,
+  // como se tivesse sido favoritado no instante em que a página abriu.
+  it('usa a data do servidor como data de adição', () => {
+    const merged = mergeServerList(emptyStore(), [song({ favorited_at: '2025-03-04T10:00:00Z' })]);
+    expect(merged.entries[0].addedAt).toBe('2025-03-04T10:00:00Z');
+  });
+
+  it('cai para agora quando a linha antiga não tem data', () => {
+    const merged = mergeServerList(emptyStore(), [song({ favorited_at: null })]);
+    expect(Date.parse(merged.entries[0].addedAt)).toBeGreaterThan(0);
   });
 });
 
@@ -277,7 +290,7 @@ describe('tetos do arquivo importado', () => {
   });
 
   it('o merge não passa do teto mesmo com a estante já cheia', () => {
-    const cheia: FavoritesStore = { version: 1, categories: [], entries: muitasEntradas(MAX_ENTRIES) };
+    const cheia: FavoritesStore = { ...emptyStore(), entries: muitasEntradas(MAX_ENTRIES) };
     const merged = mergeImported(cheia, {
       app: 'viola-libre', kind: 'favoritos', version: 1, exportedAt: 'x',
       categories: [],
@@ -317,6 +330,28 @@ describe('identidade no export/import', () => {
 
   it('exporta com identidade quando é backup pessoal', () => {
     expect(buildExportFile(emptyStore(), 'c'.repeat(32)).userHash).toBe('c'.repeat(32));
+  });
+});
+
+// A rota de favorito é um TOGGLE, não um delete. Uma remoção que ficou só local precisa
+// ser lembrada, senão o pull seguinte traz a música de volta e o usuário vê a cifra
+// ressuscitar sozinha.
+describe('remoções pendentes', () => {
+  it('a estante nasce sem nenhuma pendência', () => {
+    expect(emptyStore().pendingRemovals).toEqual([]);
+  });
+
+  it('aceita estante antiga, gravada antes do campo existir', () => {
+    const antiga = JSON.stringify({ version: 1, categories: [], entries: [] });
+    const parsed = favoritesStoreSchema.safeParse(JSON.parse(antiga));
+    expect(parsed.success).toBe(true);
+    expect(parsed.data?.pendingRemovals).toEqual([]);
+  });
+
+  it('descarta pendências que não são lista de string', () => {
+    const parsed = favoritesStoreSchema.safeParse({ version: 1, categories: [], entries: [], pendingRemovals: 'nao' });
+    expect(parsed.success).toBe(true);
+    expect(parsed.data?.pendingRemovals).toEqual([]);
   });
 });
 

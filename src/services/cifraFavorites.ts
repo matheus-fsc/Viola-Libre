@@ -17,7 +17,15 @@
 // músicas favoritadas, e organizar é um gesto pessoal que não precisa de round-trip.
 
 import { z } from 'zod';
-import { favoriteCifra, getUserFavorites, getUserHash, isValidUserHash, setUserHash, type GlobalSearchResult } from './api';
+import {
+  favoriteCifra,
+  getUserFavorites,
+  getUserHash,
+  isValidUserHash,
+  setUserHash,
+  syncFavoritesToServer,
+  type FavoritedSong,
+} from './api';
 
 // ---------------------------------------------------------------------------
 // Tipos e schemas
@@ -44,6 +52,14 @@ export interface FavoritesStore {
   version: 1;
   categories: FavoriteCategory[];
   entries: FavoriteEntry[];
+  /**
+   * Chaves desfavoritadas aqui cuja remoção o servidor ainda não confirmou.
+   *
+   * Sem isso, desfavoritar sem rede seria desfeito sozinho: a remoção fica só local, o
+   * servidor continua com a música e o próximo sync a traria de volta. O usuário veria a
+   * cifra ressuscitar sem ter feito nada.
+   */
+  pendingRemovals: string[];
 }
 
 // Slugs seguem a mesma regra do `actionSchema` de api.ts — o que não casa aqui seria
@@ -89,6 +105,8 @@ export const favoritesStoreSchema = z.object({
   version: z.literal(1),
   categories: resilientArray(categorySchema),
   entries: resilientArray(entrySchema),
+  // Ausente nas estantes gravadas antes do campo existir.
+  pendingRemovals: z.array(z.string()).catch([]),
 });
 
 /**
@@ -135,7 +153,8 @@ export const MAX_CATEGORIES = 200;
 /** 4 MB cobre 5.000 entradas com sobra; acima disso o arquivo não é uma estante. */
 export const MAX_FILE_BYTES = 4 * 1024 * 1024;
 
-export const emptyStore = (): FavoritesStore => ({ version: 1, categories: [], entries: [] });
+export const emptyStore = (): FavoritesStore =>
+  ({ version: 1, categories: [], entries: [], pendingRemovals: [] });
 
 /**
  * Índice chave→entrada.
@@ -291,7 +310,7 @@ export const prettifySlug = (slug: string): string =>
  * offline que ainda não subiram. O que o servidor acrescenta é o nome real do artista —
  * ele tem o dado que a rota da cifra não entrega.
  */
-export const mergeServerList = (store: FavoritesStore, remote: GlobalSearchResult[]): FavoritesStore => {
+export const mergeServerList = (store: FavoritesStore, remote: FavoritedSong[]): FavoritesStore => {
   const index = indexEntries(store.entries);
   const novas: FavoriteEntry[] = [];
 
@@ -309,7 +328,10 @@ export const mergeServerList = (store: FavoritesStore, remote: GlobalSearchResul
         artistName: song.artist_name ?? null,
         versionName: song.version_name ?? null,
         categoryIds: [],
-        addedAt: new Date().toISOString(),
+        // A data do servidor, quando existe. Carimbar `now()` amontoava tudo que veio de
+        // lá no topo da ordem cronológica, como se tivesse sido favoritado no instante em
+        // que a página abriu — a ordem real não sobrevivia à troca de aparelho.
+        addedAt: song.favorited_at ?? new Date().toISOString(),
       });
     }
   }
@@ -526,35 +548,96 @@ export async function toggleCifraFavorite(
   const songSlug = normalizeSongSlug(input.songSlug);
   const wanted = !isFavorited(getStore(), input.artistSlug, songSlug);
 
-  const apply = (on: boolean) => {
-    updateStore(store =>
-      on
+  const key = favoriteKey(input.artistSlug, songSlug);
+
+  /**
+   * `pendingRemoval` marca uma remoção que o servidor ainda não confirmou. Favoritar de
+   * novo sempre limpa a marca: a intenção mais recente é a que vale, e uma marca esquecida
+   * faria o próximo sync apagar do servidor algo que o usuário acabou de refavoritar.
+   */
+  const apply = (on: boolean, pendingRemoval: boolean) => {
+    updateStore(store => {
+      const base = on
         ? addEntry(store, { ...input, songSlug, categoryIds: [], addedAt: new Date().toISOString() })
-        : removeEntry(store, input.artistSlug, songSlug)
-    );
+        : removeEntry(store, input.artistSlug, songSlug);
+      const outras = base.pendingRemovals.filter(k => k !== key);
+      return { ...base, pendingRemovals: pendingRemoval ? [...outras, key] : outras };
+    });
   };
-  apply(wanted);
+  apply(wanted, false);
 
   try {
     const result = await favoriteCifra(input.artistSlug, songSlug);
-    if (result.favorited !== null && result.favorited !== wanted) apply(result.favorited);
-    return { favorited: result.favorited ?? wanted, count: result.count, offline: false };
+    if (result.favorited !== wanted) apply(result.favorited, false);
+    return { favorited: result.favorited, count: result.count, offline: false };
   } catch (err) {
     console.error('Favorito de cifra não sincronizou com o servidor:', err);
     // O favorito local fica de pé: perder a estante por causa de rede seria pior que
-    // uma contagem momentaneamente dessincronizada.
+    // uma contagem momentaneamente dessincronizada. Uma REMOÇÃO, porém, precisa ficar
+    // registrada — senão o próximo sync a desfaz puxando a música de volta do servidor.
+    if (!wanted) apply(false, true);
     return { favorited: wanted, count: null, offline: true };
   }
 }
 
-/** Puxa a lista do servidor e funde na local. Silencioso: é conveniência, não requisito. */
+/**
+ * Reconcilia estante local e servidor, nos dois sentidos.
+ *
+ * Silencioso de propósito: é conveniência, não requisito — a estante local já está na tela
+ * e o app inteiro funciona sem isso. Qualquer etapa pode falhar sem derrubar as outras.
+ *
+ * A ordem não é arbitrária:
+ *
+ *   1. PUXA primeiro, porque as duas etapas seguintes precisam saber o que o servidor tem.
+ *   2. RESOLVE as remoções pendentes. A rota é um *toggle*, não um delete: mandá-la para
+ *      algo que o servidor já não tem ADICIONARIA a música de volta. Por isso só desliga o
+ *      que aparece de fato na lista remota.
+ *   3. EMPURRA o que só existe aqui — favoritos feitos sem rede, ou vindos de um backup
+ *      importado. Antes da rota em lote isso não tinha como subir e ficava preso no
+ *      navegador para sempre.
+ *   4. FUNDE, ignorando o que está pendente de remoção, para não ressuscitar na tela o que
+ *      o usuário acabou de tirar.
+ */
 export async function syncFavoritesFromServer(): Promise<FavoritesStore> {
+  let remote: FavoritedSong[];
   try {
-    const remote = await getUserFavorites();
-    return updateStore(store => mergeServerList(store, remote));
+    remote = await getUserFavorites();
   } catch {
     return getStore();
   }
+
+  const store = getStore();
+  const pendentes = new Set(store.pendingRemovals);
+
+  const resolvidas: string[] = [];
+  for (const song of remote) {
+    const key = favoriteKey(song.artist_slug, song.slug);
+    if (!pendentes.has(key)) continue;
+    try {
+      await favoriteCifra(song.artist_slug, song.slug);
+      resolvidas.push(key);
+    } catch {
+      // Continua pendente; a próxima sincronização tenta de novo.
+    }
+  }
+
+  const remotas = new Set(remote.map(s => favoriteKey(s.artist_slug, s.slug)));
+  const aEnviar = store.entries
+    .filter(e => !remotas.has(entryKey(e)))
+    .map(e => ({ artist_slug: e.artistSlug, song_slug: e.songSlug }));
+  if (aEnviar.length > 0) {
+    try {
+      await syncFavoritesToServer(aEnviar);
+    } catch {
+      // Sem rede o empurrão espera a próxima; nada se perde, o local é a fonte da verdade.
+    }
+  }
+
+  const aplicaveis = remote.filter(s => !pendentes.has(favoriteKey(s.artist_slug, s.slug)));
+  return updateStore(st => ({
+    ...mergeServerList(st, aplicaveis),
+    pendingRemovals: st.pendingRemovals.filter(k => !resolvidas.includes(k)),
+  }));
 }
 
 // ---------------------------------------------------------------------------
