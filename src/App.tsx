@@ -216,6 +216,12 @@ function App() {
   // Taskbar collapse state
   const [isTaskbarCollapsed, setIsTaskbarCollapsed] = useState(false);
 
+  // Popup "em construção" da aba Tirando de Ouvido
+  const [showEarWip, setShowEarWip] = useState(false);
+  useEffect(() => {
+    if (activeTab === 'ear') setShowEarWip(true);
+  }, [activeTab]);
+
   // Layout states for hybrid window / docked visualizer
   const [isEditorOpen, setIsEditorOpen] = useState(true);
   const [isDocked, setIsDocked] = useState(true); // Docked by default
@@ -1353,17 +1359,6 @@ function App() {
             </button>
 
             <button 
-              onClick={() => goToTab('chords')}
-              className={`h-[28px] px-3 border text-xs font-mono font-bold rounded flex items-center gap-1.5 select-none cursor-pointer ${
-                activeTab === 'chords'
-                  ? 'bg-[#3a8bfb] text-white border-[#002fa7] border-t-white border-l-white shadow-[inset_1px_1px_0_#ffffff50]'
-                  : 'bg-[#ece9d8] text-black border-white border-r-[#808080] border-bottom-[#808080] hover:bg-white'
-              }`}
-            >
-              <span>Acordes</span>
-            </button>
-            
-            <button 
               onClick={() => goToTab('favorites')}
               className={`h-[28px] px-3 border text-xs font-mono font-bold rounded flex items-center gap-1.5 select-none cursor-pointer ${
                 activeTab === 'favorites'
@@ -1374,6 +1369,17 @@ function App() {
               <span>Favoritos ({cifraFavorites.entries.length})</span>
             </button>
 
+            <button 
+              onClick={() => goToTab('chords')}
+              className={`h-[28px] px-3 border text-xs font-mono font-bold rounded flex items-center gap-1.5 select-none cursor-pointer ${
+                activeTab === 'chords'
+                  ? 'bg-[#3a8bfb] text-white border-[#002fa7] border-t-white border-l-white shadow-[inset_1px_1px_0_#ffffff50]'
+                  : 'bg-[#ece9d8] text-black border-white border-r-[#808080] border-bottom-[#808080] hover:bg-white'
+              }`}
+            >
+              <span>Acordes</span>
+            </button>
+            
             <button 
               onClick={() => setShowCifraWindow(true)}
               className={`h-[28px] px-3 border text-xs font-mono font-bold rounded flex items-center gap-1.5 select-none cursor-pointer ${
@@ -1405,9 +1411,6 @@ function App() {
               Termos de Uso
             </button>
             <div className="w-[1.5px] h-4 bg-white/30 mx-1"></div>
-            <span className="cursor-pointer" title="Rede Ativa (Livre)">NET</span>
-            <span className="cursor-pointer" title="Áudio Ativo (Afinado)">VOL</span>
-            <div className="w-[1.5px] h-4 bg-white/30 mx-1"></div>
             <span className="font-bold text-[11px]" title="Hora local do sistema">{time}</span>
           </div>
         </div>
@@ -1438,6 +1441,36 @@ function App() {
           onSelect={handleInstrumentOnboardingSelect}
           onSkip={handleInstrumentOnboardingSkip}
         />
+      )}
+
+      {showEarWip && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40" onClick={() => setShowEarWip(false)}>
+          <div
+            className="bg-[#ece9d8] border-[3px] border-[#0058e6] rounded-t-lg shadow-2xl w-[90vw] max-w-md"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="winxp-gradient-blue text-white px-3 py-1.5 flex items-center gap-2 font-bold text-xs sm:text-sm font-mono border-b-2 border-[#002fa7] select-none rounded-t">
+              ⚠️ Aviso
+            </div>
+            <div className="p-4 sm:p-6 flex flex-col gap-3 text-sm text-black/90">
+              <p className="font-bold text-[#002fa7]">
+                🚧 Esta aba está em construção!
+              </p>
+              <p>
+                A funcionalidade de "Tirando de Ouvido" ainda está sendo desenvolvida e por
+                enquanto não faz muito sentido. Estamos trabalhando para trazer algo legal aqui em breve.
+              </p>
+              <div className="flex justify-end pt-2">
+                <button
+                  onClick={() => setShowEarWip(false)}
+                  className="px-6 py-1.5 bg-[#ece9d8] border-2 border-white border-r-[#808080] border-b-[#808080] font-bold text-xs hover:bg-white active:border-t-[#808080] active:border-l-[#808080] cursor-pointer"
+                >
+                  OK
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
