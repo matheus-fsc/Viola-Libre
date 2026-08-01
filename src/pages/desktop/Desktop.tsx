@@ -87,12 +87,12 @@ function useTopSongs(mode: TopMode): { songs: GlobalSearchResult[]; hasAny: bool
  * há download, e vetor não pixeliza em tela nenhuma. O ArtistList já desenha as bandeiras
  * de gênero assim — é o idioma da casa.
  *
- * `fixed` de propósito: papel de parede cobre a viewport inteira, inclusive atrás da barra
- * de tarefas, sem depender da altura do conteúdo.
+ * Só a cena, sem posicionamento: quem chama decide onde ela mora. O desfoque de fundo das
+ * outras abas embrulha isto num elemento com `filter`, e elemento filtrado vira bloco
+ * contentor de descendente `fixed` — um `fixed` aqui dentro se ancoraria no lugar errado.
  */
-const BlissBackdrop: React.FC = () => (
-  <div className="fixed inset-0 z-0 pointer-events-none" aria-hidden="true">
-    <svg width="100%" height="100%" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid slice">
+const BlissScene: React.FC = () => (
+  <svg width="100%" height="100%" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid slice">
       <defs>
         <linearGradient id="vl-sky" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="#1c5fbe" />
@@ -145,7 +145,13 @@ const BlissBackdrop: React.FC = () => (
       {/* Realce de luz raspando o topo da colina. */}
       <path d="M0 660 C 260 556, 520 596, 760 640 C 950 675, 1080 668, 1200 632"
             fill="none" stroke="#c3e77a" strokeWidth="3" opacity="0.5" />
-    </svg>
+  </svg>
+);
+
+/** Papel de parede da própria área de trabalho: cobre a viewport, atrás de tudo. */
+const BlissBackdrop: React.FC = () => (
+  <div className="fixed inset-0 z-0 pointer-events-none" aria-hidden="true">
+    <BlissScene />
   </div>
 );
 
@@ -286,14 +292,11 @@ const EmAltaPanel: React.FC<{ className?: string }> = ({ className = '' }) => {
  * Espalhados pela largura eles leem como barra de ferramentas; empilhados no canto, leem
  * como área de trabalho. É a diferença entre parecer um menu e parecer um sistema.
  */
-const DesktopIcons: React.FC<{ shortcuts: Shortcut[] }> = ({ shortcuts }) => (
+const DesktopIcons: React.FC<{ shortcuts: Shortcut[]; decorative?: boolean }> = ({ shortcuts, decorative = false }) => (
   <ul className="flex flex-col gap-1 w-[92px]">
-    {shortcuts.map(s => (
-      <li key={s.to}>
-        <Link
-          to={s.to}
-          className="group flex flex-col items-center gap-1 px-1 py-1.5 border border-transparent hover:border-dotted hover:border-white/70 hover:bg-[#0058e6]/40 focus:outline-none focus-visible:border-dotted focus-visible:border-white"
-        >
+    {shortcuts.map(s => {
+      const inner = (
+        <>
           <span className="relative w-10 h-10 flex items-center justify-center text-white [&>svg]:w-9 [&>svg]:h-9 drop-shadow-[1px_2px_2px_rgba(0,0,0,0.55)]">
             {s.icon}
             {s.badge !== undefined && s.badge > 0 && (
@@ -306,9 +309,26 @@ const DesktopIcons: React.FC<{ shortcuts: Shortcut[] }> = ({ shortcuts }) => (
           <span className="text-[11px] leading-tight text-center text-white font-sans [text-shadow:0_1px_3px_rgba(0,0,0,0.95),0_0_2px_rgba(0,0,0,0.8)]">
             {s.label}
           </span>
-        </Link>
-      </li>
-    ))}
+        </>
+      );
+      const base = 'group flex flex-col items-center gap-1 px-1 py-1.5 border border-transparent';
+      return (
+        <li key={s.to}>
+          {/* No fundo desfocado eles viram <span>, não <Link>: link invisível seria alvo de
+              foco pelo teclado, ruído de leitor de tela e duplicata de href em toda aba. */}
+          {decorative ? (
+            <span className={base}>{inner}</span>
+          ) : (
+            <Link
+              to={s.to}
+              className={`${base} hover:border-dotted hover:border-white/70 hover:bg-[#0058e6]/40 focus:outline-none focus-visible:border-dotted focus-visible:border-white`}
+            >
+              {inner}
+            </Link>
+          )}
+        </li>
+      );
+    })}
   </ul>
 );
 
@@ -351,6 +371,33 @@ const PhoneHome: React.FC<{ shortcuts: Shortcut[] }> = ({ shortcuts }) => {
           </li>
         ))}
       </ul>
+    </div>
+  );
+};
+
+/**
+ * A área de trabalho desfocada atrás da janela do app, nas outras abas.
+ *
+ * No telefone a janela está maximizada e encosta nas laterais, então do desktop só se vê a
+ * tira de ~12px no topo e o que sobra abaixo da janela quando o conteúdo é curto. O papel
+ * de parede vale ali (era teal cru), mas os ícones não: eles moram no canto superior
+ * esquerdo, que a janela cobre por inteiro nessa largura. Renderizá-los seria rasterizar
+ * seis nós dentro de um `filter` pra ninguém ver.
+ *
+ * A camada interna transborda a viewport (`-inset-12`) porque `filter: blur` esmaece as
+ * bordas do próprio elemento: sem a folga, apareceria um halo claro nos quatro lados.
+ */
+export const DesktopBackdrop: React.FC = () => {
+  const shortcuts = useShortcuts();
+  return (
+    <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none" aria-hidden="true">
+      <div className="absolute -inset-12 blur-[10px] brightness-[0.92]">
+        <BlissScene />
+        {/* +48px pra compensar o -inset-12 e cair no mesmo canto da área de trabalho real. */}
+        <div className="hidden md:block absolute left-12 top-12 p-3">
+          <DesktopIcons shortcuts={shortcuts} decorative />
+        </div>
+      </div>
     </div>
   );
 };

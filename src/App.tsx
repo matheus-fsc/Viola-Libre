@@ -37,7 +37,7 @@ import { useImmersiveStore } from './stores/useImmersiveStore';
 import { useCifraFavorites, useFavoritesBootSync } from './hooks/useCifraFavorites';
 import { FavoritosDashboard } from './pages/favoritos/FavoritosDashboard';
 import { CifrasApp } from './pages/cifras/CifrasApp';
-import { Desktop } from './pages/desktop/Desktop';
+import { Desktop, DesktopBackdrop } from './pages/desktop/Desktop';
 import { MinhasCifras } from './pages/minhasCifras/MinhasCifras';
 import { TermosDeUso } from './pages/termos/TermosDeUso';
 
@@ -555,6 +555,9 @@ function App() {
       className="min-h-screen flex flex-col justify-between overflow-x-hidden font-sans select-none relative"
       style={{ paddingBottom: sequencerPad }}
     >
+      {/* Com uma aba aberta, a janela flutua sobre a própria área de trabalho desfocada.
+          Fora na rota de timing, que ocupa a viewport inteira e não deixa nada à mostra. */}
+      {activeTab !== 'desktop' && !isTimingRoute && <DesktopBackdrop />}
 
       {/* --- DESKTOP WINDOW CONTAINER --- */}
       {/* Timing route wants the editor to fill the full viewport (width included) — the
