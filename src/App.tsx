@@ -32,7 +32,7 @@ import {
 } from './services/authApi';
 import { getPreferredInstrumentId, setPreferredInstrumentId } from './utils/instrumentPreference';
 import { preloadSoundfont } from './engine/AudioEngine';
-import { useTabNavigation } from './hooks/useTabNavigation';
+import { useTabNavigation, TAB_LABEL } from './hooks/useTabNavigation';
 import { useImmersiveStore } from './stores/useImmersiveStore';
 import { useCifraFavorites, useFavoritesBootSync } from './hooks/useCifraFavorites';
 import { FavoritosDashboard } from './pages/favoritos/FavoritosDashboard';
@@ -585,8 +585,43 @@ function App() {
            flutuar sobre o desktop, com moldura nos quatro lados. */
         <div className={`w-full bg-[#ece9d8] border-x-0 border-b-0 border-t-[3px] md:border-[3px] border-[#0058e6] md:rounded-t-lg shadow-2xl flex flex-col ${isTimingRoute ? 'flex-1 min-h-0' : ''}`}>
 
-          {/* Main Title Bar */}
-          <div className="winxp-gradient-blue text-white px-3 py-1.5 flex justify-between items-center md:rounded-t-md border-b-2 border-[#002fa7] select-none">
+          {/* App bar do celular, no lugar da barra de título.
+              Minimizar e fechar são afordâncias de *janela*: num telefone não existe o gesto
+              nem o conceito, e o app ocupa a tela toda. Sobra o que faz sentido ali — voltar
+              pro menu, saber onde se está, e os dois atalhos que já eram úteis.
+              O ⓘ herda o que o ✕ fazia (abrir o Sobre), que era o único caminho pro modal. */}
+          <div className="md:hidden winxp-gradient-blue text-white px-1.5 py-1.5 flex items-center gap-1 border-b-2 border-[#002fa7] select-none">
+            <button
+              onClick={() => goToTab('desktop')}
+              className="w-8 h-8 shrink-0 rounded flex items-center justify-center text-lg font-bold hover:bg-white/20 active:bg-white/30 focus:outline-none cursor-pointer"
+              aria-label="Voltar ao menu"
+              title="Voltar ao menu"
+            >
+              ←
+            </button>
+            <span className="flex-1 min-w-0 truncate font-bold text-sm tracking-wide font-mono">
+              {TAB_LABEL[activeTab]}
+            </span>
+            <button
+              onClick={() => goToTab('favorites')}
+              className={`w-8 h-8 shrink-0 rounded flex items-center justify-center focus:outline-none cursor-pointer ${activeTab === 'favorites' ? 'bg-[#ff7f27]' : 'hover:bg-white/20 active:bg-white/30'}`}
+              aria-label="Abrir Favoritos"
+              title="Abrir Favoritos"
+            >
+              <StarIcon className="w-4 h-4" fill={activeTab === 'favorites' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" />
+            </button>
+            <button
+              onClick={() => setShowAboutModal(true)}
+              className="w-8 h-8 shrink-0 rounded flex items-center justify-center hover:bg-white/20 active:bg-white/30 focus:outline-none cursor-pointer"
+              aria-label="Sobre o Viola Libre"
+              title="Sobre"
+            >
+              <IconInfo className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Main Title Bar — só do `md` pra cima, onde a janela é mesmo uma janela. */}
+          <div className="hidden md:flex winxp-gradient-blue text-white px-3 py-1.5 justify-between items-center md:rounded-t-md border-b-2 border-[#002fa7] select-none">
             <div className="flex items-center gap-2 min-w-0">
               <span className="font-bold text-xs sm:text-sm tracking-wide font-mono truncate">
                 Viola Libre v1.1

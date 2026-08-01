@@ -15,6 +15,21 @@ export const TAB_ROOT_PATH: Record<TabId, string> = {
   termos: '/termos',
 };
 
+/**
+ * Nome de cada seção por extenso. A app bar do celular mostra só a seção atual, então aqui
+ * não cabe a abreviação que a faixa de abas usa por falta de largura ("Minhas", "Ouvido").
+ */
+export const TAB_LABEL: Record<TabId, string> = {
+  desktop: 'Viola Libre',
+  cifras: 'Explore Cifras',
+  minhascifras: 'Minhas Cifras',
+  chords: 'Dicionário de Acordes',
+  train: 'Treinos e Teoria',
+  ear: 'Tirando de Ouvido',
+  favorites: 'Meus Favoritos',
+  termos: 'Termos de Uso',
+};
+
 export function tabFromPathname(pathname: string): TabId {
   // '/' é a área de trabalho — caso EXPLÍCITO, nunca o fallback. Se o desktop virasse o
   // fallback, toda rota inexistente cairia nele em vez de no explorador de cifras.
