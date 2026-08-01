@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { FileText, Eye, Heart, Pin, Save } from 'lucide-react';
+import { Ellipsis, Eye, FileText, Guitar, Heart, Music2, Pencil, Pin, Play, RotateCcw, Save, Video } from 'lucide-react';
 import {
   getCifra, incrementView, type CifraDetail,
   saveSequencia, loadSequencia, updateSequencia, deleteSequencia,
@@ -23,6 +23,8 @@ import { extractYouTubeId, fetchBestTiming, type TimingContribution } from '../.
 import { fetchYouTubeDuration } from '../../services/youtubeApi';
 import { getIsMobile, useIsMobile } from '../../hooks/useIsMobile';
 import { useImmersiveStore } from '../../stores/useImmersiveStore';
+import { MobileCifraBar, TransporteMobile, GrupoAjustes, LinhaAjuste, Stepper, BotaoFolha } from './MobileCifraBar';
+import { SeletorDeTom, GradeDeTons } from './SeletorDeTom';
 import { reflowCifraHtml } from '../../services/cifraUtils';
 import { getPreferredInstrumentId, setPreferredInstrumentId } from '../../utils/instrumentPreference';
 import {
@@ -173,9 +175,9 @@ export const CifraViewer: React.FC = () => {
   const [tabPosIdx, setTabPosIdx] = useState<number>(0);
   const [panelPosition, setPanelPosition] = useState<'left' | 'top' | 'right' | 'bottom'>(() => getIsMobile() ? 'top' : 'left');
   const isMobile = useIsMobile();
-  /* No telefone o painel abre fechado: a cifra é o conteúdo, e os 5 grupos de controle
-     empilhados comiam quase um terço da tela antes da primeira linha aparecer. */
-  const [panelOpen, setPanelOpen] = useState(() => !getIsMobile());
+  /** Folha aberta na barra do mobile (ver MobileCifraBar). */
+  const [folhaAberta, setFolhaAberta] = useState<string | null>(null);
+  const [tomPickerOpen, setTomPickerOpen] = useState(false);
   const [showTabs, setShowTabs] = useState(true);
   
   // Scraped original chords
@@ -422,6 +424,9 @@ export const CifraViewer: React.FC = () => {
   const handleToggleAutoScroll = useCallback(() => {
     if (!autoScroll) syncPlayheadToScroll();
     setAutoScroll(p => !p);
+    // Folha aberta (mobile) taparia justamente a cifra que começou a andar. Só o atalho
+    // do Espaço chega aqui com folha aberta — a barra some enquanto ela está na tela.
+    setFolhaAberta(null);
   }, [autoScroll, syncPlayheadToScroll]);
 
   // ⏮ — único caminho que volta ao início da cifra.
@@ -598,6 +603,7 @@ export const CifraViewer: React.FC = () => {
     setImmersive(autoScroll);
     return () => setImmersive(false);
   }, [autoScroll, setImmersive]);
+
 
   // Atalhos de transporte (ignorados quando o foco está num campo de texto).
   useEffect(() => {
@@ -1076,6 +1082,11 @@ export const CifraViewer: React.FC = () => {
   /* Painel lateral tem largura fixa de 176px — num aparelho de 360px sobra menos da metade
      para a cifra. Abaixo de `md` ele só existe deitado, em cima ou embaixo. */
   const isVertical = !isMobile && (panelPosition === 'left' || panelPosition === 'right');
+  /* O mostrador passa a dizer o tom que *soa agora*, não o original — antes ele ficava em
+     "G" mesmo com +2 aplicado, e agora que dá para escolher da lista ele precisa refletir
+     a escolha. O tom original continua marcado como "original" dentro da lista. */
+  const tomAtual = transposeChordString(songKey, transposeOffset, false) || '?';
+
   const PANEL_ICONS: Record<typeof panelPosition, string> = { left: '◧', top: '▀', right: '◨', bottom: '▄' };
   const cyclePosition = () => setPanelPosition(p =>
     isMobile
@@ -1394,7 +1405,7 @@ export const CifraViewer: React.FC = () => {
   // pb no mobile: a barra de transporte é fixa e ocupa a largura toda, então sem essa
   // folga ela cobriria as últimas linhas da cifra.
   return (
-    <div className="flex flex-col bg-[var(--color-winxp-bg)] p-2 pb-32 sm:pb-2 relative">
+    <div className="flex flex-col bg-[var(--color-winxp-bg)] p-2 pb-24 md:pb-2 relative">
 
       {/* Info Popup Overlay */}
       {infoPopupChord && (
@@ -1629,8 +1640,9 @@ export const CifraViewer: React.FC = () => {
       {/* Main layout container */}
       <div className={`flex-1 flex gap-2 min-h-0 ${isVertical ? 'flex-row' : 'flex-col'}`}>
         
-        {/* ── Painel adaptativo (lateral ou horizontal) ── */}
-        {isVertical ? (
+        {/* ── Painel adaptativo (lateral ou horizontal) ──
+            Só no desktop: no telefone tudo isto vive na MobileCifraBar, lá embaixo. */}
+        {isMobile ? null : isVertical ? (
           <aside className={`bevel-out bg-[var(--color-winxp-panel)] flex flex-col gap-1.5 p-2 shrink-0 overflow-y-auto text-xs w-44 ${panelPosition === 'right' ? 'order-last' : ''}`}>
             <div className="flex items-center justify-between">
               <span className="font-bold text-[10px] uppercase text-gray-500">Painel</span>
@@ -1644,7 +1656,14 @@ export const CifraViewer: React.FC = () => {
 
             <div className="flex items-center gap-1">
               <span className="font-bold text-[10px] uppercase text-gray-500 shrink-0">Tom:</span>
-              <span className="font-bold text-xs bg-white border border-gray-400 px-1 text-[#002fa7] min-w-[20px] text-center">{songKey || '?'}</span>
+              <SeletorDeTom
+                songKey={songKey}
+                offset={transposeOffset}
+                onSelect={setTransposeOffset}
+                aberto={tomPickerOpen}
+                onAbrir={setTomPickerOpen}
+                gatilho={tomAtual}
+              />
             </div>
 
             <div className="flex flex-col gap-0.5">
@@ -1778,21 +1797,10 @@ export const CifraViewer: React.FC = () => {
         ) : (
           <div className={`bevel-out bg-[var(--color-winxp-panel)] p-1.5 sm:p-2 flex flex-col sm:flex-row sm:flex-wrap sm:items-start sm:justify-between gap-2 sm:gap-3 text-xs sm:text-sm shrink-0 ${panelPosition === 'bottom' ? 'order-last' : ''}`}>
             <div className="flex flex-wrap items-center gap-1.5 sm:gap-3 shrink-0">
-              <button
-                onClick={() => setPanelOpen(v => !v)}
-                aria-expanded={panelOpen}
-                className="md:hidden bevel-out bg-[var(--color-winxp-panel)] px-2 py-1 text-xs font-bold border border-gray-400 min-h-[32px] active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
-                title={panelOpen ? 'Recolher controles' : 'Mostrar controles'}
-              >
-                {panelOpen ? '▲' : '▼'} Controles
-              </button>
-              <button onClick={cyclePosition} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-1 sm:px-1.5 sm:py-0 text-sm font-bold border border-gray-400 min-h-[32px] sm:min-h-0" title="Mover painel">{PANEL_ICONS[panelPosition]}</button>
+              <button onClick={cyclePosition} className="bevel-out bg-[var(--color-winxp-panel)] px-1.5 py-0 text-sm font-bold border border-gray-400" title="Mover painel">{PANEL_ICONS[panelPosition]}</button>
               <span className="text-gray-600 flex items-center gap-1 font-bold" title="Visualizações"><Eye size={16} className="text-blue-600" /> {cifra.views || 1}</span>
               <span className="text-gray-600 flex items-center gap-1 font-bold" title="Favoritos"><Heart size={16} className="text-red-500" /> {cifra.favorited || 0}</span>
             </div>
-
-            {/* Recolhido no telefone: some tudo menos a linha de identificação acima. */}
-            <div className={`${panelOpen ? 'contents' : 'hidden md:contents'}`}>
 
             <div className="hidden sm:block w-px self-stretch bg-gray-400/60" />
 
@@ -1802,7 +1810,14 @@ export const CifraViewer: React.FC = () => {
               <div className="flex items-center gap-1.5 sm:gap-3 flex-wrap [&>*]:shrink-0">
                 <div className="flex items-center gap-1">
                   <label className="hidden sm:inline font-bold text-[11px] uppercase tracking-wider text-gray-700">Tom:</label>
-                  <span className="font-bold text-xs bg-white border border-gray-400 px-1 text-[#002fa7] min-w-[20px] text-center">{songKey || '?'}</span>
+                  <SeletorDeTom
+                    songKey={songKey}
+                    offset={transposeOffset}
+                    onSelect={setTransposeOffset}
+                    aberto={tomPickerOpen}
+                    onAbrir={setTomPickerOpen}
+                    gatilho={tomAtual}
+                  />
                 </div>
                 <div className="flex items-center gap-1">
                   <label className="hidden sm:inline font-bold text-[11px] uppercase tracking-wider text-gray-700">Variações:</label>
@@ -1917,7 +1932,6 @@ export const CifraViewer: React.FC = () => {
                 )}
               </div>
             </div>
-            </div>
           </div>
         )}
 
@@ -1927,11 +1941,15 @@ export const CifraViewer: React.FC = () => {
         {/* Carousel de Acordes Superior */}
         {currentChords.length > 0 && (
           <div className="bevel-out bg-[var(--color-winxp-panel)] p-1.5 sm:p-2 shrink-0 flex flex-col gap-1 transition-all">
-            <div className="flex justify-between items-center">
-              <span className="text-xs font-bold text-[#002fa7] flex items-center gap-1">
-                Acordes ({currentChords.length}) - {currentTuning.name}
+            <div className="flex flex-wrap justify-between items-center gap-1">
+              {/* A afinação some no telefone: "Cebolão em Ré (A D F# A D)" quebrava o título
+                  em duas linhas e espremia os controles, e a barra de baixo já mostra o
+                  instrumento — a afinação inteira está a um toque, na folha. */}
+              <span className="text-xs font-bold text-[#002fa7] flex items-center gap-1 min-w-0">
+                <span className="shrink-0">Acordes ({currentChords.length})</span>
+                <span className="hidden sm:inline truncate">- {currentTuning.name}</span>
               </span>
-              <div className="flex gap-1 items-center relative">
+              <div className="flex gap-1 items-center relative shrink-0">
                 <select
                   value={voicingOrderMode}
                   onChange={e => {
@@ -1943,7 +1961,7 @@ export const CifraViewer: React.FC = () => {
                     // novo modo, que é justamente o que o músico pediu ao trocar.
                     setVariationIndices({});
                   }}
-                  className="text-[10px] font-bold border border-gray-400 bg-[#ece9d8] text-black px-1 py-0.5 hover:bg-white cursor-pointer max-w-[104px]"
+                  className="text-[10px] font-bold border border-gray-400 bg-[#ece9d8] text-black px-1 py-1.5 sm:py-0.5 hover:bg-white cursor-pointer max-w-[104px]"
                   title="Qual fonte decide a primeira variação de cada acorde"
                 >
                   {VOICING_ORDER_MODES.map(m => (
@@ -1953,7 +1971,7 @@ export const CifraViewer: React.FC = () => {
                 {isFilterActive && (
                   <button
                     onClick={() => { setVoicingFilter(DEFAULT_FILTER); setVariationIndices({}); setLockedVariations({}); setExcludedFromFilter({}); }}
-                    className="text-[10px] font-bold border border-gray-400 px-2 py-0.5 bg-[#ece9d8] hover:bg-white text-[#cc3300]"
+                    className="text-[10px] font-bold border border-gray-400 px-2 py-1.5 sm:py-0.5 bg-[#ece9d8] hover:bg-white text-[#cc3300]"
                     title="Restaurar todos os filtros ao padrão"
                   >
                     Restaurar
@@ -1961,7 +1979,7 @@ export const CifraViewer: React.FC = () => {
                 )}
                 <button
                   onClick={() => setFilterPopupOpen(p => !p)}
-                  className={`text-[10px] font-bold border px-2 py-0.5 ${isFilterActive ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#ece9d8] text-black border-gray-400 hover:bg-white'}`}
+                  className={`text-[10px] font-bold border px-2 py-1.5 sm:py-0.5 ${isFilterActive ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#ece9d8] text-black border-gray-400 hover:bg-white'}`}
                   title="Filtrar variações de acordes"
                 >
                   {isFilterActive ? 'Filtros ▼' : 'Filtros ▽'}
@@ -2301,7 +2319,7 @@ export const CifraViewer: React.FC = () => {
           onPointerMove={handleRailPointerMove}
           onPointerUp={handleRailPointerUp}
           onPointerCancel={handleRailPointerUp}
-          className="fixed right-2 sm:right-3 top-20 bottom-32 sm:bottom-20 w-6 sm:w-3.5 z-40 bg-[#d4d0c8] bevel-in cursor-pointer touch-none select-none"
+          className="fixed right-2 md:right-3 top-20 bottom-28 md:bottom-20 w-6 md:w-3.5 z-40 bg-[#d4d0c8] bevel-in cursor-pointer touch-none select-none"
           title="Clique ou arraste para reposicionar"
         >
           {(loopA !== null || loopB !== null) && (
@@ -2332,84 +2350,223 @@ export const CifraViewer: React.FC = () => {
         </div>
       )}
 
-      {/* Transporte do rolamento — sempre visível.
-          No telefone vira uma barra do rodapé inteiro: os ~9 controles não cabem numa
-          linha de 360px, então quebram em duas e ganham altura de toque (40px). No
-          desktop continua sendo a caixinha flutuante do canto inferior direito. */}
-      <div className="fixed z-50 bevel-out bg-[var(--color-winxp-panel)] border border-gray-500 shadow-xl select-none text-xs
-                      inset-x-0 bottom-0 px-2 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] flex flex-wrap items-center justify-center gap-x-2 gap-y-1.5
-                      sm:inset-x-auto sm:right-4 sm:bottom-12 sm:px-2 sm:py-1.5 sm:flex-nowrap sm:justify-start sm:gap-2">
-        <div className="flex items-center gap-1.5 sm:gap-2 sm:contents">
+      {/* Transporte flutuante do desktop. No telefone quem manda é a MobileCifraBar. */}
+      {!isMobile && (
+        <div className="fixed right-4 bottom-12 z-50 bevel-out bg-[var(--color-winxp-panel)] border border-gray-500 shadow-xl px-2 py-1.5 flex items-center gap-2 text-xs select-none">
           <button
             onClick={handleRestart}
-            className="bevel-out px-3 py-2 sm:px-2 sm:py-1 font-bold border border-gray-400 bg-[var(--color-winxp-panel)] text-[#002fa7] hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
+            className="bevel-out px-2 py-1 font-bold border border-gray-400 bg-[var(--color-winxp-panel)] text-[#002fa7] hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
             title="Voltar ao início (Home)"
           >
             ⏮
           </button>
           <button
             onClick={() => seekBySeconds(-NUDGE_SEC)}
-            className="bevel-out px-3 py-2 sm:px-1.5 sm:py-1 font-bold border border-gray-400 bg-[var(--color-winxp-panel)] text-[#002fa7] hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
+            className="bevel-out px-1.5 py-1 font-bold border border-gray-400 bg-[var(--color-winxp-panel)] text-[#002fa7] hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
             title={`Voltar ${NUDGE_SEC}s (←)`}
           >
             ◀◀
           </button>
           <button
             onClick={handleToggleAutoScroll}
-            className={`bevel-out px-3 py-2 sm:py-1 font-bold border border-gray-400 min-w-[110px] sm:min-w-[90px] text-center active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${autoScroll ? 'bg-[#316ac5] text-white' : 'bg-[var(--color-winxp-panel)] text-[#002fa7] hover:bg-white'}`}
+            className={`bevel-out px-3 py-1 font-bold border border-gray-400 min-w-[90px] text-center active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${autoScroll ? 'bg-[#316ac5] text-white' : 'bg-[var(--color-winxp-panel)] text-[#002fa7] hover:bg-white'}`}
             title="Tocar/pausar (Espaço) — retoma de onde a tela está"
           >
             {autoScroll ? (userSeeking ? '✋ Ajustando' : '⏸ Pausar') : '▶ Auto-Rolar'}
           </button>
           <button
             onClick={() => seekBySeconds(NUDGE_SEC)}
-            className="bevel-out px-3 py-2 sm:px-1.5 sm:py-1 font-bold border border-gray-400 bg-[var(--color-winxp-panel)] text-[#002fa7] hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
+            className="bevel-out px-1.5 py-1 font-bold border border-gray-400 bg-[var(--color-winxp-panel)] text-[#002fa7] hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
             title={`Avançar ${NUDGE_SEC}s (→)`}
           >
             ▶▶
           </button>
-        </div>
-
-        {totalTime > 0 && (
-          <span className="font-mono text-[10px] font-bold text-[#002fa7] sm:border-l sm:border-gray-400 sm:pl-1.5 tabular-nums">
-            {fmtTime(elapsedDisplay)} / {fmtTime(totalTime)}
-          </span>
-        )}
-        <div className="flex gap-0.5">
-          {([0.5, 1, 2] as const).map(m => (
-            <button
-              key={m}
-              onClick={() => setScrollMult(m)}
-              className={`text-[10px] font-bold px-2 py-1.5 sm:px-1.5 sm:py-0.5 border leading-tight ${scrollMult === m ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#ece9d8] border-gray-400 hover:bg-white'}`}
-            >
-              {m}×
-            </button>
-          ))}
-        </div>
-        {/* Ocultar as tabs encurta a cifra e é decisão de meio-música — precisa estar aqui,
-            e não escondido atrás do painel de controles. */}
-        <button
-          onClick={() => setShowTabs(v => !v)}
-          className={`text-[10px] font-bold px-2 py-1.5 sm:px-1.5 sm:py-0.5 border leading-tight ${!showTabs ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#ece9d8] border-gray-400 hover:bg-white'}`}
-          title={showTabs ? 'Ocultar as tabs' : 'Mostrar as tabs'}
-        >
-          {showTabs ? 'Tabs ▼' : 'Tabs ▶'}
-        </button>
-        {effectiveBpm != null && (
-          <span className="font-mono text-[10px] font-bold text-[#005500] sm:border-l sm:border-gray-400 sm:pl-1.5">♩ {effectiveBpm}</span>
-        )}
-        {(loopA !== null && loopB !== null) && (
-          <span className="text-[10px] font-bold text-[#316ac5] sm:border-l sm:border-gray-400 sm:pl-1.5">⟳ Loop</span>
-        )}
-        {currentSection && autoScroll && (
-          <span
-            className="text-[10px] font-bold text-[#660033] sm:border-l sm:border-gray-400 sm:pl-1.5 max-w-[110px] truncate"
-            title={currentSection}
+          {totalTime > 0 && (
+            <span className="font-mono text-[10px] font-bold text-[#002fa7] border-l border-gray-400 pl-1.5 tabular-nums">
+              {fmtTime(elapsedDisplay)} / {fmtTime(totalTime)}
+            </span>
+          )}
+          <div className="flex gap-0.5">
+            {([0.5, 1, 2] as const).map(m => (
+              <button
+                key={m}
+                onClick={() => setScrollMult(m)}
+                className={`text-[10px] font-bold px-1.5 py-0.5 border leading-tight ${scrollMult === m ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#ece9d8] border-gray-400 hover:bg-white'}`}
+              >
+                {m}×
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => setShowTabs(v => !v)}
+            className={`text-[10px] font-bold px-1.5 py-0.5 border leading-tight ${!showTabs ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#ece9d8] border-gray-400 hover:bg-white'}`}
+            title={showTabs ? 'Ocultar as tabs' : 'Mostrar as tabs'}
           >
-            {currentSection}
-          </span>
-        )}
-      </div>
+            {showTabs ? 'Tabs ▼' : 'Tabs ▶'}
+          </button>
+          {effectiveBpm != null && (
+            <span className="font-mono text-[10px] font-bold text-[#005500] border-l border-gray-400 pl-1.5">♩ {effectiveBpm}</span>
+          )}
+          {(loopA !== null && loopB !== null) && (
+            <span className="text-[10px] font-bold text-[#316ac5] border-l border-gray-400 pl-1.5">⟳ Loop</span>
+          )}
+          {currentSection && autoScroll && (
+            <span
+              className="text-[10px] font-bold text-[#660033] border-l border-gray-400 pl-1.5 max-w-[110px] truncate"
+              title={currentSection}
+            >
+              {currentSection}
+            </span>
+          )}
+        </div>
+      )}
+
+      {isMobile && (
+        <MobileCifraBar
+          aberto={folhaAberta}
+          onAbrir={setFolhaAberta}
+          rolando={autoScroll}
+          transporte={<TransporteMobile
+            userSeeking={userSeeking}
+            onToggle={handleToggleAutoScroll}
+            onRestart={handleRestart}
+            onSeek={seekBySeconds}
+            mult={scrollMult}
+            onMult={setScrollMult}
+            elapsed={elapsedDisplay}
+            total={totalTime}
+            fmtTime={fmtTime}
+            secao={currentSection}
+            loopA={loopA}
+            loopB={loopB}
+            onLoopA={() => setLoopA(window.scrollY)}
+            onLoopB={() => setLoopB(window.scrollY)}
+            onLoopLimpar={() => { setLoopA(null); setLoopB(null); }}
+            showTabs={showTabs}
+            onToggleTabs={() => setShowTabs(v => !v)}
+          />}
+          destinos={[
+            {
+              id: 'tom', tipo: 'folha', icone: <Music2 size={17} />, rotulo: 'Tom',
+              // O tom que soa agora, com o deslocamento ao lado quando não é o original —
+              // "A +2" responde as duas perguntas: em que tom estou e o quanto mexi.
+              valor: `${tomAtual}${transposeOffset !== 0 ? ` ${transposeOffset > 0 ? '+' : ''}${transposeOffset}` : ''}`,
+              conteudo: (
+                <>
+                  <GrupoAjustes>
+                    <LinhaAjuste rotulo="Tom da música" dica={songKey ? `Original: ${songKey}` : undefined}>
+                      <span className="font-bold text-xs bg-white border border-gray-400 px-2 py-1 text-[#002fa7]">{tomAtual}</span>
+                    </LinhaAjuste>
+                    <LinhaAjuste rotulo="Ajuste fino" dica="Meio tom por vez">
+                      <Stepper
+                        rotuloMenos="-½" rotuloMais="+½"
+                        onMenos={() => setTransposeOffset(p => p - 1)}
+                        onMais={() => setTransposeOffset(p => p + 1)}
+                      >
+                        <span className="text-[#cc3300]">{transposeOffset > 0 ? `+${transposeOffset}` : transposeOffset}</span>
+                      </Stepper>
+                    </LinhaAjuste>
+                    {transposeOffset !== 0 && (
+                      <LinhaAjuste rotulo="Voltar ao original">
+                        <BotaoFolha onClick={() => setTransposeOffset(0)}><RotateCcw size={13} /> Zerar</BotaoFolha>
+                      </LinhaAjuste>
+                    )}
+                  </GrupoAjustes>
+
+                  {songKey && (
+                    <GrupoAjustes titulo="Escolher o tom">
+                      <GradeDeTons songKey={songKey} offset={transposeOffset} onSelect={setTransposeOffset} />
+                    </GrupoAjustes>
+                  )}
+                </>
+              ),
+            },
+            { id: 'rolagem', tipo: 'acao', icone: <Play size={17} />, rotulo: 'Rolagem', ativo: autoScroll, onClick: handleToggleAutoScroll },
+            {
+              id: 'instrumento', tipo: 'folha', icone: <Guitar size={17} />, rotulo: 'Instrumento', rotuloCurto: 'Instr.',
+              valor: currentInst.name,
+              conteudo: (
+                <GrupoAjustes>
+                  <LinhaAjuste rotulo="Instrumento">
+                    <select value={selectedInstId} onChange={(e) => handleInstrumentChange(e.target.value)} className="bevel-in bg-white px-2 py-1.5 text-xs outline-none cursor-pointer max-w-[150px]">
+                      {PRESET_INSTRUMENTS.map(inst => (<option key={inst.id} value={inst.id}>{inst.name}</option>))}
+                    </select>
+                  </LinhaAjuste>
+                  <LinhaAjuste rotulo="Afinação" dica={currentTuning.name}>
+                    <select value={selectedTuningId} onChange={(e) => setSelectedTuningId(e.target.value)} className="bevel-in bg-white px-2 py-1.5 text-xs outline-none cursor-pointer max-w-[150px]">
+                      {currentInst.tunings.map(tuning => (<option key={tuning.id} value={tuning.id}>{tuning.name.split(' (')[0]}</option>))}
+                    </select>
+                  </LinhaAjuste>
+                  <LinhaAjuste rotulo="Posição da tab" dica="Onde a tab é escrita no braço">
+                    <Stepper
+                      rotuloMenos="◀" rotuloMais="▶"
+                      onMenos={() => setTabPosIdx(p => (p - 1 + TAB_POSITIONS.length) % TAB_POSITIONS.length)}
+                      onMais={() => setTabPosIdx(p => (p + 1) % TAB_POSITIONS.length)}
+                    >
+                      <span className="text-[#005500]">{TAB_POSITIONS[tabPosIdx].label}</span>
+                    </Stepper>
+                  </LinhaAjuste>
+                </GrupoAjustes>
+              ),
+            },
+            {
+              id: 'opcoes', tipo: 'folha', icone: <Ellipsis size={17} />, rotulo: 'Opções',
+              conteudo: (
+                <>
+                  <GrupoAjustes titulo="Esta cifra">
+                    <LinhaAjuste rotulo="Variação" dica={`${cifra.views || 1} views · ${cifra.favorited || 0} favoritos`}>
+                      <select value={currentVersionSlug} onChange={(e) => handleVersionChange(e.target.value)} disabled={versionOptions.length <= 1} className="bevel-in bg-white px-2 py-1.5 text-xs outline-none cursor-pointer max-w-[150px] disabled:opacity-60">
+                        {versionOptions.map(v => (<option key={v.id} value={v.slug}>{v.version_name || 'Principal'}</option>))}
+                      </select>
+                    </LinhaAjuste>
+                    <LinhaAjuste rotulo="Tabs" dica="Ocultar encurta bastante a cifra">
+                      <BotaoFolha ativo={!showTabs} onClick={() => setShowTabs(v => !v)}>
+                        {showTabs ? 'Ocultar' : 'Mostrar'}
+                      </BotaoFolha>
+                    </LinhaAjuste>
+                  </GrupoAjustes>
+
+                  <GrupoAjustes titulo="Andamento">
+                    <LinhaAjuste rotulo="BPM" dica={durationStr ? `Duração ⏱ ${durationStr}${durationFromVideo ? ' 📺' : ''}` : (cifra.bpm != null ? `API: ${cifra.bpm}` : undefined)}>
+                      <Stepper
+                        onMenos={() => setLocalBpm(p => Math.max(20, (p ?? effectiveBpm ?? 100) - 1))}
+                        onMais={() => setLocalBpm(p => Math.min(300, (p ?? effectiveBpm ?? 100) + 1))}
+                      >
+                        <span className={bpmModified ? 'text-[#cc3300]' : 'text-[#005500]'}>{effectiveBpm ?? '—'}{bpmModified ? '*' : ''}</span>
+                      </Stepper>
+                    </LinhaAjuste>
+                    {bpmModified && (
+                      <LinhaAjuste rotulo="Restaurar BPM da API">
+                        <BotaoFolha onClick={() => setLocalBpm(null)}><RotateCcw size={13} /> Restaurar</BotaoFolha>
+                      </LinhaAjuste>
+                    )}
+                  </GrupoAjustes>
+
+                  <GrupoAjustes titulo="Ações">
+                    <div className="grid grid-cols-2 gap-1.5 p-2">
+                      <BotaoFolha onClick={handleFavorite} disabled={isFavoriting} ativo={isFavorited} title={isFavorited ? 'Remover dos favoritos' : 'Favoritar'}>
+                        <Heart size={13} className={isFavorited ? 'fill-current' : ''} />
+                        {isFavorited ? 'Favoritado' : 'Favoritar'}
+                      </BotaoFolha>
+                      <BotaoFolha onClick={() => { setFolhaAberta(null); setSeqModalOpen('save'); }} ativo={!!savedHash}>
+                        <Save size={13} /> {savedHash ? 'Sequência ✓' : 'Sequência'}
+                      </BotaoFolha>
+                      <BotaoFolha onClick={() => navigate(`/cifras/${artistSlug}/${songSlug}/timing`)}>
+                        <Pencil size={13} /> Timing
+                      </BotaoFolha>
+                      {sourceVideoUrl && (
+                        <BotaoFolha ativo={showVideo} onClick={() => { setFolhaAberta(null); setShowVideo(v => !v); }}>
+                          <Video size={13} /> {showVideo ? 'Fechar vídeo' : 'Ver vídeo'}
+                        </BotaoFolha>
+                      )}
+                    </div>
+                  </GrupoAjustes>
+                </>
+              ),
+            },
+          ]}
+        />
+      )}
 
       {/* Linha de leitura — guia visual a 30% da viewport enquanto auto-scroll está ativo */}
       {autoScroll && (

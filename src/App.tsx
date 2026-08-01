@@ -559,16 +559,24 @@ function App() {
       {/* Timing route wants the editor to fill the full viewport (width included) — the
           max-w-7xl cap + outer padding is the "windowed desktop" look every other tab keeps,
           but it left the timing editor centered in a box with teal desktop bleeding through on
-          the sides on wide screens. */}
-      <div className={`flex-1 flex flex-col items-center justify-start z-10 w-full mx-auto gap-6 ${
-        isTimingRoute ? '' : 'p-4 md:p-6 max-w-7xl'
+          the sides on wide screens.
+
+          No telefone a janela está *maximizada*: encosta nas laterais. Os 16px de teal ali não
+          construíam desktop nenhum — nessa largura leem como margem — e custavam 8% da largura
+          de leitura, que é o recurso escasso. Sobra a faixa de cima, onde a janela se pendura,
+          e o rodapé. Altura é barata: rola. */}
+      <div className={`flex-1 flex flex-col items-center justify-start z-10 w-full mx-auto ${
+        isTimingRoute ? '' : 'pt-3 md:p-6 max-w-7xl'
       }`}>
         
         {/* Main Application Window */}
-        <div className={`w-full bg-[#ece9d8] border-[3px] border-[#0058e6] rounded-t-lg shadow-2xl flex flex-col ${isTimingRoute ? 'flex-1 min-h-0' : ''}`}>
+        {/* Maximizada no telefone: sem canto arredondado e sem borda lateral, porque o
+            arredondado é afordância de janela *restaurada*. Do `md` para cima ela volta a
+            flutuar sobre o desktop, com moldura nos quatro lados. */}
+        <div className={`w-full bg-[#ece9d8] border-x-0 border-b-0 border-t-[3px] md:border-[3px] border-[#0058e6] md:rounded-t-lg shadow-2xl flex flex-col ${isTimingRoute ? 'flex-1 min-h-0' : ''}`}>
 
           {/* Main Title Bar */}
-          <div className="winxp-gradient-blue text-white px-3 py-1.5 flex justify-between items-center rounded-t-md border-b-2 border-[#002fa7] select-none">
+          <div className="winxp-gradient-blue text-white px-3 py-1.5 flex justify-between items-center md:rounded-t-md border-b-2 border-[#002fa7] select-none">
             <div className="flex items-center gap-2 min-w-0">
               <span className="font-bold text-xs sm:text-sm tracking-wide font-mono truncate">
                 Viola Libre v1.1
