@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Music, Guitar, BookOpen, Ear, Flame, Signal, BatteryFull, Search } from 'lucide-react';
+import { Music, Guitar, BookOpen, Ear, Flame, Heart, Signal, BatteryFull, Search } from 'lucide-react';
 import { StarIcon } from '../../components/Icons';
 import { IconNotepad } from '../../components/FretboardDiagram';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useCifraFavorites } from '../../hooks/useCifraFavorites';
-import { getTopSongs, type GlobalSearchResult } from '../../services/api';
+import { getTopSongs, getTopLikes, type GlobalSearchResult } from '../../services/api';
 
 /**
  * A tela inicial.
@@ -38,17 +38,45 @@ function useShortcuts(): Shortcut[] {
   ];
 }
 
-/** Top 10 mais vistas. Enfeite da home: se a API cair, o painel simplesmente não aparece. */
-function useTopSongs(): GlobalSearchResult[] {
-  const [songs, setSongs] = useState<GlobalSearchResult[]>([]);
+type TopMode = 'vistas' | 'curtidas';
+
+const TOP_FETCHERS: Record<TopMode, () => Promise<GlobalSearchResult[]>> = {
+  vistas: getTopSongs,
+  curtidas: getTopLikes,
+};
+
+/**
+ * Top 10 da aba escolhida. Busca sob demanda e guarda o que já veio: quem nunca abre
+ * "curtidas" não paga por ela, e alternar de novo não refaz o request.
+ *
+ * `hasAny` separa "ainda carregando" de "não tem nada": o painel é enfeite da home e some
+ * calado se a API cair, mas não pode sumir no meio de uma troca de aba.
+ */
+function useTopSongs(mode: TopMode): { songs: GlobalSearchResult[]; hasAny: boolean } {
+  const [lists, setLists] = useState<Partial<Record<TopMode, GlobalSearchResult[]>>>({});
+  const requested = useRef<Set<TopMode>>(new Set());
+
+  // Sem flag `cancelled` de propósito. Com o StrictMode do main.tsx o efeito roda, sofre
+  // cleanup e roda de novo; o ref (que sobrevive ao ciclo) barraria a segunda passada,
+  // e um `cancelled` da primeira mataria o único request em voo — o painel nunca carregaria.
+  // O ref já deduplica, e setState depois de desmontar é no-op no React 18+.
   useEffect(() => {
-    let cancelled = false;
-    getTopSongs()
-      .then(data => { if (!cancelled) setSongs(Array.isArray(data) ? data.slice(0, 10) : []); })
-      .catch(() => { /* home não trava por causa de enfeite */ });
-    return () => { cancelled = true; };
-  }, []);
-  return songs;
+    if (requested.current.has(mode)) return;
+    requested.current.add(mode);
+    TOP_FETCHERS[mode]()
+      .then(data => {
+        setLists(prev => ({ ...prev, [mode]: Array.isArray(data) ? data.slice(0, 10) : [] }));
+      })
+      .catch(() => {
+        // Libera pra tentar de novo se o usuário voltar nesta aba.
+        requested.current.delete(mode);
+      });
+  }, [mode]);
+
+  return {
+    songs: lists[mode] ?? [],
+    hasAny: Object.values(lists).some(l => l.length > 0),
+  };
 }
 
 /**
@@ -195,8 +223,27 @@ const SearchWindow: React.FC<{ className?: string }> = ({ className = '' }) => {
  * app: numa SPA sem prerender, esta é a única página que oferece links internos estáveis
  * pro crawler encontrar as cifras.
  */
-const EmAltaPanel: React.FC<{ songs: GlobalSearchResult[]; className?: string }> = ({ songs, className = '' }) => {
-  if (songs.length === 0) return null;
+const EmAltaPanel: React.FC<{ className?: string }> = ({ className = '' }) => {
+  const [mode, setMode] = useState<TopMode>('vistas');
+  const { songs, hasAny } = useTopSongs(mode);
+
+  if (!hasAny) return null;
+
+  const tab = (value: TopMode, label: string, icon: React.ReactNode) => (
+    <button
+      type="button"
+      onClick={() => setMode(value)}
+      aria-pressed={mode === value}
+      className={`flex-1 flex items-center justify-center gap-1 px-2 py-1 text-xs font-bold border cursor-pointer ${
+        mode === value
+          ? 'bg-[#316ac5] text-white border-[#316ac5]'
+          : 'bg-[#e0dfd6] text-black border-gray-400 hover:bg-white'
+      }`}
+    >
+      {icon}
+      {label}
+    </button>
+  );
 
   return (
     <section className={`bg-[#ece9d8] border-[3px] border-[#0058e6] rounded-t-lg shadow-2xl flex flex-col overflow-hidden ${className}`}>
@@ -204,6 +251,12 @@ const EmAltaPanel: React.FC<{ songs: GlobalSearchResult[]; className?: string }>
         <Flame size={15} className="text-orange-300 shrink-0" />
         Em alta
       </h2>
+
+      <div className="flex gap-1 p-1.5 pb-0">
+        {tab('vistas', 'Mais vistas', <Flame size={13} className={mode === 'vistas' ? 'text-orange-300' : 'text-orange-500'} />)}
+        {tab('curtidas', 'Mais curtidas', <Heart size={13} className={mode === 'curtidas' ? 'text-red-300' : 'text-red-500'} />)}
+      </div>
+
       <ol className="bevel-in bg-white m-1.5 p-1 flex-1 overflow-y-auto retro-scrollbar">
         {songs.map((song, i) => (
           <li key={song.id}>
@@ -219,6 +272,9 @@ const EmAltaPanel: React.FC<{ songs: GlobalSearchResult[]; className?: string }>
             </Link>
           </li>
         ))}
+        {songs.length === 0 && (
+          <li className="px-2 py-3 text-xs text-gray-500">Carregando...</li>
+        )}
       </ol>
     </section>
   );
@@ -301,7 +357,6 @@ const PhoneHome: React.FC<{ shortcuts: Shortcut[] }> = ({ shortcuts }) => {
 
 export const Desktop: React.FC = () => {
   const shortcuts = useShortcuts();
-  const songs = useTopSongs();
   const isMobile = useIsMobile();
 
   if (isMobile) {
@@ -314,7 +369,7 @@ export const Desktop: React.FC = () => {
           <PhoneHome shortcuts={shortcuts} />
           <div className="px-3 pb-3 flex flex-col gap-3">
             <SearchWindow />
-            <EmAltaPanel songs={songs} className="max-h-[55vh]" />
+            <EmAltaPanel className="max-h-[55vh]" />
           </div>
         </div>
       </div>
@@ -329,7 +384,7 @@ export const Desktop: React.FC = () => {
         <DesktopIcons shortcuts={shortcuts} />
         <div className="flex flex-col gap-4 w-[320px] shrink-0 pt-4 pr-3">
           <SearchWindow />
-          <EmAltaPanel songs={songs} className="max-h-[55vh]" />
+          <EmAltaPanel className="max-h-[55vh]" />
         </div>
       </div>
     </div>
