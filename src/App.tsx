@@ -216,11 +216,13 @@ function App() {
   // Taskbar collapse state
   const [isTaskbarCollapsed, setIsTaskbarCollapsed] = useState(false);
 
-  // Popup "em construção" da aba Tirando de Ouvido
-  const [showEarWip, setShowEarWip] = useState(false);
+  // Popup "em construção" — abas/rotas que ainda não estão prontas
+  const [wipPopup, setWipPopup] = useState<string | null>(null);
   useEffect(() => {
-    if (activeTab === 'ear') setShowEarWip(true);
-  }, [activeTab]);
+    if (activeTab === 'ear') setWipPopup('ear');
+    else if (activeTab === 'minhascifras') setWipPopup('minhascifras');
+    else if (isTimingRoute) setWipPopup('timing');
+  }, [activeTab, isTimingRoute]);
 
   // Layout states for hybrid window / docked visualizer
   const [isEditorOpen, setIsEditorOpen] = useState(true);
@@ -1443,8 +1445,8 @@ function App() {
         />
       )}
 
-      {showEarWip && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40" onClick={() => setShowEarWip(false)}>
+      {wipPopup && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40" onClick={() => setWipPopup(null)}>
           <div
             className="bg-[#ece9d8] border-[3px] border-[#0058e6] rounded-t-lg shadow-2xl w-[90vw] max-w-md"
             onClick={e => e.stopPropagation()}
@@ -1454,15 +1456,16 @@ function App() {
             </div>
             <div className="p-4 sm:p-6 flex flex-col gap-3 text-sm text-black/90">
               <p className="font-bold text-[#002fa7]">
-                🚧 Esta aba está em construção!
+                🚧 {wipPopup === 'ear' ? 'Esta aba está em construção!' : wipPopup === 'minhascifras' ? 'Esta aba está em construção!' : 'O editor de timing está em construção!'}
               </p>
               <p>
-                A funcionalidade de "Tirando de Ouvido" ainda está sendo desenvolvida e por
-                enquanto não faz muito sentido. Estamos trabalhando para trazer algo legal aqui em breve.
+                {wipPopup === 'ear' && 'A funcionalidade de "Tirando de Ouvido" ainda está sendo desenvolvida e por enquanto não faz muito sentido. Estamos trabalhando para trazer algo legal aqui em breve.'}
+                {wipPopup === 'minhascifras' && 'A funcionalidade de "Minhas Cifras" ainda está sendo desenvolvida e por enquanto não faz muito sentido. Estamos trabalhando para trazer algo legal aqui em breve.'}
+                {wipPopup === 'timing' && 'O editor de timing ainda está sendo desenvolvido e por enquanto não faz muito sentido. Estamos trabalhando para trazer algo legal aqui em breve.'}
               </p>
               <div className="flex justify-end pt-2">
                 <button
-                  onClick={() => setShowEarWip(false)}
+                  onClick={() => setWipPopup(null)}
                   className="px-6 py-1.5 bg-[#ece9d8] border-2 border-white border-r-[#808080] border-b-[#808080] font-bold text-xs hover:bg-white active:border-t-[#808080] active:border-l-[#808080] cursor-pointer"
                 >
                   OK
