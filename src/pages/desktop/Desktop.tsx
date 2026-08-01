@@ -121,14 +121,6 @@ const BlissBackdrop: React.FC = () => (
   </div>
 );
 
-/** Fundo do celular: gradiente simples, no espírito do aparelho antigo. */
-const PhoneBackdrop: React.FC = () => (
-  <div
-    className="fixed inset-0 z-0 pointer-events-none bg-gradient-to-b from-[#1c5fbe] via-[#2f7bc8] to-[#3f7a17]"
-    aria-hidden="true"
-  />
-);
-
 /**
  * Busca da home, como uma janelinha do XP.
  *
@@ -315,7 +307,9 @@ export const Desktop: React.FC = () => {
   if (isMobile) {
     return (
       <div className="w-full">
-        <PhoneBackdrop />
+        {/* Mesmo papel de parede do desktop: um aparelho com foto de natureza é plausível,
+            e um gradiente chapado deixava as duas telas parecendo projetos diferentes. */}
+        <BlissBackdrop />
         <div className="relative z-10 flex flex-col gap-3">
           <PhoneHome shortcuts={shortcuts} />
           <div className="px-3 pb-3 flex flex-col gap-3">
