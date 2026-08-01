@@ -163,7 +163,7 @@ export const incrementView = async (artistSlug: string, songSlug: string): Promi
 // O site não tem cadastro: este hash de 32 hex É o usuário, para o servidor. Ele é a
 // única chave que liga alguém aos favoritos gravados lá (`/api/usuario/{hash}/favoritos`),
 // e não existe nenhum jeito de recuperá-lo depois de perdido — não há e-mail para
-// reenviar. Por isso duas coisas passaram a valer aqui:
+// reenviar. Por isso três coisas passam a valer aqui:
 //
 //   1. A leitura valida antes de reaproveitar. Um valor truncado ou corrompido por outra
 //      aba geraria requisições que o servidor recusa em silêncio (o `user_hash` cai no
@@ -171,6 +171,12 @@ export const incrementView = async (artistSlug: string, songSlug: string): Promi
 //   2. `setUserHash` existe para a importação de backup restaurar a identidade antiga.
 //      Sem isso, limpar o localStorage seria irreversível: a lista voltaria do arquivo,
 //      mas o vínculo com o que está no servidor ficaria órfão para sempre.
+//   3. O sorteio é criptográfico. Como o hash é a credencial inteira — quem o tem lê e
+//      altera os favoritos daquele usuário, sem nenhuma segunda prova — ele precisa ser
+//      imprevisível, e não só improvável de repetir. `Math.random()` no V8 é xorshift128+:
+//      o estado interno é recuperável a partir de poucas saídas consecutivas, então quem
+//      abrisse o site conseguiria derivar os hashes sorteados perto do seu e assumir a
+//      identidade de outras pessoas.
 
 const USER_HASH_KEY = 'viola_user_hash';
 
@@ -179,8 +185,9 @@ export const userHashSchema = z.string().regex(/^[0-9a-f]{32}$/, 'Hash de usuár
 
 export const isValidUserHash = (value: unknown): value is string => userHashSchema.safeParse(value).success;
 
+/** 16 bytes de CSPRNG em hex — mesmos 32 caracteres que `userHashSchema` exige. */
 const randomUserHash = (): string =>
-  Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+  Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join('');
 
 export const getUserHash = (): string => {
   let stored: string | null = null;
