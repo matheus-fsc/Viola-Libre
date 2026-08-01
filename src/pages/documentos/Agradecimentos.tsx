@@ -21,9 +21,18 @@ export const Agradecimentos: React.FC = () => (
       </>
     }
   >
-    <Section n={1} title="Comunidade">
-      <p className="text-gray-600 italic">
-        Esta lista ainda está sendo montada. Quem contribuiu está sendo consultado, um a um,
+    <Section n={1} title="Amigos">
+      <Lista>
+        <li>
+          <Link href="https://ernopolis.neocities.org/">Ernópolis</Link> — o amigo responsável
+          por este site existir. Sem ele, nada teria acontecido. Contribuiu com a fagulha
+          inicial e com o incômodo de que todos merecem um ambiente livre para aprender, tocar
+          e compartilhar música. Prospector da espiculação — ele mesmo difundidor do termo{' '}
+          <em>espicular</em>, a arte de ser curioso e sempre buscar mais conhecimento.
+        </li>
+      </Lista>
+      <p className="text-gray-600 italic mt-1">
+        Esta lista continua sendo montada. Quem contribuiu está sendo consultado, um a um,
         sobre querer ou não ser nomeado aqui. Ninguém entra sem ter dito que sim.
       </p>
       <p>
@@ -32,7 +41,26 @@ export const Agradecimentos: React.FC = () => (
       </p>
     </Section>
 
-    <Section n={2} title="Projetos que tornaram isto possível">
+    <Section n={2} title="A todos os artistas e compositores">
+      <p>
+        Um agradecimento que não cabe em lista nenhuma: a todos os artistas e compositores que,
+        de forma generalizada e imensurável, moldaram e continuam moldando a cultura e a arte
+        que escrevem a história da humanidade.
+      </p>
+      <p>
+        A música é o tempero que dá sabor à existência — não só de paz e amor, mas de todos os
+        efeitos históricos que ela carrega e não deixa morrer na lembrança de cada um. Cada
+        melodia composta, cada verso cantado, cada acorde inventado é um pedaço de memória
+        coletiva que atravessa gerações e mantém vivo aquilo que os livros sozinhos não
+        conseguem preservar.
+      </p>
+      <p>
+        Este projeto existe porque antes dele existiu música. E a música existiu porque alguém
+        teve a coragem de criar.
+      </p>
+    </Section>
+
+    <Section n={3} title="Projetos que tornaram isto possível">
       <p>
         O site se apoia em trabalho aberto de outras pessoas:
       </p>
@@ -53,7 +81,7 @@ export const Agradecimentos: React.FC = () => (
       </Lista>
     </Section>
 
-    <Section n={3} title="A quem tocou antes">
+    <Section n={4} title="A quem tocou antes">
       <p>
         À tradição da viola caipira e a quem a manteve viva sem esperar por site nenhum.
       </p>
