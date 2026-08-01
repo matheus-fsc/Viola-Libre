@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { InfiniteLoader } from '../../components/InfiniteLoader';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Flame, Heart, FileText, Mic2, Music, Guitar } from 'lucide-react';
 
 // ─── Genre flag SVGs ──────────────────────────────────────────────────────────
@@ -173,6 +173,15 @@ const loadBuffer = (letra: string, q: string, fromOffset: number): { artists: Ar
   } catch { return null; }
 };
 
+type SearchMode = 'artistas' | 'musicas' | 'top_views' | 'top_likes' | 'generos';
+
+const SEARCH_MODES: SearchMode[] = ['artistas', 'musicas', 'top_views', 'top_likes', 'generos'];
+
+/** `?modo=` só vale se for um modo conhecido — qualquer outra coisa cai no padrão. */
+function parseSearchMode(raw: string | null): SearchMode {
+  return SEARCH_MODES.includes(raw as SearchMode) ? (raw as SearchMode) : 'artistas';
+}
+
 export const ArtistList: React.FC = () => {
   // ── Artistas (server-side infinite scroll) ───────────────────
   const [pagedArtists, setPagedArtists] = useState<Artist[]>([]);
@@ -188,9 +197,17 @@ export const ArtistList: React.FC = () => {
   useLayoutEffect(() => { pageOffsetRef.current = pageOffset; }, [pageOffset]);
   useLayoutEffect(() => { totalArtistsRef.current = totalArtists; }, [totalArtists]);
 
-  const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [searchMode, setSearchMode] = useState<'artistas' | 'musicas' | 'top_views' | 'top_likes' | 'generos'>('artistas');
+  // A busca vive na URL (?busca=&modo=): é o que deixa a área de trabalho mandar o usuário
+  // pra cá já com a consulta feita, e de quebra torna um resultado compartilhável por link.
+  // Só o valor INICIAL vem dos params — depois o estado local manda e a URL o acompanha,
+  // senão os dois se realimentariam.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialSearch = searchParams.get('busca') ?? '';
+  const initialMode = parseSearchMode(searchParams.get('modo'));
+
+  const [search, setSearch] = useState(initialSearch);
+  const [debouncedSearch, setDebouncedSearch] = useState(initialSearch);
+  const [searchMode, setSearchMode] = useState<SearchMode>(initialMode);
 
   const [songResults, setSongResults] = useState<GlobalSearchResult[]>([]);
   const [loadingSongs, setLoadingSongs] = useState(false);
@@ -209,12 +226,22 @@ export const ArtistList: React.FC = () => {
 
   const navigate = useNavigate();
 
-  // Debounce da busca de artistas (evita requests a cada tecla)
+  // Debounce da busca (evita requests a cada tecla). Roda em todos os modos, não só em
+  // 'artistas': quem consome `debouncedSearch` já se protege sozinho, e a sincronia da URL
+  // abaixo pendura nele pra não escrever no histórico a cada tecla.
   useEffect(() => {
-    if (searchMode !== 'artistas') return;
     const t = setTimeout(() => setDebouncedSearch(search), 350);
     return () => clearTimeout(t);
-  }, [search, searchMode]);
+  }, [search]);
+
+  // Estado -> URL. `replace` porque cada tecla não merece uma entrada no histórico: o botão
+  // voltar do navegador deve sair da busca, não desfazê-la letra por letra.
+  useEffect(() => {
+    const next = new URLSearchParams();
+    if (debouncedSearch) next.set('busca', debouncedSearch);
+    if (searchMode !== 'artistas') next.set('modo', searchMode);
+    setSearchParams(next, { replace: true });
+  }, [debouncedSearch, searchMode, setSearchParams]);
 
   // Carrega primeira página quando filtros mudam.
   // useLayoutEffect (e não useEffect) garante que setIsLoadingPage(true) commita
@@ -409,15 +436,17 @@ export const ArtistList: React.FC = () => {
 
       <div className="flex-1 bevel-in bg-white p-4 overflow-y-auto flex flex-col retro-scrollbar">
         {/* Filtros e Tabs Rápidas */}
+        {/* Artistas <-> Músicas preservam a consulta digitada: digitar um nome e querer vê-lo
+            como música é o gesto natural, e limpar o campo ali obrigava a redigitar. */}
         <div className="flex flex-wrap gap-2 mb-4 p-2 bg-[var(--color-winxp-panel)] bevel-out">
           <button
-            onClick={() => { setSearchMode('artistas'); setSearch(''); setSelectedGenero(null); }}
+            onClick={() => { setSearchMode('artistas'); setSelectedGenero(null); }}
             className={`px-3 py-1 text-sm font-bold border transition-colors ${searchMode === 'artistas' ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#e0dfd6] text-black border-gray-400 hover:bg-gray-300'}`}
           >
             Artistas
           </button>
           <button
-            onClick={() => { setSearchMode('musicas'); setSearch(''); setSelectedGenero(null); }}
+            onClick={() => { setSearchMode('musicas'); setSelectedGenero(null); }}
             className={`px-3 py-1 text-sm font-bold border transition-colors ${searchMode === 'musicas' ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#e0dfd6] text-black border-gray-400 hover:bg-gray-300'}`}
           >
             Músicas (Busca)

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Music, Guitar, BookOpen, Ear, Flame, Signal, BatteryFull } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Music, Guitar, BookOpen, Ear, Flame, Signal, BatteryFull, Search } from 'lucide-react';
 import { StarIcon } from '../../components/Icons';
 import { IconNotepad } from '../../components/FretboardDiagram';
 import { useIsMobile } from '../../hooks/useIsMobile';
@@ -85,6 +85,44 @@ const EmAltaPanel: React.FC<{ songs: GlobalSearchResult[]; className?: string }>
         ))}
       </ol>
     </section>
+  );
+};
+
+/**
+ * Busca da home. Manda pro explorador já com a consulta feita, via `?busca=`.
+ *
+ * Vai pro modo 'artistas' (o padrão do explorador) e não pro de músicas: procurar pelo nome
+ * do artista é como se chega a uma cifra na maioria das vezes, e lá dentro o botão "Músicas"
+ * reaproveita o mesmo texto se a pessoa quis o título da canção.
+ */
+const DesktopSearch: React.FC<{ className?: string }> = ({ className = '' }) => {
+  const [q, setQ] = useState('');
+  const navigate = useNavigate();
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const term = q.trim();
+    navigate(term ? `/cifras?busca=${encodeURIComponent(term)}` : '/cifras');
+  };
+
+  return (
+    <form onSubmit={submit} className={`flex items-stretch gap-1 ${className}`}>
+      <input
+        type="search"
+        value={q}
+        onChange={e => setQ(e.target.value)}
+        placeholder="Buscar artista..."
+        aria-label="Buscar artista"
+        className="bevel-in px-3 py-2 text-sm w-full outline-none min-w-0"
+      />
+      <button
+        type="submit"
+        className="bevel-out bg-[var(--color-winxp-panel)] px-3 shrink-0 flex items-center justify-center hover:bg-white active:border-t-[#808080] active:border-l-[#808080] active:border-b-white active:border-r-white cursor-pointer"
+        title="Buscar"
+      >
+        <Search size={16} className="text-[#0058e6]" />
+      </button>
+    </form>
   );
 };
 
@@ -173,6 +211,7 @@ export const Desktop: React.FC = () => {
     return (
       <div className="w-full flex flex-col gap-3 p-3">
         <PhoneMenu shortcuts={shortcuts} />
+        <DesktopSearch />
         <EmAltaPanel songs={songs} className="max-h-[60vh]" />
       </div>
     );
@@ -180,8 +219,9 @@ export const Desktop: React.FC = () => {
 
   return (
     <div className="w-full flex gap-6 p-6 items-start">
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 flex flex-col gap-6">
         <DesktopIcons shortcuts={shortcuts} />
+        <DesktopSearch className="max-w-[320px]" />
       </div>
       <EmAltaPanel songs={songs} className="w-[320px] shrink-0 max-h-[70vh]" />
     </div>
