@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { InfiniteLoader } from '../../components/InfiniteLoader';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Flame, Heart, FileText, Mic2, Music, Guitar } from 'lucide-react';
+import { Flame, Heart, FileText, Mic2, Music, Guitar, TrendingUp } from 'lucide-react';
 
 // ─── Genre flag SVGs ──────────────────────────────────────────────────────────
 // Simplified cute flags used as button backgrounds in the genre grid.
@@ -221,6 +221,9 @@ export const ArtistList: React.FC = () => {
   const [loadingGeneroArtists, setLoadingGeneroArtists] = useState(false);
 
   // visibleCount só usado pelos modos musicas/top/generos (client-side slice)
+  // Os dois rankings são um modo só na interface ("Populares"), dois no estado.
+  const isPopulares = searchMode === 'top_views' || searchMode === 'top_likes';
+
   const [visibleCount, setVisibleCount] = useState(32);
   const [selectedLetter, setSelectedLetter] = useState<string | null>(null);
 
@@ -459,17 +462,17 @@ export const ArtistList: React.FC = () => {
           >
             Músicas (Busca)
           </button>
+          {/* "+ Views" e "+ Likes" eram dois modos irmãos disputando espaço com os outros
+              três. Viram um só: Populares abre o ranking (visualizações por padrão) e a
+              escolha entre os dois desce pra uma segunda fileira, que só existe quando é
+              relevante. O estado continua sendo top_views/top_likes — nada muda na URL nem
+              nos deep links. */}
           <button
             onClick={() => { setSearchMode('top_views'); setSelectedGenero(null); }}
-            className={`flex items-center gap-1 px-3 py-1 text-sm font-bold border transition-colors ${searchMode === 'top_views' ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#e0dfd6] text-black border-gray-400 hover:bg-gray-300'}`}
+            aria-expanded={isPopulares}
+            className={`flex items-center gap-1 px-3 py-1 text-sm font-bold border transition-colors ${isPopulares ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#e0dfd6] text-black border-gray-400 hover:bg-gray-300'}`}
           >
-            <Flame size={16} className={searchMode === 'top_views' ? "text-orange-300" : "text-orange-500"} /> + Views
-          </button>
-          <button
-            onClick={() => { setSearchMode('top_likes'); setSelectedGenero(null); }}
-            className={`flex items-center gap-1 px-3 py-1 text-sm font-bold border transition-colors ${searchMode === 'top_likes' ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#e0dfd6] text-black border-gray-400 hover:bg-gray-300'}`}
-          >
-            <Heart size={16} className={searchMode === 'top_likes' ? "text-red-300" : "text-red-500"} /> + Likes
+            <TrendingUp size={16} className={isPopulares ? 'text-orange-300' : 'text-orange-500'} /> Populares
           </button>
           <button
             onClick={() => { setSearchMode('generos'); setSelectedGenero(null); }}
@@ -478,6 +481,27 @@ export const ArtistList: React.FC = () => {
             <Guitar size={16} /> Gêneros
           </button>
         </div>
+
+        {/* Segunda fileira de Populares: qual ranking. Só existe dentro do modo, então não
+            cobra espaço de quem está navegando artistas. */}
+        {isPopulares && (
+          <div className="flex flex-wrap gap-2 mb-4 px-1">
+            <button
+              onClick={() => setSearchMode('top_views')}
+              aria-pressed={searchMode === 'top_views'}
+              className={`flex items-center gap-1 px-3 py-1 text-sm font-bold border transition-colors ${searchMode === 'top_views' ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#e0dfd6] text-black border-gray-400 hover:bg-gray-300'}`}
+            >
+              <Flame size={16} className={searchMode === 'top_views' ? 'text-orange-300' : 'text-orange-500'} /> + Views
+            </button>
+            <button
+              onClick={() => setSearchMode('top_likes')}
+              aria-pressed={searchMode === 'top_likes'}
+              className={`flex items-center gap-1 px-3 py-1 text-sm font-bold border transition-colors ${searchMode === 'top_likes' ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#e0dfd6] text-black border-gray-400 hover:bg-gray-300'}`}
+            >
+              <Heart size={16} className={searchMode === 'top_likes' ? 'text-red-300' : 'text-red-500'} /> + Likes
+            </button>
+          </div>
+        )}
 
         {/* Search Input (Apenas visivel em Artistas ou Musicas) */}
         {(searchMode === 'artistas' || searchMode === 'musicas') && (
