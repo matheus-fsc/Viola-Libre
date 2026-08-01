@@ -18,8 +18,12 @@ describe('tabFromPathname', () => {
     expect(tabFromPathname('/cifras/os-novos-baianos/misterio-do-planeta/timing')).toBe('cifras');
   });
 
+  it('reconhece a raiz como área de trabalho', () => {
+    expect(tabFromPathname('/')).toBe('desktop');
+  });
+
+  // A raiz é caso explícito, não o fallback — senão todo 404 abriria o desktop.
   it('cai em cifras para rota desconhecida', () => {
-    expect(tabFromPathname('/')).toBe('cifras');
     expect(tabFromPathname('/qualquer-coisa')).toBe('cifras');
   });
 });

@@ -37,6 +37,7 @@ import { useImmersiveStore } from './stores/useImmersiveStore';
 import { useCifraFavorites, useFavoritesBootSync } from './hooks/useCifraFavorites';
 import { FavoritosDashboard } from './pages/favoritos/FavoritosDashboard';
 import { CifrasApp } from './pages/cifras/CifrasApp';
+import { Desktop } from './pages/desktop/Desktop';
 import { MinhasCifras } from './pages/minhasCifras/MinhasCifras';
 import { TermosDeUso } from './pages/termos/TermosDeUso';
 
@@ -569,10 +570,14 @@ function App() {
         isTimingRoute ? '' : 'pt-3 md:p-6 max-w-7xl'
       }`}>
         
-        {/* Main Application Window */}
-        {/* Maximizada no telefone: sem canto arredondado e sem borda lateral, porque o
-            arredondado é afordância de janela *restaurada*. Do `md` para cima ela volta a
-            flutuar sobre o desktop, com moldura nos quatro lados. */}
+        {/* Na raiz não há janela aberta: vê-se a área de trabalho (desktop no XP, menu de
+            apps no celular). Toda outra rota abre a janela do app por cima dela. */}
+        {activeTab === 'desktop' ? <Desktop /> : (
+
+        /* Main Application Window */
+        /* Maximizada no telefone: sem canto arredondado e sem borda lateral, porque o
+           arredondado é afordância de janela *restaurada*. Do `md` para cima ela volta a
+           flutuar sobre o desktop, com moldura nos quatro lados. */
         <div className={`w-full bg-[#ece9d8] border-x-0 border-b-0 border-t-[3px] md:border-[3px] border-[#0058e6] md:rounded-t-lg shadow-2xl flex flex-col ${isTimingRoute ? 'flex-1 min-h-0' : ''}`}>
 
           {/* Main Title Bar */}
@@ -585,7 +590,13 @@ function App() {
             
             {/* Windows Window Buttons */}
             <div className="flex gap-1">
-              <button className="w-[21px] h-[21px] rounded bg-[#0058e6] border border-white flex items-center justify-center font-bold text-xs hover:bg-[#3a8bfb] focus:outline-none cursor-pointer">
+              {/* Minimizar = voltar pra área de trabalho. Era um botão decorativo; agora
+                  cumpre o que promete e é o caminho de volta pra home. */}
+              <button
+                onClick={() => goToTab('desktop')}
+                className="w-[21px] h-[21px] rounded bg-[#0058e6] border border-white flex items-center justify-center font-bold text-xs hover:bg-[#3a8bfb] focus:outline-none cursor-pointer"
+                title="Minimizar (área de trabalho)"
+              >
                 _
               </button>
               <button 
@@ -1033,6 +1044,7 @@ function App() {
           )}
 
         </div>
+        )}
 
       </div>
 
@@ -1259,7 +1271,19 @@ function App() {
               ◀
             </button>
 
-            <button 
+            <button
+              onClick={() => goToTab('desktop')}
+              className={`h-[28px] px-3 border text-xs font-mono font-bold rounded flex items-center gap-1.5 select-none cursor-pointer ${
+                activeTab === 'desktop'
+                  ? 'bg-[#3a8bfb] text-white border-[#002fa7] border-t-white border-l-white shadow-[inset_1px_1px_0_#ffffff50]'
+                  : 'bg-[#ece9d8] text-black border-white border-r-[#808080] border-bottom-[#808080] hover:bg-white'
+              }`}
+              title="Mostrar área de trabalho"
+            >
+              <span>Área de Trabalho</span>
+            </button>
+
+            <button
               onClick={() => goToTab('cifras')}
               className={`h-[28px] px-3 border text-xs font-mono font-bold rounded flex items-center gap-1.5 select-none cursor-pointer ${
                 activeTab === 'cifras'

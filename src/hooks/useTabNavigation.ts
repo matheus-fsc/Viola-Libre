@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-export type TabId = 'cifras' | 'minhascifras' | 'chords' | 'train' | 'ear' | 'favorites' | 'termos';
+export type TabId = 'desktop' | 'cifras' | 'minhascifras' | 'chords' | 'train' | 'ear' | 'favorites' | 'termos';
 
 /** Rota "inicial" de cada aba — o ponto de partida quando não há nada memorizado. */
 export const TAB_ROOT_PATH: Record<TabId, string> = {
+  desktop: '/',
   cifras: '/cifras',
   minhascifras: '/minhascifras',
   chords: '/chords',
@@ -15,6 +16,9 @@ export const TAB_ROOT_PATH: Record<TabId, string> = {
 };
 
 export function tabFromPathname(pathname: string): TabId {
+  // '/' é a área de trabalho — caso EXPLÍCITO, nunca o fallback. Se o desktop virasse o
+  // fallback, toda rota inexistente cairia nele em vez de no explorador de cifras.
+  if (pathname === '/') return 'desktop';
   if (pathname === '/termos') return 'termos';
   if (pathname.startsWith('/cifras')) return 'cifras';
   if (pathname === '/minhascifras') return 'minhascifras';
