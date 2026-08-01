@@ -31,6 +31,9 @@ export const Agradecimentos: React.FC = () => (
           ativamente para a melhoria da plataforma. Prospector da espiculação, ele mesmo
           difundidor do termo{' '}
           <em>espicular</em>, a arte de ser curioso e sempre buscar mais conhecimento.
+          Sintam-se curiosos de visitar a{' '}
+          <Link href="https://ernopolis.neocities.org/">página dele</Link> e conhecer um
+          pouquinho sobre ele!
         </li>
       </Lista>
       <p className="text-gray-600 italic mt-1">
