@@ -24,7 +24,7 @@ export const Agradecimentos: React.FC = () => (
     <Section n={1} title="Amigos">
       <Lista>
         <li>
-          <Link href="https://ernopolis.neocities.org/">Ernópolis</Link>, o amigo responsável
+          <Link href="https://ernopolis.neocities.org/">Ernopolis</Link>, o amigo responsável
           por este site existir. Sem ele, nada teria acontecido. Contribuiu com a fagulha
           inicial e com o incômodo de que todos merecem um ambiente livre para aprender, tocar
           e compartilhar música. Ainda contribui com seu conhecimento musical, testa e contribui
