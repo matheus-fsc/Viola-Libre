@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Music, Music2, Guitar, BookOpen, Ear, Flame, Heart, Search } from 'lucide-react';
+import { Music, Music2, Guitar, BookOpen, Ear, Flame, Heart, Search, ScrollText, ShieldCheck, HeartHandshake } from 'lucide-react';
 import { StarIcon } from '../../components/Icons';
 import { IconNotepad } from '../../components/FretboardDiagram';
 import { useIsMobile } from '../../hooks/useIsMobile';
@@ -35,6 +35,9 @@ function useShortcuts(): Shortcut[] {
     { to: '/chords', label: 'Dicionário de Acordes', shortLabel: 'Acordes', icon: <Guitar /> },
     { to: '/treinos', label: 'Treinos e Teoria', shortLabel: 'Treinos', icon: <BookOpen /> },
     { to: '/ouvido', label: 'Tirando de Ouvido', shortLabel: 'Ouvido', icon: <Ear /> },
+    { to: '/termos', label: 'Termos de Uso', shortLabel: 'Termos', icon: <ScrollText /> },
+    { to: '/privacidade', label: 'Privacidade', shortLabel: 'Privacidade', icon: <ShieldCheck /> },
+    { to: '/agradecimentos', label: 'Agradecimentos', shortLabel: 'Obrigado', icon: <HeartHandshake /> },
   ];
 }
 
@@ -293,7 +296,9 @@ const EmAltaPanel: React.FC<{ className?: string }> = ({ className = '' }) => {
  * como área de trabalho. É a diferença entre parecer um menu e parecer um sistema.
  */
 const DesktopIcons: React.FC<{ shortcuts: Shortcut[]; decorative?: boolean }> = ({ shortcuts, decorative = false }) => (
-  <ul className="flex flex-col gap-1 w-[92px]">
+  /* Coluna que transborda pra uma segunda quando não cabe na altura — é o que o XP faz
+     quando os atalhos passam do rodapé, e evita que nove ícones estourem uma tela curta. */
+  <ul className="flex flex-col flex-wrap content-start gap-1 max-h-[min(70vh,560px)] [&>li]:w-[92px]">
     {shortcuts.map(s => {
       const inner = (
         <>

@@ -203,7 +203,11 @@ function parseSuffixToFormula(suffixRaw: string): ChordFormula | null {
   const rest = s.replace(/[()]/g, ' ').replace(/[,/]/g, ' ').trim();
   const tokens = rest.length ? rest.split(/\s+/) : [];
 
-  let sawExtended = false;  // presença de 9/11/13 (dispara sétima dominante implícita)
+  // Marca de função DOMINANTE: 11ª/13ª, ou nona ALTERADA (b9/#9). É o que dispara a sétima
+  // implícita — a nona natural sozinha NÃO dispara, porque na notação BR '9' puro é add9
+  // (ver a entrada '9' em CHORD_FORMULAS). Sem isso, 'C9' ganharia uma Bb que a cifra
+  // original não escreveu.
+  let sawDominantExt = false;
   let sawSixth = false;     // presença de 6 (bloqueia sétima implícita: é 6/9, não 9)
   let suppressImplied7 = false; // 'add' explícito não implica sétima
   let maxExt = -1;          // tensão estendida mais aguda (vira obrigatória)
@@ -246,7 +250,7 @@ function parseSuffixToFormula(suffixRaw: string): ChordFormula | null {
         const iv = grauParaIntervalo(grau)! + acc;
         extra.add(iv);
         if (acc !== 0) required.add(iv); // tensão alterada é característica → obrigatória
-        sawExtended = true;
+        if (grau !== 9 || acc !== 0) sawDominantExt = true;
         maxExt = Math.max(maxExt, iv);
         ok = true; break;
       }
@@ -256,10 +260,9 @@ function parseSuffixToFormula(suffixRaw: string): ChordFormula | null {
 
   if (!ok) return null;
 
-  // sétima dominante implícita em acordes estendidos (9/11/13) sem sétima explícita,
-  // exceto quando é acorde de sexta (6/9), 'add', ou base alterada (dim/aug) — que não
-  // trazem a b7.
-  if (seventh === null && sawExtended && !sawSixth && !suppressImplied7 && !alteredBase) seventh = 10;
+  // sétima dominante implícita: só com marca de função dominante (11/13 ou nona alterada),
+  // e não em acorde de sexta (6/9), 'add', ou base alterada (dim/aug) — que não trazem a b7.
+  if (seventh === null && sawDominantExt && !sawSixth && !suppressImplied7 && !alteredBase) seventh = 10;
 
   // monta obrigatórios: terça, quinta alterada, sétima, e a tensão estendida mais aguda
   if (third !== null) required.add(third);

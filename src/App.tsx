@@ -41,6 +41,8 @@ import { CifrasApp } from './pages/cifras/CifrasApp';
 import { Desktop, DesktopBackdrop } from './pages/desktop/Desktop';
 import { MinhasCifras } from './pages/minhasCifras/MinhasCifras';
 import { TermosDeUso } from './pages/termos/TermosDeUso';
+import { PoliticaPrivacidade } from './pages/documentos/PoliticaPrivacidade';
+import { Agradecimentos } from './pages/documentos/Agradecimentos';
 
 
 const IconInfo: React.FC<{ className?: string }> = ({ className = "w-3.5 h-3.5" }) => (
@@ -1084,6 +1086,18 @@ function App() {
           {activeTab === 'termos' && (
             <div className="w-full" style={{ minHeight: '400px' }}>
               <TermosDeUso />
+            </div>
+          )}
+
+          {activeTab === 'privacidade' && (
+            <div className="w-full" style={{ minHeight: '400px' }}>
+              <PoliticaPrivacidade />
+            </div>
+          )}
+
+          {activeTab === 'agradecimentos' && (
+            <div className="w-full" style={{ minHeight: '400px' }}>
+              <Agradecimentos />
             </div>
           )}
 

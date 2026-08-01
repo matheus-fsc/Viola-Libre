@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-export type TabId = 'desktop' | 'cifras' | 'minhascifras' | 'chords' | 'train' | 'ear' | 'favorites' | 'termos';
+export type TabId = 'desktop' | 'cifras' | 'minhascifras' | 'chords' | 'train' | 'ear' | 'favorites' | 'termos' | 'privacidade' | 'agradecimentos';
 
 /** Rota "inicial" de cada aba — o ponto de partida quando não há nada memorizado. */
 export const TAB_ROOT_PATH: Record<TabId, string> = {
@@ -13,6 +13,8 @@ export const TAB_ROOT_PATH: Record<TabId, string> = {
   ear: '/ouvido',
   favorites: '/favoritos',
   termos: '/termos',
+  privacidade: '/privacidade',
+  agradecimentos: '/agradecimentos',
 };
 
 /**
@@ -28,6 +30,8 @@ export const TAB_LABEL: Record<TabId, string> = {
   ear: 'Tirando de Ouvido',
   favorites: 'Meus Favoritos',
   termos: 'Termos de Uso',
+  privacidade: 'Política de Privacidade',
+  agradecimentos: 'Agradecimentos',
 };
 
 export function tabFromPathname(pathname: string): TabId {
@@ -35,6 +39,8 @@ export function tabFromPathname(pathname: string): TabId {
   // fallback, toda rota inexistente cairia nele em vez de no explorador de cifras.
   if (pathname === '/') return 'desktop';
   if (pathname === '/termos') return 'termos';
+  if (pathname === '/privacidade') return 'privacidade';
+  if (pathname === '/agradecimentos') return 'agradecimentos';
   if (pathname.startsWith('/cifras')) return 'cifras';
   if (pathname === '/minhascifras') return 'minhascifras';
   if (pathname === '/chords') return 'chords';

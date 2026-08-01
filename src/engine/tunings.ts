@@ -513,10 +513,14 @@ export const CHORD_FORMULAS: ChordFormula[] = [
     requiredIntervals: [0, 5]
   },
   {
-    name: "Nona",
+    // Notação BR (Cifra Club e afins): '9' puro é tríade + nona, SEM sétima — o mesmo que
+    // 'add9'. A nona dominante se escreve '7(9)' ou '7/9', que já têm entrada própria.
+    // Verificado na fonte: o diagrama de F9 do Cifra Club é x-x-3-2-1-3 = F A C G (sem Eb),
+    // e cifras usam os dois símbolos lado a lado na mesma música (Corcovado: C9 e C7(9)).
+    name: "Nona Adicionada (notação BR)",
     suffix: "9",
-    intervals: [0, 4, 7, 10, 14],
-    requiredIntervals: [0, 4, 10, 14]
+    intervals: [0, 4, 7, 14],
+    requiredIntervals: [0, 4, 14]
   },
   {
     name: "Sétima Maior com Nona",
