@@ -21,8 +21,8 @@ export const PoliticaPrivacidade: React.FC = () => (
       <>
         O Viola Libre é um projeto comunitário, sem fins lucrativos e de código aberto. Não há
         anúncios, não há rastreadores de publicidade, não existe cadastro e nada é vendido a
-        ninguém. Esta página descreve, sem rodeios, os dados que existem — porque alguns
-        existem, e dizer "não coletamos nada" seria mentira.
+        ninguém. Esta página descreve, sem rodeios, os dados que existem. Alguns existem, e
+        dizer "não coletamos nada" seria mentira.
       </>
     }
   >
@@ -58,8 +58,8 @@ export const PoliticaPrivacidade: React.FC = () => (
     <Section n={3} title="O identificador anônimo">
       <p>
         Para que seus favoritos sobrevivam a um F5 e possam ser reconhecidos pelo servidor, o
-        site gera um <strong>identificador aleatório</strong> — 32 caracteres sorteados por um
-        gerador criptográfico — e o guarda no seu navegador.
+        site gera um <strong>identificador aleatório</strong> de 32 caracteres, sorteados por
+        um gerador criptográfico, e o guarda no seu navegador.
       </p>
       <p>
         Esse identificador não deriva do seu aparelho, do seu IP nem de nada seu: é um número
@@ -79,7 +79,7 @@ export const PoliticaPrivacidade: React.FC = () => (
       <Lista>
         <li>
           <strong>Favoritos:</strong> a lista de cifras que você favoritou, associada ao
-          identificador anônimo do item 3 — é o que permite recuperá-la.
+          identificador anônimo do item 3, que é o que permite recuperá-la.
         </li>
         <li>
           <strong>Contagem de acessos:</strong> ao abrir uma cifra, um contador daquela música
@@ -91,7 +91,7 @@ export const PoliticaPrivacidade: React.FC = () => (
         </li>
       </Lista>
       <p>
-        Como todo servidor, ele também registra requisições — inclusive endereços IP — para
+        Como todo servidor, ele também registra requisições, inclusive endereços IP, para
         funcionar e para se defender de abuso. Esses registros não são usados para traçar
         perfis nem cruzados com o identificador anônimo.
       </p>
@@ -105,20 +105,20 @@ export const PoliticaPrivacidade: React.FC = () => (
       </p>
       <Lista>
         <li>
-          <strong>Cloudflare</strong> — entrega o site e o protege. Todo o tráfego passa por
+          <strong>Cloudflare:</strong> entrega o site e o protege. Todo o tráfego passa por
           ele. Usamos também o serviço de estatísticas da Cloudflare, que conta visitas e
           mede desempenho de forma agregada, sem cookies de publicidade e sem identificar
           visitantes individualmente.
         </li>
         <li>
-          <strong>YouTube (Google)</strong> — os vídeos das cifras. O script do YouTube só é
+          <strong>YouTube (Google):</strong> os vídeos das cifras. O script do YouTube só é
           carregado quando você abre o painel de vídeo ou aciona a rolagem automática numa
           música cuja duração ainda não é conhecida. Enquanto isso não acontece, o YouTube não
           é contatado. Quando é, ele pode gravar cookies e coletar dados conforme a política de
           privacidade do Google.
         </li>
         <li>
-          <strong>GitHub</strong> — hospeda os bancos de som usados para tocar os acordes. São
+          <strong>GitHub:</strong> hospeda os bancos de som usados para tocar os acordes. São
           baixados na primeira vez que você pede um som.
         </li>
       </Lista>
@@ -144,16 +144,16 @@ export const PoliticaPrivacidade: React.FC = () => (
         </li>
         <li>
           <strong>Favoritos no servidor:</strong> desfavoritar uma cifra a remove. Para apagar
-          tudo de uma vez, escreva para o contato abaixo informando o identificador anônimo — a
-          tela de Favoritos permite exportá-lo.
+          tudo de uma vez, escreva para o contato abaixo informando o identificador anônimo,
+          que a tela de Favoritos permite exportar.
         </li>
       </Lista>
     </Section>
 
     <Section n={8} title="Crianças">
       <p>
-        O site não é direcionado a crianças e não coleta dados pessoais de ninguém —
-        deliberadamente, não há o que coletar.
+        O site não é direcionado a crianças e não coleta dados pessoais de ninguém.
+        Deliberadamente, não há o que coletar.
       </p>
     </Section>
 
@@ -164,7 +164,7 @@ export const PoliticaPrivacidade: React.FC = () => (
       </p>
       <p>
         O código-fonte é aberto. Tudo o que está descrito aqui pode ser conferido no{' '}
-        <Link href={REPO_URL}>repositório do projeto</Link> — inclusive a lista de serviços
+        <Link href={REPO_URL}>repositório do projeto</Link>, inclusive a lista de serviços
         externos, que fica declarada no cabeçalho de segurança do site.
       </p>
     </Section>

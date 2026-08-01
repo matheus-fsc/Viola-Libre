@@ -37,7 +37,7 @@ function useShortcuts(): Shortcut[] {
     { to: '/ouvido', label: 'Tirando de Ouvido', shortLabel: 'Ouvido', icon: <Ear /> },
     { to: '/termos', label: 'Termos de Uso', shortLabel: 'Termos', icon: <ScrollText /> },
     { to: '/privacidade', label: 'Privacidade', shortLabel: 'Privacidade', icon: <ShieldCheck /> },
-    { to: '/agradecimentos', label: 'Agradecimentos', shortLabel: 'Obrigado', icon: <HeartHandshake /> },
+    { to: '/agradecimentos', label: 'Agradecimentos', shortLabel: 'Agradecimentos', icon: <HeartHandshake /> },
   ];
 }
 
@@ -372,7 +372,9 @@ const PhoneHome: React.FC<{ shortcuts: Shortcut[] }> = ({ shortcuts }) => {
                   </span>
                 )}
               </span>
-              <span className="font-mono text-[10px] font-bold leading-none text-center text-black">
+              {/* leading-tight, não leading-none: "Agradecimentos" quebra em duas linhas num
+                  aparelho estreito, e sem entrelinha as linhas se encavalam. */}
+              <span className="font-mono text-[10px] font-bold leading-tight text-center text-black">
                 {s.shortLabel}
               </span>
             </Link>

@@ -16,7 +16,7 @@ export const Agradecimentos: React.FC = () => (
     intro={
       <>
         O Viola Libre existe por causa de gente que emprestou tempo, ouvido e conhecimento sem
-        pedir nada em troca — e de trabalho aberto que outras pessoas deixaram disponível para
+        pedir nada em troca, e de trabalho aberto que outras pessoas deixaram disponível para
         quem viesse depois.
       </>
     }
@@ -24,7 +24,7 @@ export const Agradecimentos: React.FC = () => (
     <Section n={1} title="Comunidade">
       <p className="text-gray-600 italic">
         Esta lista ainda está sendo montada. Quem contribuiu está sendo consultado, um a um,
-        sobre querer ou não ser nomeado aqui — ninguém entra sem ter dito que sim.
+        sobre querer ou não ser nomeado aqui. Ninguém entra sem ter dito que sim.
       </p>
       <p>
         Se você contribuiu e quer aparecer (ou prefere não aparecer), escreva para{' '}
@@ -38,17 +38,17 @@ export const Agradecimentos: React.FC = () => (
       </p>
       <Lista>
         <li>
-          <Link href="https://github.com/gleitz/midi-js-soundfonts">midi-js-soundfonts</Link>{' '}
-          — os bancos de som que fazem os acordes soarem.
+          <Link href="https://github.com/gleitz/midi-js-soundfonts">midi-js-soundfonts</Link>,
+          os bancos de som que fazem os acordes soarem.
         </li>
         <li>
           <Link href="https://react.dev">React</Link>,{' '}
           <Link href="https://vite.dev">Vite</Link> e{' '}
-          <Link href="https://tailwindcss.com">Tailwind CSS</Link> — a base sobre a qual a
+          <Link href="https://tailwindcss.com">Tailwind CSS</Link>, a base sobre a qual a
           interface foi construída.
         </li>
         <li>
-          <Link href="https://lucide.dev">Lucide</Link> — os ícones.
+          <Link href="https://lucide.dev">Lucide</Link>, os ícones.
         </li>
       </Lista>
     </Section>
