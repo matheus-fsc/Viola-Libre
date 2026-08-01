@@ -27,7 +27,9 @@ export const Agradecimentos: React.FC = () => (
           <Link href="https://ernopolis.neocities.org/">Ernópolis</Link> — o amigo responsável
           por este site existir. Sem ele, nada teria acontecido. Contribuiu com a fagulha
           inicial e com o incômodo de que todos merecem um ambiente livre para aprender, tocar
-          e compartilhar música. Prospector da espiculação — ele mesmo difundidor do termo{' '}
+          e compartilhar música. Ainda contribui com seu conhecimento musical, testa e contribui
+          ativamente para a melhoria da plataforma. Prospector da espiculação — ele mesmo
+          difundidor do termo{' '}
           <em>espicular</em>, a arte de ser curioso e sempre buscar mais conhecimento.
         </li>
       </Lista>
