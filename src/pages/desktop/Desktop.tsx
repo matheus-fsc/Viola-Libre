@@ -13,11 +13,8 @@ import { getTopSongs, type GlobalSearchResult } from '../../services/api';
  * Antes o site abria direto no explorador de cifras — um formulário de consulta sobre uma
  * lista alfabética de milhares de artistas, que é a primeira tela de menor sinal possível.
  * Aqui a home assume a identidade do projeto: no desktop, a área de trabalho do XP com
- * atalhos; no celular, o menu de apps de um telefone antigo, porque "área de trabalho" não
- * é uma metáfora que exista num aparelho de bolso.
- *
- * O fundo teal com scanlines não é daqui — vem do `body` (src/index.css), então este
- * componente desenha só o que fica *sobre* a mesa.
+ * atalhos e janelas; no celular, a tela inicial de um telefone antigo, porque "área de
+ * trabalho" não é uma metáfora que exista num aparelho de bolso.
  */
 
 interface Shortcut {
@@ -55,6 +52,153 @@ function useTopSongs(): GlobalSearchResult[] {
 }
 
 /**
+ * Papel de parede: a colina do XP redesenhada em SVG.
+ *
+ * A "Bliss" original é uma fotografia da Microsoft e não pode ser embutida num projeto
+ * publicado sob AGPL. Redesenhá-la resolve o direito autoral e é melhor tecnicamente: não
+ * há download, e vetor não pixeliza em tela nenhuma. O ArtistList já desenha as bandeiras
+ * de gênero assim — é o idioma da casa.
+ *
+ * `fixed` de propósito: papel de parede cobre a viewport inteira, inclusive atrás da barra
+ * de tarefas, sem depender da altura do conteúdo.
+ */
+const BlissBackdrop: React.FC = () => (
+  <div className="fixed inset-0 z-0 pointer-events-none" aria-hidden="true">
+    <svg width="100%" height="100%" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid slice">
+      <defs>
+        <linearGradient id="vl-sky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#1c5fbe" />
+          <stop offset="45%" stopColor="#4b95dd" />
+          <stop offset="80%" stopColor="#a8d4f2" />
+          <stop offset="100%" stopColor="#d8ecfa" />
+        </linearGradient>
+        <linearGradient id="vl-hill" x1="0" y1="0" x2="0.3" y2="1">
+          <stop offset="0%" stopColor="#9ccf4a" />
+          <stop offset="40%" stopColor="#6fae2c" />
+          <stop offset="100%" stopColor="#3f7a17" />
+        </linearGradient>
+        <linearGradient id="vl-hill-far" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#8fc44a" />
+          <stop offset="100%" stopColor="#5d9a28" />
+        </linearGradient>
+        {/* Nuvem de cúmulo é borda macia — mas blur demais vira névoa, não nuvem. */}
+        <filter id="vl-cloud" x="-40%" y="-60%" width="180%" height="240%">
+          <feGaussianBlur stdDeviation="7" />
+        </filter>
+      </defs>
+
+      <rect width="1200" height="800" fill="url(#vl-sky)" />
+
+      {/* Deslocadas pro centro/direita: a coluna de ícones mora na esquerda e nuvem atrás
+          de label branca custa legibilidade. */}
+      <g fill="#ffffff" filter="url(#vl-cloud)">
+        <g opacity="0.92">
+          <ellipse cx="470" cy="140" rx="92" ry="26" />
+          <ellipse cx="432" cy="122" rx="52" ry="24" />
+          <ellipse cx="508" cy="120" rx="60" ry="21" />
+        </g>
+        <g opacity="0.8">
+          <ellipse cx="905" cy="98" rx="112" ry="24" />
+          <ellipse cx="952" cy="82" rx="64" ry="21" />
+          <ellipse cx="856" cy="84" rx="52" ry="18" />
+        </g>
+        <g opacity="0.45">
+          <ellipse cx="690" cy="268" rx="96" ry="15" />
+          <ellipse cx="1120" cy="205" rx="84" ry="14" />
+        </g>
+      </g>
+
+      {/* Colina de trás: dá profundidade e evita o horizonte reto de gráfico. */}
+      <path d="M0 560 C 220 500, 430 512, 660 548 C 850 578, 1030 566, 1200 528 L1200 800 L0 800 Z"
+            fill="url(#vl-hill-far)" opacity="0.85" />
+      {/* Colina principal, com a curva em S que é a assinatura da imagem original. */}
+      <path d="M0 660 C 260 556, 520 596, 760 640 C 950 675, 1080 668, 1200 632 L1200 800 L0 800 Z"
+            fill="url(#vl-hill)" />
+      {/* Realce de luz raspando o topo da colina. */}
+      <path d="M0 660 C 260 556, 520 596, 760 640 C 950 675, 1080 668, 1200 632"
+            fill="none" stroke="#c3e77a" strokeWidth="3" opacity="0.5" />
+    </svg>
+  </div>
+);
+
+/** Fundo do celular: gradiente simples, no espírito do aparelho antigo. */
+const PhoneBackdrop: React.FC = () => (
+  <div
+    className="fixed inset-0 z-0 pointer-events-none bg-gradient-to-b from-[#1c5fbe] via-[#2f7bc8] to-[#3f7a17]"
+    aria-hidden="true"
+  />
+);
+
+/**
+ * Busca da home, como uma janelinha do XP.
+ *
+ * O buscador do projeto NÃO é unificado — `getArtistsPaginated` e `searchSongsGlobal` são
+ * consultas separadas. Então a escolha fica explícita pro usuário em vez de a home decidir
+ * por ele e devolver zero resultado quando ele digitou a outra coisa.
+ */
+const SearchWindow: React.FC<{ className?: string }> = ({ className = '' }) => {
+  const [q, setQ] = useState('');
+  const [modo, setModo] = useState<'artistas' | 'musicas'>('artistas');
+  const navigate = useNavigate();
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const term = q.trim();
+    if (!term) { navigate('/cifras'); return; }
+    const params = new URLSearchParams({ busca: term });
+    if (modo !== 'artistas') params.set('modo', modo);
+    navigate(`/cifras?${params}`);
+  };
+
+  const tab = (value: 'artistas' | 'musicas', label: string) => (
+    <button
+      type="button"
+      onClick={() => setModo(value)}
+      aria-pressed={modo === value}
+      className={`flex-1 px-2 py-1 text-xs font-bold border cursor-pointer ${
+        modo === value
+          ? 'bg-[#316ac5] text-white border-[#316ac5]'
+          : 'bg-[#e0dfd6] text-black border-gray-400 hover:bg-white'
+      }`}
+    >
+      {label}
+    </button>
+  );
+
+  return (
+    <section className={`bg-[#ece9d8] border-[3px] border-[#0058e6] rounded-t-lg shadow-2xl ${className}`}>
+      <h2 className="winxp-gradient-blue text-white px-3 py-1.5 flex items-center gap-2 font-bold text-xs sm:text-sm tracking-wide font-mono border-b-2 border-[#002fa7] select-none">
+        <Search size={14} className="shrink-0" />
+        Buscar cifras
+      </h2>
+      <form onSubmit={submit} className="p-2 flex flex-col gap-2">
+        <div className="flex gap-1">
+          {tab('artistas', 'Artistas')}
+          {tab('musicas', 'Músicas')}
+        </div>
+        <div className="flex items-stretch gap-1">
+          <input
+            type="search"
+            value={q}
+            onChange={e => setQ(e.target.value)}
+            placeholder={modo === 'artistas' ? 'Nome do artista...' : 'Nome da música...'}
+            aria-label={modo === 'artistas' ? 'Buscar artista' : 'Buscar música'}
+            className="bevel-in px-2 py-1.5 text-sm w-full outline-none min-w-0"
+          />
+          <button
+            type="submit"
+            className="bevel-out bg-[var(--color-winxp-panel)] px-3 shrink-0 flex items-center justify-center hover:bg-white active:border-t-[#808080] active:border-l-[#808080] active:border-b-white active:border-r-white cursor-pointer"
+            title="Buscar"
+          >
+            <Search size={16} className="text-[#0058e6]" />
+          </button>
+        </div>
+      </form>
+    </section>
+  );
+};
+
+/**
  * Os itens são <Link> (viram <a href> de verdade), e não onClick+navigate como no resto do
  * app: numa SPA sem prerender, esta é a única página que oferece links internos estáveis
  * pro crawler encontrar as cifras.
@@ -89,55 +233,20 @@ const EmAltaPanel: React.FC<{ songs: GlobalSearchResult[]; className?: string }>
 };
 
 /**
- * Busca da home. Manda pro explorador já com a consulta feita, via `?busca=`.
+ * Ícones da área de trabalho: coluna única encostada no canto superior esquerdo, como no XP.
  *
- * Vai pro modo 'artistas' (o padrão do explorador) e não pro de músicas: procurar pelo nome
- * do artista é como se chega a uma cifra na maioria das vezes, e lá dentro o botão "Músicas"
- * reaproveita o mesmo texto se a pessoa quis o título da canção.
+ * Espalhados pela largura eles leem como barra de ferramentas; empilhados no canto, leem
+ * como área de trabalho. É a diferença entre parecer um menu e parecer um sistema.
  */
-const DesktopSearch: React.FC<{ className?: string }> = ({ className = '' }) => {
-  const [q, setQ] = useState('');
-  const navigate = useNavigate();
-
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const term = q.trim();
-    navigate(term ? `/cifras?busca=${encodeURIComponent(term)}` : '/cifras');
-  };
-
-  return (
-    <form onSubmit={submit} className={`flex items-stretch gap-1 ${className}`}>
-      <input
-        type="search"
-        value={q}
-        onChange={e => setQ(e.target.value)}
-        placeholder="Buscar artista..."
-        aria-label="Buscar artista"
-        className="bevel-in px-3 py-2 text-sm w-full outline-none min-w-0"
-      />
-      <button
-        type="submit"
-        className="bevel-out bg-[var(--color-winxp-panel)] px-3 shrink-0 flex items-center justify-center hover:bg-white active:border-t-[#808080] active:border-l-[#808080] active:border-b-white active:border-r-white cursor-pointer"
-        title="Buscar"
-      >
-        <Search size={16} className="text-[#0058e6]" />
-      </button>
-    </form>
-  );
-};
-
-/** Área de trabalho: ícones soltos sobre o teal, alinhados à esquerda como no XP. */
 const DesktopIcons: React.FC<{ shortcuts: Shortcut[] }> = ({ shortcuts }) => (
-  // Duas colunas fixas, não auto-fill: espalhados pela largura da tela os ícones leem como
-  // barra de ferramentas. Agrupados num bloco no canto superior esquerdo, leem como desktop.
-  <ul className="grid grid-cols-[repeat(2,88px)] gap-x-2 gap-y-4 content-start">
+  <ul className="flex flex-col gap-1 w-[92px]">
     {shortcuts.map(s => (
       <li key={s.to}>
         <Link
           to={s.to}
-          className="group flex flex-col items-center gap-1 p-1.5 w-[88px] border border-transparent hover:border-dotted hover:border-white/70 hover:bg-[#0058e6]/30 focus:outline-none focus-visible:border-dotted focus-visible:border-white"
+          className="group flex flex-col items-center gap-1 px-1 py-1.5 border border-transparent hover:border-dotted hover:border-white/70 hover:bg-[#0058e6]/40 focus:outline-none focus-visible:border-dotted focus-visible:border-white"
         >
-          <span className="relative w-10 h-10 flex items-center justify-center text-white [&>svg]:w-9 [&>svg]:h-9 drop-shadow-[1px_1px_2px_rgba(0,0,0,0.8)]">
+          <span className="relative w-10 h-10 flex items-center justify-center text-white [&>svg]:w-9 [&>svg]:h-9 drop-shadow-[1px_2px_2px_rgba(0,0,0,0.55)]">
             {s.icon}
             {s.badge !== undefined && s.badge > 0 && (
               <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-[#ff7f27] border border-white text-[10px] font-bold leading-4 text-center text-white">
@@ -145,8 +254,8 @@ const DesktopIcons: React.FC<{ shortcuts: Shortcut[] }> = ({ shortcuts }) => (
               </span>
             )}
           </span>
-          {/* Sombra dura atrás do texto: label branca sobre teal claro fica ilegível sem ela. */}
-          <span className="text-[11px] leading-tight text-center text-white font-sans [text-shadow:1px_1px_2px_rgba(0,0,0,0.9)]">
+          {/* Sombra dura atrás do texto: label branca sobre céu claro fica ilegível sem ela. */}
+          <span className="text-[11px] leading-tight text-center text-white font-sans [text-shadow:0_1px_3px_rgba(0,0,0,0.95),0_0_2px_rgba(0,0,0,0.8)]">
             {s.label}
           </span>
         </Link>
@@ -155,8 +264,8 @@ const DesktopIcons: React.FC<{ shortcuts: Shortcut[] }> = ({ shortcuts }) => (
   </ul>
 );
 
-/** Menu de apps de celular antigo: barra de status + grid 3× de tiles. */
-const PhoneMenu: React.FC<{ shortcuts: Shortcut[] }> = ({ shortcuts }) => {
+/** Tela inicial do celular antigo: barra de status colada no topo e grid de apps. */
+const PhoneHome: React.FC<{ shortcuts: Shortcut[] }> = ({ shortcuts }) => {
   const [clock, setClock] = useState(() => new Date());
   useEffect(() => {
     const id = setInterval(() => setClock(new Date()), 30_000);
@@ -165,23 +274,19 @@ const PhoneMenu: React.FC<{ shortcuts: Shortcut[] }> = ({ shortcuts }) => {
   const hhmm = clock.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
   return (
-    <div className="bevel-out bg-[#c8d8c8] p-1 shadow-2xl">
-      {/* Barra de status — o aparelho */}
-      <div className="flex items-center justify-between px-2 py-1 bg-[#0058e6] text-white font-mono text-[10px] font-bold tracking-wide">
-        <span className="flex items-center gap-1"><Signal size={11} /> Viola Libre</span>
-        <span className="flex items-center gap-1.5">{hhmm} <BatteryFull size={13} /></span>
+    <div className="flex flex-col">
+      {/* Barra de status encostada na borda: é o que faz a tela virar "aparelho". */}
+      <div className="flex items-center justify-between px-3 py-1.5 bg-black/35 text-white font-mono text-[11px] font-bold tracking-wide">
+        <span className="flex items-center gap-1.5"><Signal size={12} /> Viola Libre</span>
+        <span className="flex items-center gap-1.5">{hhmm} <BatteryFull size={15} /></span>
       </div>
 
-      <p className="px-2 py-1.5 font-mono text-[11px] font-bold text-[#1a3b1a] border-b border-[#8a9a8a]">
-        Menu
-      </p>
-
-      <ul className="grid grid-cols-3 gap-1.5 p-1.5">
+      <ul className="grid grid-cols-3 gap-2.5 p-3">
         {shortcuts.map(s => (
           <li key={s.to}>
             <Link
               to={s.to}
-              className="flex flex-col items-center justify-center gap-1.5 aspect-square rounded-lg bevel-out bg-[#ece9d8] p-1 active:border-t-[#808080] active:border-l-[#808080] active:border-b-white active:border-r-white"
+              className="flex flex-col items-center justify-center gap-1.5 aspect-square rounded-xl bevel-out bg-[#ece9d8] p-1 shadow-lg active:border-t-[#808080] active:border-l-[#808080] active:border-b-white active:border-r-white"
             >
               <span className="relative w-8 h-8 flex items-center justify-center text-[#0058e6] [&>svg]:w-7 [&>svg]:h-7">
                 {s.icon}
@@ -209,21 +314,30 @@ export const Desktop: React.FC = () => {
 
   if (isMobile) {
     return (
-      <div className="w-full flex flex-col gap-3 p-3">
-        <PhoneMenu shortcuts={shortcuts} />
-        <DesktopSearch />
-        <EmAltaPanel songs={songs} className="max-h-[60vh]" />
+      <div className="w-full">
+        <PhoneBackdrop />
+        <div className="relative z-10 flex flex-col gap-3">
+          <PhoneHome shortcuts={shortcuts} />
+          <div className="px-3 pb-3 flex flex-col gap-3">
+            <SearchWindow />
+            <EmAltaPanel songs={songs} className="max-h-[55vh]" />
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="w-full flex gap-6 p-6 items-start">
-      <div className="flex-1 min-w-0 flex flex-col gap-6">
+    <div className="w-full">
+      <BlissBackdrop />
+      {/* Ícones colados no canto; janelas flutuando à direita, como uma sessão em uso. */}
+      <div className="relative z-10 flex justify-between items-start gap-6 p-3">
         <DesktopIcons shortcuts={shortcuts} />
-        <DesktopSearch className="max-w-[320px]" />
+        <div className="flex flex-col gap-4 w-[320px] shrink-0 pt-4 pr-3">
+          <SearchWindow />
+          <EmAltaPanel songs={songs} className="max-h-[55vh]" />
+        </div>
       </div>
-      <EmAltaPanel songs={songs} className="w-[320px] shrink-0 max-h-[70vh]" />
     </div>
   );
 };
