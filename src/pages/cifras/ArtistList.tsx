@@ -688,21 +688,26 @@ export const ArtistList: React.FC = () => {
                     Carregando gêneros...
                   </div>
                 ) : (
-                  <div className="flex flex-wrap gap-3 mt-2">
+                  /* Grade de colunas iguais, não flex-wrap. Com largura de conteúdo os 88
+                     botões variavam de 130 a 205px, então cada linha fechava com um ou dois
+                     itens e um buraco à direita — lia como layout quebrado, não como grade.
+                     Colunas fixas alinham tudo e enchem a linha. */
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3 mt-2">
                     {generos.map(g => (
                       <button
                         key={g}
                         onClick={() => setSelectedGenero(g)}
-                        className="group relative overflow-hidden bevel-out bg-[var(--color-winxp-panel)] px-5 py-4 font-bold text-sm hover:bg-[#e8e6dc] active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white shadow-sm min-w-[130px] cursor-pointer"
+                        className="group relative overflow-hidden bevel-out bg-[var(--color-winxp-panel)] w-full h-full px-2 py-3 font-bold text-xs sm:text-sm hover:bg-[#e8e6dc] active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white shadow-sm cursor-pointer"
                       >
                         {/* Flag background */}
                         <span className="absolute inset-0 opacity-[0.22] group-hover:opacity-[0.35] transition-opacity duration-150 pointer-events-none select-none">
                           {getGenreFlag(g)}
                         </span>
-                        {/* Content */}
-                        <span className="relative z-10 flex items-center justify-center gap-2">
-                          <Guitar size={15} className="text-gray-700 shrink-0" />
-                          <span>{g}</span>
+                        {/* Content — min-h de duas linhas pra que nomes curtos e nomes que
+                            quebram ("Alternativo / Indie") tenham a mesma altura. */}
+                        <span className="relative z-10 flex items-center justify-center gap-1.5 min-h-[2.4em]">
+                          <Guitar size={14} className="text-gray-700 shrink-0" />
+                          <span className="text-center leading-tight">{g}</span>
                         </span>
                       </button>
                     ))}
