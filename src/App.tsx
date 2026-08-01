@@ -608,7 +608,10 @@ function App() {
 
 
           {/* XP Dialog Tabs (under menu bar) */}
-          <div className="flex pl-2 gap-1 bg-[#ece9d8] border-b border-[#d4d0c8] select-none pt-2 z-10 overflow-x-auto no-scrollbar whitespace-nowrap">
+          {/* touch-pan-x: no mobile o arraste na barra de abas fica travado no eixo X.
+              Sem isso o dedo "puxa" a página junto na diagonal e a barra parece solta.
+              overscroll-x-contain: evita o overscroll encadear em voltar-página/bounce. */}
+          <div className="flex pl-2 gap-1 bg-[#ece9d8] border-b border-[#d4d0c8] select-none pt-2 z-10 overflow-x-auto overflow-y-hidden touch-pan-x overscroll-x-contain no-scrollbar whitespace-nowrap">
             <button
               onClick={() => goToTab('cifras')}
               className={`shrink-0 px-2 sm:px-4 py-1.5 font-mono text-[10px] sm:text-xs font-bold rounded-t border-2 border-b-0 cursor-pointer ${
@@ -618,6 +621,23 @@ function App() {
               }`}
             >
               <span>Explore Cifras</span>
+            </button>
+            <button
+              onClick={() => goToTab('favorites')}
+              className={`shrink-0 px-2 sm:px-4 py-1.5 font-mono text-[10px] sm:text-xs font-bold rounded-t border-2 border-b-0 cursor-pointer ${
+                activeTab === 'favorites'
+                  ? 'bg-[#ece9d8] border-white border-t-[#0058e6] border-x-[#808080] translate-y-[2px] z-10 text-black'
+                  : 'bg-[#d4d0c8] border-[#ece9d8] border-r-[#808080] border-bottom-[#808080] text-gray-700 hover:bg-white/50'
+              }`}
+            >
+              <span className="hidden sm:inline-flex items-center gap-1">
+                <StarIcon className="w-3.5 h-3.5 text-[#ff7f27]" fill={activeTab === 'favorites' ? '#ff7f27' : 'none'} stroke="currentColor" strokeWidth="1.5" />
+                <span>Meus Favoritos ({cifraFavorites.entries.length})</span>
+              </span>
+              <span className="inline-flex sm:hidden items-center gap-1">
+                <StarIcon className="w-3 h-3 text-[#ff7f27]" fill={activeTab === 'favorites' ? '#ff7f27' : 'none'} stroke="currentColor" strokeWidth="1.5" />
+                <span>Favoritos ({cifraFavorites.entries.length})</span>
+              </span>
             </button>
             <button
               onClick={() => goToTab('minhascifras')}
@@ -661,23 +681,6 @@ function App() {
             >
               <span className="hidden sm:inline">Tirando de Ouvido</span>
               <span className="inline sm:hidden">Ouvido</span>
-            </button>
-            <button 
-              onClick={() => goToTab('favorites')}
-              className={`shrink-0 px-2 sm:px-4 py-1.5 font-mono text-[10px] sm:text-xs font-bold rounded-t border-2 border-b-0 cursor-pointer ${
-                activeTab === 'favorites'
-                  ? 'bg-[#ece9d8] border-white border-t-[#0058e6] border-x-[#808080] translate-y-[2px] z-10 text-black' 
-                  : 'bg-[#d4d0c8] border-[#ece9d8] border-r-[#808080] border-bottom-[#808080] text-gray-700 hover:bg-white/50'
-              }`}
-            >
-              <span className="hidden sm:inline-flex items-center gap-1">
-                <StarIcon className="w-3.5 h-3.5 text-[#ff7f27]" fill={activeTab === 'favorites' ? '#ff7f27' : 'none'} stroke="currentColor" strokeWidth="1.5" />
-                <span>Meus Favoritos ({cifraFavorites.entries.length})</span>
-              </span>
-              <span className="inline-flex sm:hidden items-center gap-1">
-                <StarIcon className="w-3 h-3 text-[#ff7f27]" fill={activeTab === 'favorites' ? '#ff7f27' : 'none'} stroke="currentColor" strokeWidth="1.5" />
-                <span>Favoritos ({cifraFavorites.entries.length})</span>
-              </span>
             </button>
           </div>
 
