@@ -24,16 +24,9 @@ export const Agradecimentos: React.FC = () => (
     <Section n={1} title="Amigos">
       <Lista>
         <li>
-          <Link href="https://ernopolis.neocities.org/">Ernopolis</Link>, o amigo responsável
-          por este site existir. Sem ele, nada teria acontecido. Contribuiu com a fagulha
-          inicial e com o incômodo de que todos merecem um ambiente livre para aprender, tocar
-          e compartilhar música. Ainda contribui com seu conhecimento musical, testa e contribui
-          ativamente para a melhoria da plataforma. Prospector da espiculação, ele mesmo
-          difundidor do termo{' '}
-          <em>espicular</em>, a arte de ser curioso e sempre buscar mais conhecimento.
-          Sintam-se curiosos de visitar a{' '}
-          <Link href="https://ernopolis.neocities.org/">página dele</Link> e conhecer um
-          pouquinho sobre ele!
+          <Link href="https://ernopolis.neocities.org/">Ernopolis</Link>, idealizador
+          do projeto. A fagulha inicial que fez tudo isso acontecer, e que continua
+          contribuindo ativamente para a plataforma.
         </li>
       </Lista>
       <p className="text-gray-600 italic mt-1">
