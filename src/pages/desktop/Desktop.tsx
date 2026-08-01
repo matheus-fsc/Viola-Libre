@@ -5,7 +5,15 @@ import { StarIcon } from '../../components/Icons';
 import { IconNotepad } from '../../components/FretboardDiagram';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useCifraFavorites } from '../../hooks/useCifraFavorites';
-import { getTopSongs, getTopLikes, type GlobalSearchResult } from '../../services/api';
+import {
+  getTopSongs,
+  getTopLikes,
+  getArtistsPaginated,
+  searchSongsGlobal,
+  isAbortError,
+  type Artist,
+  type GlobalSearchResult,
+} from '../../services/api';
 
 /**
  * A tela inicial.
@@ -165,10 +173,63 @@ const BlissBackdrop: React.FC = () => (
  * consultas separadas. Então a escolha fica explícita pro usuário em vez de a home decidir
  * por ele e devolver zero resultado quando ele digitou a outra coisa.
  */
+type Sugestao = { to: string; titulo: string; sub?: string };
+
+/**
+ * Sugestões enquanto se digita, para a pessoa escolher sem trocar de tela.
+ *
+ * Aborta o pedido anterior a cada tecla: sem isso duas respostas competem e quem escreve a
+ * lista é a que chega por último, não a que foi pedida por último. É o mesmo defeito que o
+ * explorador tinha, e aqui ele apareceria pior — a lista pisca a cada letra.
+ */
+function useSugestoes(q: string, modo: 'artistas' | 'musicas'): { itens: Sugestao[]; carregando: boolean } {
+  const [itens, setItens] = useState<Sugestao[]>([]);
+  const [carregando, setCarregando] = useState(false);
+
+  const termo = q.trim();
+  const curtoDemais = termo.length < 2;
+
+  useEffect(() => {
+    if (curtoDemais) return;
+
+    const ctrl = new AbortController();
+    // Sinalizar "buscando" é justamente o trabalho deste efeito; não há como derivar isso.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCarregando(true);
+    const timer = setTimeout(() => {
+      const pedido: Promise<Sugestao[]> = modo === 'artistas'
+        ? getArtistsPaginated(0, 6, '', termo, ctrl.signal)
+            .then(p => (p.artists ?? []).map((a: Artist) => ({ to: `/cifras/${a.slug}`, titulo: a.name, sub: a.genre ?? undefined })))
+        : searchSongsGlobal(termo, ctrl.signal)
+            .then(rs => (rs ?? []).slice(0, 6).map((s: GlobalSearchResult) => ({
+              to: `/cifras/${s.artist_slug}/${s.slug}`, titulo: s.title, sub: s.artist_name,
+            })));
+
+      pedido
+        .then(rs => { setItens(rs); setCarregando(false); })
+        .catch(err => {
+          // Abortado é o caso normal de "digitou de novo": quem manda é o pedido seguinte, e
+          // ele já ligou o carregando. Desligar aqui piscaria o indicador entre as teclas.
+          if (isAbortError(err)) return;
+          // Sugestão é conveniência: falhando, o campo continua funcionando pelo Enter.
+          setItens([]);
+          setCarregando(false);
+        });
+    }, 300);
+
+    return () => { clearTimeout(timer); ctrl.abort(); };
+  }, [termo, modo, curtoDemais]);
+
+  // Derivado, não zerado por efeito: apagar o campo esconde a lista no mesmo render, sem o
+  // frame intermediário em que as sugestões antigas ainda aparecem sob um campo vazio.
+  return { itens: curtoDemais ? [] : itens, carregando: carregando && !curtoDemais };
+}
+
 const SearchWindow: React.FC<{ className?: string }> = ({ className = '' }) => {
   const [q, setQ] = useState('');
   const [modo, setModo] = useState<'artistas' | 'musicas'>('artistas');
   const navigate = useNavigate();
+  const { itens: sugestoes, carregando } = useSugestoes(q, modo);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -222,6 +283,35 @@ const SearchWindow: React.FC<{ className?: string }> = ({ className = '' }) => {
             <Search size={16} className="text-[#0058e6]" />
           </button>
         </div>
+
+        {/* Sugestões abaixo do campo, no fluxo e não flutuando: a janela está solta no
+            desktop, então crescer pra baixo não cobre nada e evita disputa de z-index com o
+            papel de parede. <Link> e não onClick pra que valha clique do meio e "abrir em
+            nova aba", que é o que se espera de um resultado de busca. */}
+        {/* Enquanto a busca nova está no ar, a lista anterior continua na tela mas esmaecida.
+            Sem isso o usuário digita e fica vendo nomes velhos por segundos numa conexão
+            lenta, sem sinal de que algo mudou. Esmaecer diz "isto já não vale" sem sumir com
+            o conteúdo, que seria pior: piscar a lista a cada tecla. */}
+        {carregando && sugestoes.length === 0 && (
+          <p className="px-2 py-1.5 text-xs text-gray-500 italic">Buscando...</p>
+        )}
+        {sugestoes.length > 0 && (
+          <ul className={`bevel-in bg-white max-h-64 overflow-y-auto retro-scrollbar transition-opacity ${carregando ? 'opacity-50' : 'opacity-100'}`}>
+            {sugestoes.map(s => (
+              <li key={s.to}>
+                <Link
+                  to={s.to}
+                  className="flex flex-col px-2 py-1.5 hover:bg-[#316ac5] hover:text-white group"
+                >
+                  <span className="text-sm font-bold truncate">{s.titulo}</span>
+                  {s.sub && (
+                    <span className="text-xs text-gray-500 group-hover:text-gray-200 truncate">{s.sub}</span>
+                  )}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
       </form>
     </section>
   );

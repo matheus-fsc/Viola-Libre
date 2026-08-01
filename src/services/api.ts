@@ -1,6 +1,14 @@
 import axios from 'axios';
 import { z } from 'zod';
 
+/**
+ * Um pedido abortado não é uma falha: é o resultado esperado de o usuário ter digitado mais
+ * uma letra. Quem trata erro de busca precisa separar os dois, senão mostra "erro" toda vez
+ * que a digitação continua.
+ */
+export const isAbortError = (err: unknown): boolean =>
+  axios.isCancel(err) || (err instanceof Error && err.name === 'AbortError');
+
 const api = axios.create({
   baseURL: import.meta.env.DEV ? '' : (import.meta.env.VITE_API_BASE_URL || ''),
   headers: {
@@ -60,16 +68,20 @@ export interface ArtistPage {
 }
 
 // Services
+// `signal` existe para que uma busca em andamento possa ser abortada quando o usuário digita
+// de novo. Sem isso, duas respostas no ar competem e quem escreve o estado é a que chega por
+// último, não a que foi pedida por último — a busca "acha outra coisa".
 export const getArtistsPaginated = async (
   offset = 0,
   limit = 50,
   letra = '',
-  q = ''
+  q = '',
+  signal?: AbortSignal
 ): Promise<ArtistPage> => {
   const params = new URLSearchParams({ offset: String(offset), limit: String(limit) });
   if (letra) params.set('letra', letra);
   if (q) params.set('q', q);
-  const { data } = await api.get<ArtistPage>(`/api/artistas?${params}`);
+  const { data } = await api.get<ArtistPage>(`/api/artistas?${params}`, { signal });
   return data;
 };
 
@@ -101,9 +113,9 @@ export interface GlobalSearchResult {
   version_name?: string;
 }
 
-export const searchSongsGlobal = async (query: string): Promise<GlobalSearchResult[]> => {
+export const searchSongsGlobal = async (query: string, signal?: AbortSignal): Promise<GlobalSearchResult[]> => {
   if (query.length < 2) return [];
-  const { data } = await api.get<GlobalSearchResult[]>(`/api/musicas/busca?q=${encodeURIComponent(query)}`);
+  const { data } = await api.get<GlobalSearchResult[]>(`/api/musicas/busca?q=${encodeURIComponent(query)}`, { signal });
   return data;
 };
 

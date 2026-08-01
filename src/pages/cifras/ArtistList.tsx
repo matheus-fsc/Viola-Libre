@@ -138,6 +138,7 @@ function getGenreFlag(genre: string): React.ReactNode {
   return <FlagGeneric />;
 }
 import {
+  isAbortError,
   getArtistsPaginated,
   searchSongsGlobal,
   getTopSongs,
@@ -147,6 +148,10 @@ import {
   type Artist,
   type GlobalSearchResult
 } from '../../services/api';
+
+// Com o abort em vigor, o debounce deixa de ser a defesa contra pedidos concorrentes e volta
+// a ser só economia de banda — dá pra ser mais curto e a busca responder mais rápido.
+const SEARCH_DEBOUNCE_MS = 300;
 
 const SMALL_PAGE = 200;   // tamanho normal (primeiros loads)
 const BULK_PAGE  = 2000;  // tamanho bulk (após BULK_AFTER loads)
@@ -209,6 +214,12 @@ export const ArtistList: React.FC = () => {
   const [debouncedSearch, setDebouncedSearch] = useState(initialSearch);
   const [searchMode, setSearchMode] = useState<SearchMode>(initialMode);
 
+  // Falha de busca é estado próprio, e não ausência de resultado: são coisas diferentes pro
+  // usuário e a tela precisa dizer qual das duas aconteceu.
+  const [searchError, setSearchError] = useState<string | null>(null);
+  // Incrementar isto reexecuta a busca sem exigir que o usuário mexa no que digitou.
+  const [retryTick, setRetryTick] = useState(0);
+
   const [songResults, setSongResults] = useState<GlobalSearchResult[]>([]);
   const [loadingSongs, setLoadingSongs] = useState(false);
   const [hasSearchedSongs, setHasSearchedSongs] = useState(false);
@@ -233,7 +244,7 @@ export const ArtistList: React.FC = () => {
   // 'artistas': quem consome `debouncedSearch` já se protege sozinho, e a sincronia da URL
   // abaixo pendura nele pra não escrever no histórico a cada tecla.
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search), 350);
+    const t = setTimeout(() => setDebouncedSearch(search), SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(t);
   }, [search]);
 
@@ -262,17 +273,33 @@ export const ArtistList: React.FC = () => {
     setPageOffset(0);
     pageLoadingRef.current = true;
     setIsLoadingPage(true);
-    getArtistsPaginated(0, SMALL_PAGE, selectedLetter ?? '', debouncedSearch)
+    setSearchError(null);
+
+    // Aborta a busca anterior ao digitar de novo. Sem isso duas respostas competiam e quem
+    // escrevia o estado era a que chegava por último, não a que foi pedida por último.
+    const ctrl = new AbortController();
+    getArtistsPaginated(0, SMALL_PAGE, selectedLetter ?? '', debouncedSearch, ctrl.signal)
       .then(page => {
         pageOffsetRef.current = page.artists.length;
         totalArtistsRef.current = page.total;
         setPagedArtists(page.artists);
         setTotalArtists(page.total);
         setPageOffset(page.artists.length);
+        pageLoadingRef.current = false;
+        setIsLoadingPage(false);
       })
-      .catch(console.error)
-      .finally(() => { pageLoadingRef.current = false; setIsLoadingPage(false); });
-  }, [searchMode, selectedLetter, debouncedSearch]);
+      .catch(err => {
+        if (isAbortError(err)) return; // digitou de novo: quem manda é o pedido seguinte
+        console.error(err);
+        // Sem isto, falha de rede caía no mesmo lugar visual de "nenhum resultado" e o
+        // usuário lia que o artista não existe.
+        setSearchError('Não foi possível buscar agora. Verifique a conexão e tente de novo.');
+        pageLoadingRef.current = false;
+        setIsLoadingPage(false);
+      });
+
+    return () => ctrl.abort();
+  }, [searchMode, selectedLetter, debouncedSearch, retryTick]);
 
   const loadNextArtistPage = () => {
     if (pageLoadingRef.current || pageOffsetRef.current >= totalArtistsRef.current) return;
@@ -405,22 +432,28 @@ export const ArtistList: React.FC = () => {
 
     setLoadingSongs(true);
     setHasSearchedSongs(true);
+    setSearchError(null);
 
+    // clearTimeout sozinho só cancelava o timer PENDENTE: uma vez disparado o fetch, nada o
+    // interrompia e a resposta antiga ainda sobrescrevia a nova. O abort fecha esse buraco.
+    const ctrl = new AbortController();
     const timer = setTimeout(() => {
-      searchSongsGlobal(search)
+      searchSongsGlobal(search, ctrl.signal)
         .then(data => {
           setSongResults(Array.isArray(data) ? data : []);
           setLoadingSongs(false);
         })
         .catch(err => {
+          if (isAbortError(err)) return;
           console.error(err);
+          setSearchError('Não foi possível buscar agora. Verifique a conexão e tente de novo.');
           setSongResults([]);
           setLoadingSongs(false);
         });
-    }, 500);
+    }, SEARCH_DEBOUNCE_MS);
 
-    return () => clearTimeout(timer);
-  }, [search, searchMode]);
+    return () => { clearTimeout(timer); ctrl.abort(); };
+  }, [search, searchMode, retryTick]);
 
   // Reset client-side visibleCount para modos que ainda usam slice local
   useEffect(() => {
@@ -535,6 +568,20 @@ export const ArtistList: React.FC = () => {
                 {letter}
               </button>
             ))}
+          </div>
+        )}
+
+        {/* Falha de rede tem lugar próprio na tela. Antes ela caía no mesmo texto de
+            "nenhum resultado", e o usuário concluía que o artista não existe. */}
+        {searchError && (
+          <div className="mb-4 p-3 bevel-out bg-[#ffe9c9] border border-[#cc3300] flex flex-wrap items-center gap-2 text-xs sm:text-sm">
+            <span className="font-bold text-[#cc3300]">{searchError}</span>
+            <button
+              onClick={() => setRetryTick(t => t + 1)}
+              className="px-3 py-1 bevel-out bg-[var(--color-winxp-panel)] font-bold text-xs hover:bg-white active:border-t-[#808080] active:border-l-[#808080] active:border-b-white active:border-r-white cursor-pointer"
+            >
+              Tentar de novo
+            </button>
           </div>
         )}
 
