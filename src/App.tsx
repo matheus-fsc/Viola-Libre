@@ -567,12 +567,15 @@ function App() {
 
           No telefone a janela está *maximizada*: encosta nas laterais. Os 16px de teal ali não
           construíam desktop nenhum — nessa largura leem como margem — e custavam 8% da largura
-          de leitura, que é o recurso escasso. Sobra a faixa de cima, onde a janela se pendura,
-          e o rodapé. Altura é barata: rola. */}
+          de leitura, que é o recurso escasso.
+
+          A faixa de cima também caiu: ela existia porque a janela "se pendurava" nela, e com a
+          app bar no lugar da barra de título não há mais janela pendurada — há um app, e app
+          encosta no topo. */}
       {/* A área de trabalho não é uma janela: ela sangra até a borda, senão o papel de
           parede vira um retângulo centralizado com teal em volta. */}
       <div className={`flex-1 flex flex-col items-center justify-start z-10 w-full mx-auto ${
-        isTimingRoute || activeTab === 'desktop' ? '' : 'pt-3 md:p-6 max-w-7xl'
+        isTimingRoute || activeTab === 'desktop' ? '' : 'md:p-6 max-w-7xl'
       }`}>
         
         {/* Na raiz não há janela aberta: vê-se a área de trabalho (desktop no XP, menu de
