@@ -24,11 +24,11 @@ export const Agradecimentos: React.FC = () => (
     <Section n={1} title="Amigos">
       <Lista>
         <li>
-          <Link href="https://ernopolis.neocities.org/">Ernópolis</Link> — o amigo responsável
+          <Link href="https://ernopolis.neocities.org/">Ernópolis</Link>, o amigo responsável
           por este site existir. Sem ele, nada teria acontecido. Contribuiu com a fagulha
           inicial e com o incômodo de que todos merecem um ambiente livre para aprender, tocar
           e compartilhar música. Ainda contribui com seu conhecimento musical, testa e contribui
-          ativamente para a melhoria da plataforma. Prospector da espiculação — ele mesmo
+          ativamente para a melhoria da plataforma. Prospector da espiculação, ele mesmo
           difundidor do termo{' '}
           <em>espicular</em>, a arte de ser curioso e sempre buscar mais conhecimento.
         </li>
@@ -50,7 +50,7 @@ export const Agradecimentos: React.FC = () => (
         que escrevem a história da humanidade.
       </p>
       <p>
-        A música é o tempero que dá sabor à existência — não só de paz e amor, mas de todos os
+        A música é o tempero que dá sabor à existência, não só de paz e amor, mas de todos os
         efeitos históricos que ela carrega e não deixa morrer na lembrança de cada um. Cada
         melodia composta, cada verso cantado, cada acorde inventado é um pedaço de memória
         coletiva que atravessa gerações e mantém vivo aquilo que os livros sozinhos não
