@@ -428,17 +428,25 @@ export const ArtistList: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full bg-[var(--color-winxp-bg)] p-2">
-      {/* Window Header */}
-      <div className="winxp-gradient-blue text-white px-2 py-1 flex items-center font-bold text-sm mb-2 rounded-t select-none">
+      {/* Window Header — só no desktop. No celular a app bar logo acima já diz "Explore
+          Cifras": repetir o rótulo custa 44px de altura pra não informar nada. */}
+      <div className="hidden md:flex winxp-gradient-blue text-white px-2 py-1 items-center font-bold text-sm mb-2 rounded-t select-none">
         <Music size={16} className="mr-2" />
         Explorador de Cifras
       </div>
 
-      <div className="flex-1 bevel-in bg-white p-4 overflow-y-auto flex flex-col retro-scrollbar">
+      {/* p-2 no celular: largura de leitura é o recurso escasso ali, e 16px de cada lado
+          saem caros num aparelho de 360px. */}
+      <div className="flex-1 bevel-in bg-white p-2 md:p-4 overflow-y-auto flex flex-col retro-scrollbar">
         {/* Filtros e Tabs Rápidas */}
         {/* Artistas <-> Músicas preservam a consulta digitada: digitar um nome e querer vê-lo
-            como música é o gesto natural, e limpar o campo ali obrigava a redigitar. */}
-        <div className="flex flex-wrap gap-2 mb-4 p-2 bg-[var(--color-winxp-panel)] bevel-out">
+            como música é o gesto natural, e limpar o campo ali obrigava a redigitar.
+
+            No celular os cinco modos quebravam em três linhas (86px) antes de qualquer
+            conteúdo. Viram uma faixa que rola na horizontal — mesma solução da barra de abas,
+            com `touch-pan-x` pra travar o gesto no eixo X. Do `md` pra cima volta a quebrar,
+            que lá sobra largura e ver tudo de uma vez é melhor. */}
+        <div className="flex flex-nowrap md:flex-wrap gap-2 mb-4 p-2 bg-[var(--color-winxp-panel)] bevel-out overflow-x-auto md:overflow-x-visible touch-pan-x overscroll-x-contain no-scrollbar [&>button]:shrink-0">
           <button
             onClick={() => { setSearchMode('artistas'); setSelectedGenero(null); }}
             className={`px-3 py-1 text-sm font-bold border transition-colors ${searchMode === 'artistas' ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#e0dfd6] text-black border-gray-400 hover:bg-gray-300'}`}
@@ -486,7 +494,10 @@ export const ArtistList: React.FC = () => {
 
         {/* Alphabet Filter (Apenas visível em Artistas) */}
         {searchMode === 'artistas' && !search && (
-          <div className="flex flex-wrap gap-1 mb-4 justify-center">
+          /* Mesma ideia dos modos: 28 letras quebravam em três ou quatro linhas no celular.
+             Uma faixa que rola alcança qualquer letra com um arraste do polegar, e devolve
+             ~90px de altura antes do primeiro artista. */
+          <div className="flex flex-nowrap md:flex-wrap gap-1 mb-4 md:justify-center overflow-x-auto md:overflow-x-visible touch-pan-x overscroll-x-contain no-scrollbar [&>button]:shrink-0">
             {['ALL', 'A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','#'].map(letter => (
               <button
                 key={letter}

@@ -32,6 +32,7 @@ import {
 } from './services/authApi';
 import { getPreferredInstrumentId, setPreferredInstrumentId } from './utils/instrumentPreference';
 import { preloadSoundfont } from './engine/AudioEngine';
+import { ArrowLeft } from 'lucide-react';
 import { useTabNavigation, TAB_LABEL } from './hooks/useTabNavigation';
 import { useImmersiveStore } from './stores/useImmersiveStore';
 import { useCifraFavorites, useFavoritesBootSync } from './hooks/useCifraFavorites';
@@ -596,11 +597,11 @@ function App() {
           <div className="md:hidden winxp-gradient-blue text-white px-1.5 py-1.5 flex items-center gap-1 border-b-2 border-[#002fa7] select-none">
             <button
               onClick={() => goToTab('desktop')}
-              className="w-8 h-8 shrink-0 rounded flex items-center justify-center text-lg font-bold hover:bg-white/20 active:bg-white/30 focus:outline-none cursor-pointer"
+              className="w-8 h-8 shrink-0 rounded flex items-center justify-center hover:bg-white/20 active:bg-white/30 focus:outline-none cursor-pointer"
               aria-label="Voltar ao menu"
               title="Voltar ao menu"
             >
-              ←
+              <ArrowLeft size={18} strokeWidth={2.5} />
             </button>
             <span className="flex-1 min-w-0 truncate font-bold text-sm tracking-wide font-mono">
               {TAB_LABEL[activeTab]}

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Music, Guitar, BookOpen, Ear, Flame, Heart, Signal, BatteryFull, Search } from 'lucide-react';
+import { Music, Music2, Guitar, BookOpen, Ear, Flame, Heart, Search } from 'lucide-react';
 import { StarIcon } from '../../components/Icons';
 import { IconNotepad } from '../../components/FretboardDiagram';
 import { useIsMobile } from '../../hooks/useIsMobile';
@@ -343,10 +343,13 @@ const PhoneHome: React.FC<{ shortcuts: Shortcut[] }> = ({ shortcuts }) => {
 
   return (
     <div className="flex flex-col">
-      {/* Barra de status encostada na borda: é o que faz a tela virar "aparelho". */}
+      {/* Barra de status encostada na borda: é o que faz a tela virar "aparelho".
+          Nota no lugar do ícone de sinal, e sem bateria: sinal e carga são estado do
+          aparelho de verdade do usuário, e fingi-los é decoração que mente. A hora fica
+          porque essa a gente sabe mesmo. */}
       <div className="flex items-center justify-between px-3 py-1.5 bg-black/35 text-white font-mono text-[11px] font-bold tracking-wide">
-        <span className="flex items-center gap-1.5"><Signal size={12} /> Viola Libre</span>
-        <span className="flex items-center gap-1.5">{hhmm} <BatteryFull size={15} /></span>
+        <span className="flex items-center gap-1.5"><Music2 size={12} /> Viola Libre</span>
+        <span>{hhmm}</span>
       </div>
 
       <ul className="grid grid-cols-3 gap-2.5 p-3">
