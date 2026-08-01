@@ -21,7 +21,8 @@ import { splitHtmlByTabs, TAB_POSITIONS, type ContentSegment } from '../../engin
 import '../../components/Cifras.css';
 import { extractYouTubeId, fetchBestTiming, type TimingContribution } from '../../services/timingApi';
 import { fetchYouTubeDuration } from '../../services/youtubeApi';
-import { getIsMobile } from '../../hooks/useIsMobile';
+import { getIsMobile, useIsMobile } from '../../hooks/useIsMobile';
+import { useImmersiveStore } from '../../stores/useImmersiveStore';
 import { reflowCifraHtml } from '../../services/cifraUtils';
 import { getPreferredInstrumentId, setPreferredInstrumentId } from '../../utils/instrumentPreference';
 import {
@@ -171,6 +172,10 @@ export const CifraViewer: React.FC = () => {
   const [transposeOffset, setTransposeOffset] = useState<number>(0);
   const [tabPosIdx, setTabPosIdx] = useState<number>(0);
   const [panelPosition, setPanelPosition] = useState<'left' | 'top' | 'right' | 'bottom'>(() => getIsMobile() ? 'top' : 'left');
+  const isMobile = useIsMobile();
+  /* No telefone o painel abre fechado: a cifra é o conteúdo, e os 5 grupos de controle
+     empilhados comiam quase um terço da tela antes da primeira linha aparecer. */
+  const [panelOpen, setPanelOpen] = useState(() => !getIsMobile());
   const [showTabs, setShowTabs] = useState(true);
   
   // Scraped original chords
@@ -585,6 +590,14 @@ export const CifraViewer: React.FC = () => {
       window.removeEventListener('touchmove', mark);
     };
   }, [autoScroll]);
+
+  // Rolando, o footer do App só rouba altura de leitura — o mesmo botão "◀" que o músico
+  // apertaria na mão. Sai da tela ao ligar e volta ao parar (ou ao deixar a cifra).
+  const setImmersive = useImmersiveStore(s => s.setImmersive);
+  useEffect(() => {
+    setImmersive(autoScroll);
+    return () => setImmersive(false);
+  }, [autoScroll, setImmersive]);
 
   // Atalhos de transporte (ignorados quando o foco está num campo de texto).
   useEffect(() => {
@@ -1060,9 +1073,15 @@ export const CifraViewer: React.FC = () => {
   }, [distinctChordIds, songSlug]);
 
 
-  const isVertical = panelPosition === 'left' || panelPosition === 'right';
+  /* Painel lateral tem largura fixa de 176px — num aparelho de 360px sobra menos da metade
+     para a cifra. Abaixo de `md` ele só existe deitado, em cima ou embaixo. */
+  const isVertical = !isMobile && (panelPosition === 'left' || panelPosition === 'right');
   const PANEL_ICONS: Record<typeof panelPosition, string> = { left: '◧', top: '▀', right: '◨', bottom: '▄' };
-  const cyclePosition = () => setPanelPosition(p => ({ left: 'top', top: 'right', right: 'bottom', bottom: 'left' } as const)[p]);
+  const cyclePosition = () => setPanelPosition(p =>
+    isMobile
+      ? (p === 'bottom' ? 'top' : 'bottom')
+      : ({ left: 'top', top: 'right', right: 'bottom', bottom: 'left' } as const)[p]
+  );
 
   // Versão atualmente exibida (slug normalizado para comparar com o param da rota)
   const normSlug = (s?: string) => (s || '').replace(/^\//, '');
@@ -1372,9 +1391,11 @@ export const CifraViewer: React.FC = () => {
     );
   }
 
+  // pb no mobile: a barra de transporte é fixa e ocupa a largura toda, então sem essa
+  // folga ela cobriria as últimas linhas da cifra.
   return (
-    <div className="flex flex-col bg-[var(--color-winxp-bg)] p-2 relative">
-      
+    <div className="flex flex-col bg-[var(--color-winxp-bg)] p-2 pb-32 sm:pb-2 relative">
+
       {/* Info Popup Overlay */}
       {infoPopupChord && (
         <div className="absolute inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -1757,17 +1778,28 @@ export const CifraViewer: React.FC = () => {
         ) : (
           <div className={`bevel-out bg-[var(--color-winxp-panel)] p-1.5 sm:p-2 flex flex-col sm:flex-row sm:flex-wrap sm:items-start sm:justify-between gap-2 sm:gap-3 text-xs sm:text-sm shrink-0 ${panelPosition === 'bottom' ? 'order-last' : ''}`}>
             <div className="flex flex-wrap items-center gap-1.5 sm:gap-3 shrink-0">
-              <button onClick={cyclePosition} className="bevel-out bg-[var(--color-winxp-panel)] px-1.5 py-0 text-sm font-bold border border-gray-400" title="Mover painel">{PANEL_ICONS[panelPosition]}</button>
+              <button
+                onClick={() => setPanelOpen(v => !v)}
+                aria-expanded={panelOpen}
+                className="md:hidden bevel-out bg-[var(--color-winxp-panel)] px-2 py-1 text-xs font-bold border border-gray-400 min-h-[32px] active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
+                title={panelOpen ? 'Recolher controles' : 'Mostrar controles'}
+              >
+                {panelOpen ? '▲' : '▼'} Controles
+              </button>
+              <button onClick={cyclePosition} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-1 sm:px-1.5 sm:py-0 text-sm font-bold border border-gray-400 min-h-[32px] sm:min-h-0" title="Mover painel">{PANEL_ICONS[panelPosition]}</button>
               <span className="text-gray-600 flex items-center gap-1 font-bold" title="Visualizações"><Eye size={16} className="text-blue-600" /> {cifra.views || 1}</span>
               <span className="text-gray-600 flex items-center gap-1 font-bold" title="Favoritos"><Heart size={16} className="text-red-500" /> {cifra.favorited || 0}</span>
             </div>
+
+            {/* Recolhido no telefone: some tudo menos a linha de identificação acima. */}
+            <div className={`${panelOpen ? 'contents' : 'hidden md:contents'}`}>
 
             <div className="hidden sm:block w-px self-stretch bg-gray-400/60" />
 
             {/* Grupo: Música (tom + versão) */}
             <div className="flex flex-col gap-0.5 min-w-0">
               <span className="text-[8px] font-bold uppercase tracking-wider text-gray-500 leading-none">Música</span>
-              <div className="flex items-center gap-1.5 sm:gap-3 flex-nowrap sm:flex-wrap overflow-x-auto no-scrollbar [&>*]:shrink-0">
+              <div className="flex items-center gap-1.5 sm:gap-3 flex-wrap [&>*]:shrink-0">
                 <div className="flex items-center gap-1">
                   <label className="hidden sm:inline font-bold text-[11px] uppercase tracking-wider text-gray-700">Tom:</label>
                   <span className="font-bold text-xs bg-white border border-gray-400 px-1 text-[#002fa7] min-w-[20px] text-center">{songKey || '?'}</span>
@@ -1786,7 +1818,7 @@ export const CifraViewer: React.FC = () => {
             {/* Grupo: Instrumento (instrumento + afinação) */}
             <div className="flex flex-col gap-0.5 min-w-0">
               <span className="text-[8px] font-bold uppercase tracking-wider text-gray-500 leading-none">Instrumento</span>
-              <div className="flex items-center gap-1.5 sm:gap-3 flex-nowrap sm:flex-wrap overflow-x-auto no-scrollbar [&>*]:shrink-0">
+              <div className="flex items-center gap-1.5 sm:gap-3 flex-wrap [&>*]:shrink-0">
                 <div className="flex items-center gap-1">
                   <label className="hidden sm:inline font-bold text-[11px] uppercase tracking-wider text-gray-700">Instrumento:</label>
                   <select value={selectedInstId} onChange={(e) => handleInstrumentChange(e.target.value)} className="bevel-in bg-white px-1 py-0 text-xs outline-none cursor-pointer max-w-[90px] sm:max-w-[100px]">
@@ -1807,7 +1839,7 @@ export const CifraViewer: React.FC = () => {
             {/* Grupo: Transposição (tom da execução + posição da tab) */}
             <div className="flex flex-col gap-0.5 min-w-0">
               <span className="text-[8px] font-bold uppercase tracking-wider text-gray-500 leading-none">Transposição</span>
-              <div className="flex items-center gap-1.5 sm:gap-3 flex-nowrap sm:flex-wrap overflow-x-auto no-scrollbar [&>*]:shrink-0">
+              <div className="flex items-center gap-1.5 sm:gap-3 flex-wrap [&>*]:shrink-0">
                 <div className="flex items-center bg-[#d4d0c8] bevel-in px-1 py-1 gap-1">
                   <span className="hidden sm:inline text-[11px] font-bold px-1 text-gray-700">TOM:</span>
                   <button onClick={() => setTransposeOffset(p => p - 1)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white" title="Abaixar meio tom">-½</button>
@@ -1829,7 +1861,7 @@ export const CifraViewer: React.FC = () => {
             {/* Grupo: Reprodução (BPM, auto-rolar, velocidade, loop) */}
             <div className="flex flex-col gap-0.5 min-w-0">
               <span className="text-[8px] font-bold uppercase tracking-wider text-gray-500 leading-none">Reprodução</span>
-              <div className="flex items-center gap-1.5 sm:gap-2 flex-nowrap sm:flex-wrap overflow-x-auto no-scrollbar [&>*]:shrink-0">
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap [&>*]:shrink-0">
                 <div className="flex items-center bg-[#d4d0c8] bevel-in px-1 py-1 gap-1">
                   <span className="hidden sm:inline text-[11px] font-bold px-1 text-gray-700">BPM:</span>
                   <button onClick={() => setLocalBpm(p => Math.max(20, (p ?? effectiveBpm ?? 100) - 1))} className="bevel-out bg-[var(--color-winxp-panel)] px-1.5 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white">−</button>
@@ -1862,7 +1894,7 @@ export const CifraViewer: React.FC = () => {
             {/* Grupo: Ações (favoritar, sequência, contribuir timing) */}
             <div className="flex flex-col gap-0.5 min-w-0">
               <span className="text-[8px] font-bold uppercase tracking-wider text-gray-500 leading-none">Ações</span>
-              <div className="flex items-center gap-1.5 sm:gap-2 flex-nowrap sm:flex-wrap overflow-x-auto no-scrollbar [&>*]:shrink-0">
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap [&>*]:shrink-0">
                 <button onClick={handleFavorite} disabled={isFavoriting} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-1 sm:px-3 text-xs font-bold flex items-center gap-1 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white text-black" title={isFavorited ? 'Remover dos favoritos' : 'Favoritar'}>
                   <Heart size={14} className={`${isFavoriting ? 'opacity-50' : ''} ${isFavorited ? 'fill-red-500 text-red-500' : 'text-gray-600'}`} />
                   <span className={`hidden sm:inline ${isFavoriting ? 'opacity-50' : ''}`}>{isFavorited ? 'Favoritado' : 'Favoritar'}</span>
@@ -1884,6 +1916,7 @@ export const CifraViewer: React.FC = () => {
                   </button>
                 )}
               </div>
+            </div>
             </div>
           </div>
         )}
@@ -2258,7 +2291,9 @@ export const CifraViewer: React.FC = () => {
       )}
 
       {/* Barra de posição — fixa na viewport para continuar alcançável durante o
-          rolamento. Clique/arraste reposiciona; os traços são as seções da cifra. */}
+          rolamento. Clique/arraste reposiciona; os traços são as seções da cifra.
+          Mais larga no telefone (14px é alvo de mouse, não de polegar) e parando
+          acima do transporte, que no mobile ocupa a largura toda. */}
       {maxScroll > 0 && (autoScroll || loopA !== null || loopB !== null) && (
         <div
           ref={railRef}
@@ -2266,7 +2301,7 @@ export const CifraViewer: React.FC = () => {
           onPointerMove={handleRailPointerMove}
           onPointerUp={handleRailPointerUp}
           onPointerCancel={handleRailPointerUp}
-          className="fixed right-3 top-20 bottom-20 w-3.5 z-40 bg-[#d4d0c8] bevel-in cursor-pointer touch-none select-none"
+          className="fixed right-2 sm:right-3 top-20 bottom-32 sm:bottom-20 w-6 sm:w-3.5 z-40 bg-[#d4d0c8] bevel-in cursor-pointer touch-none select-none"
           title="Clique ou arraste para reposicionar"
         >
           {(loopA !== null || loopB !== null) && (
@@ -2297,38 +2332,46 @@ export const CifraViewer: React.FC = () => {
         </div>
       )}
 
-      {/* Floating auto-scroll control — canto inferior direito, sempre visível */}
-      <div className="fixed bottom-4 right-4 z-50 bevel-out bg-[var(--color-winxp-panel)] border border-gray-500 shadow-xl px-2 py-1.5 flex items-center gap-2 text-xs select-none">
-        <button
-          onClick={handleRestart}
-          className="bevel-out px-2 py-1 font-bold border border-gray-400 bg-[var(--color-winxp-panel)] text-[#002fa7] hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
-          title="Voltar ao início (Home)"
-        >
-          ⏮
-        </button>
-        <button
-          onClick={() => seekBySeconds(-NUDGE_SEC)}
-          className="bevel-out px-1.5 py-1 font-bold border border-gray-400 bg-[var(--color-winxp-panel)] text-[#002fa7] hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
-          title={`Voltar ${NUDGE_SEC}s (←)`}
-        >
-          ◀◀
-        </button>
-        <button
-          onClick={handleToggleAutoScroll}
-          className={`bevel-out px-3 py-1 font-bold border border-gray-400 min-w-[90px] text-center active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${autoScroll ? 'bg-[#316ac5] text-white' : 'bg-[var(--color-winxp-panel)] text-[#002fa7] hover:bg-white'}`}
-          title="Tocar/pausar (Espaço) — retoma de onde a tela está"
-        >
-          {autoScroll ? (userSeeking ? '✋ Ajustando' : '⏸ Pausar') : '▶ Auto-Rolar'}
-        </button>
-        <button
-          onClick={() => seekBySeconds(NUDGE_SEC)}
-          className="bevel-out px-1.5 py-1 font-bold border border-gray-400 bg-[var(--color-winxp-panel)] text-[#002fa7] hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
-          title={`Avançar ${NUDGE_SEC}s (→)`}
-        >
-          ▶▶
-        </button>
+      {/* Transporte do rolamento — sempre visível.
+          No telefone vira uma barra do rodapé inteiro: os ~9 controles não cabem numa
+          linha de 360px, então quebram em duas e ganham altura de toque (40px). No
+          desktop continua sendo a caixinha flutuante do canto inferior direito. */}
+      <div className="fixed z-50 bevel-out bg-[var(--color-winxp-panel)] border border-gray-500 shadow-xl select-none text-xs
+                      inset-x-0 bottom-0 px-2 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] flex flex-wrap items-center justify-center gap-x-2 gap-y-1.5
+                      sm:inset-x-auto sm:right-4 sm:bottom-12 sm:px-2 sm:py-1.5 sm:flex-nowrap sm:justify-start sm:gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2 sm:contents">
+          <button
+            onClick={handleRestart}
+            className="bevel-out px-3 py-2 sm:px-2 sm:py-1 font-bold border border-gray-400 bg-[var(--color-winxp-panel)] text-[#002fa7] hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
+            title="Voltar ao início (Home)"
+          >
+            ⏮
+          </button>
+          <button
+            onClick={() => seekBySeconds(-NUDGE_SEC)}
+            className="bevel-out px-3 py-2 sm:px-1.5 sm:py-1 font-bold border border-gray-400 bg-[var(--color-winxp-panel)] text-[#002fa7] hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
+            title={`Voltar ${NUDGE_SEC}s (←)`}
+          >
+            ◀◀
+          </button>
+          <button
+            onClick={handleToggleAutoScroll}
+            className={`bevel-out px-3 py-2 sm:py-1 font-bold border border-gray-400 min-w-[110px] sm:min-w-[90px] text-center active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${autoScroll ? 'bg-[#316ac5] text-white' : 'bg-[var(--color-winxp-panel)] text-[#002fa7] hover:bg-white'}`}
+            title="Tocar/pausar (Espaço) — retoma de onde a tela está"
+          >
+            {autoScroll ? (userSeeking ? '✋ Ajustando' : '⏸ Pausar') : '▶ Auto-Rolar'}
+          </button>
+          <button
+            onClick={() => seekBySeconds(NUDGE_SEC)}
+            className="bevel-out px-3 py-2 sm:px-1.5 sm:py-1 font-bold border border-gray-400 bg-[var(--color-winxp-panel)] text-[#002fa7] hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
+            title={`Avançar ${NUDGE_SEC}s (→)`}
+          >
+            ▶▶
+          </button>
+        </div>
+
         {totalTime > 0 && (
-          <span className="font-mono text-[10px] font-bold text-[#002fa7] border-l border-gray-400 pl-1.5 tabular-nums">
+          <span className="font-mono text-[10px] font-bold text-[#002fa7] sm:border-l sm:border-gray-400 sm:pl-1.5 tabular-nums">
             {fmtTime(elapsedDisplay)} / {fmtTime(totalTime)}
           </span>
         )}
@@ -2337,21 +2380,30 @@ export const CifraViewer: React.FC = () => {
             <button
               key={m}
               onClick={() => setScrollMult(m)}
-              className={`text-[10px] font-bold px-1.5 py-0.5 border leading-tight ${scrollMult === m ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#ece9d8] border-gray-400 hover:bg-white'}`}
+              className={`text-[10px] font-bold px-2 py-1.5 sm:px-1.5 sm:py-0.5 border leading-tight ${scrollMult === m ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#ece9d8] border-gray-400 hover:bg-white'}`}
             >
               {m}×
             </button>
           ))}
         </div>
+        {/* Ocultar as tabs encurta a cifra e é decisão de meio-música — precisa estar aqui,
+            e não escondido atrás do painel de controles. */}
+        <button
+          onClick={() => setShowTabs(v => !v)}
+          className={`text-[10px] font-bold px-2 py-1.5 sm:px-1.5 sm:py-0.5 border leading-tight ${!showTabs ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#ece9d8] border-gray-400 hover:bg-white'}`}
+          title={showTabs ? 'Ocultar as tabs' : 'Mostrar as tabs'}
+        >
+          {showTabs ? 'Tabs ▼' : 'Tabs ▶'}
+        </button>
         {effectiveBpm != null && (
-          <span className="font-mono text-[10px] font-bold text-[#005500] border-l border-gray-400 pl-1.5">♩ {effectiveBpm}</span>
+          <span className="font-mono text-[10px] font-bold text-[#005500] sm:border-l sm:border-gray-400 sm:pl-1.5">♩ {effectiveBpm}</span>
         )}
         {(loopA !== null && loopB !== null) && (
-          <span className="text-[10px] font-bold text-[#316ac5] border-l border-gray-400 pl-1.5">⟳ Loop</span>
+          <span className="text-[10px] font-bold text-[#316ac5] sm:border-l sm:border-gray-400 sm:pl-1.5">⟳ Loop</span>
         )}
         {currentSection && autoScroll && (
           <span
-            className="text-[10px] font-bold text-[#660033] border-l border-gray-400 pl-1.5 max-w-[110px] truncate"
+            className="text-[10px] font-bold text-[#660033] sm:border-l sm:border-gray-400 sm:pl-1.5 max-w-[110px] truncate"
             title={currentSection}
           >
             {currentSection}

@@ -59,6 +59,8 @@ export function FavoritosDashboard() {
   const [status, setStatus] = useState<{ tone: 'ok' | 'erro'; text: string } | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  /** Só vale abaixo de `lg`; a partir daí o CSS mantém a lateral sempre aberta. */
+  const [categoriesOpen, setCategoriesOpen] = useState(false);
   /** Backup à espera da decisão sobre identidade — cru, ainda não aplicado. */
   const [pendingImport, setPendingImport] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -165,10 +167,10 @@ export function FavoritosDashboard() {
   };
 
   return (
-    <div className="p-4 flex flex-col gap-3 font-mono">
+    <div className="p-2 sm:p-4 flex flex-col gap-3 font-mono">
       {/* ── Barra de título ── */}
-      <div className="winxp-gradient-blue text-white px-3 py-1.5 flex items-center justify-between select-none shrink-0">
-        <span className="font-bold text-sm flex items-center gap-1.5">
+      <div className="winxp-gradient-blue text-white px-2 sm:px-3 py-1.5 flex flex-wrap items-center justify-between gap-2 select-none shrink-0">
+        <span className="font-bold text-sm flex items-center gap-1.5 min-w-0 truncate">
           <Heart size={14} className="fill-white" />
           Meus Favoritos ({store.entries.length})
         </span>
@@ -270,10 +272,23 @@ export function FavoritosDashboard() {
 
       <div className="flex flex-col lg:flex-row gap-3 items-start">
         {/* ── Barra lateral: categorias ── */}
-        <aside className="w-full lg:w-[240px] shrink-0 bg-[#ece9d8] border-2 border-white border-r-[#808080] border-b-[#808080] p-3 flex flex-col gap-2">
-          <div className="text-xs font-bold text-[#002fa7] border-b border-dashed border-[#808080] pb-1.5 select-none">
+        <aside className="w-full lg:w-[240px] shrink-0 bg-[#ece9d8] border-2 border-white border-r-[#808080] border-b-[#808080] p-2 sm:p-3 flex flex-col gap-2">
+          {/* Empilhada no telefone, a lista de categorias empurrava as cifras para fora
+              da primeira tela. Abaixo de `lg` ela vira um acordeão, fechado por padrão. */}
+          <button
+            onClick={() => setCategoriesOpen(v => !v)}
+            aria-expanded={categoriesOpen}
+            className="lg:hidden flex items-center justify-between gap-2 text-xs font-bold text-[#002fa7] py-1.5 cursor-pointer select-none"
+          >
+            <span>Categorias ({store.categories.length})</span>
+            <span className="text-[10px]">{categoriesOpen ? '▲' : '▼'}</span>
+          </button>
+
+          <div className="hidden lg:block text-xs font-bold text-[#002fa7] border-b border-dashed border-[#808080] pb-1.5 select-none">
             Categorias
           </div>
+
+          <div className={`${categoriesOpen ? 'flex' : 'hidden'} lg:flex flex-col gap-2 border-t border-dashed border-[#808080] pt-2 lg:border-t-0 lg:pt-0`}>
 
           <SidebarItem
             label="Todos"
@@ -318,7 +333,7 @@ export function FavoritosDashboard() {
               <button
                 onClick={() => setEditingCategory(cat.id)}
                 title="Renomear categoria"
-                className="p-1 text-gray-600 hover:text-[#002fa7] cursor-pointer shrink-0"
+                className="p-2 lg:p-1 text-gray-600 hover:text-[#002fa7] cursor-pointer shrink-0"
               >
                 <Pencil size={11} />
               </button>
@@ -328,7 +343,7 @@ export function FavoritosDashboard() {
                   setSelection(sel => (sel.kind === 'category' && sel.id === cat.id ? { kind: 'all' } : sel));
                 }}
                 title="Apagar categoria (as cifras continuam nos favoritos)"
-                className="p-1 text-gray-600 hover:text-[#cc3300] cursor-pointer shrink-0"
+                className="p-2 lg:p-1 text-gray-600 hover:text-[#cc3300] cursor-pointer shrink-0"
               >
                 <Trash2 size={11} />
               </button>
@@ -347,15 +362,16 @@ export function FavoritosDashboard() {
             <button
               onClick={handleCreateCategory}
               title="Criar categoria"
-              className="bevel-out bg-[#ece9d8] px-2 text-black hover:bg-white cursor-pointer active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
+              className="bevel-out bg-[#ece9d8] px-3 lg:px-2 text-black hover:bg-white cursor-pointer active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
             >
               <FolderPlus size={12} />
             </button>
           </div>
+          </div>
         </aside>
 
         {/* ── Lista de cifras ── */}
-        <section className="flex-1 min-w-0 w-full bg-white border-2 border-[#808080] border-r-white border-b-white p-3 flex flex-col gap-3 min-h-[420px]">
+        <section className="flex-1 min-w-0 w-full bg-white border-2 border-[#808080] border-r-white border-b-white p-2 sm:p-3 flex flex-col gap-3 min-h-[320px] sm:min-h-[420px]">
           <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
             <div className="flex-1 flex items-center gap-1.5 bg-white border-2 border-[#808080] border-r-white border-b-white px-2">
               <Search size={12} className="text-gray-500 shrink-0" />
@@ -421,16 +437,19 @@ export function FavoritosDashboard() {
                       <button
                         onClick={() => setOpenMenuFor(openMenuFor === key ? null : key)}
                         aria-expanded={openMenuFor === key}
-                        className="bevel-out bg-[#ece9d8] px-2 py-1 text-[10px] font-bold text-black hover:bg-white cursor-pointer shrink-0 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
+                        className="bevel-out bg-[#ece9d8] px-2 py-2 sm:py-1 text-[10px] font-bold text-black hover:bg-white cursor-pointer shrink-0 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
                         title="Organizar em categorias"
                       >
-                        Categorias
+                        {/* Rótulo curto no telefone: com o título da cifra ao lado, "Categorias"
+                            por extenso não cabe numa tela de 360px. */}
+                        <span className="sm:hidden">Cat.</span>
+                        <span className="hidden sm:inline">Categorias</span>
                       </button>
 
                       <button
                         onClick={() => updateStore(s => removeEntry(s, entry.artistSlug, entry.songSlug))}
                         title="Remover dos favoritos"
-                        className="p-1.5 text-[#cc3300] hover:bg-[#fdecea] cursor-pointer shrink-0"
+                        className="p-2 sm:p-1.5 text-[#cc3300] hover:bg-[#fdecea] cursor-pointer shrink-0"
                       >
                         <Heart size={14} className="fill-current" />
                       </button>
@@ -478,7 +497,7 @@ function ToolbarButton({ onClick, disabled, icon, children }: {
     <button
       onClick={onClick}
       disabled={disabled}
-      className="px-2 py-0.5 bg-[#ece9d8] text-black text-[11px] font-bold border border-white border-r-[#808080] border-b-[#808080] hover:bg-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+      className="px-2.5 py-1.5 sm:py-0.5 bg-[#ece9d8] text-black text-[11px] font-bold border border-white border-r-[#808080] border-b-[#808080] hover:bg-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
     >
       {icon}
       <span className="hidden sm:inline">{children}</span>
@@ -495,7 +514,7 @@ function SidebarItem({ label, count, active, onClick }: {
   return (
     <button
       onClick={onClick}
-      className={`flex-1 min-w-0 flex items-center justify-between gap-2 px-2 py-1 text-xs cursor-pointer text-left ${
+      className={`flex-1 min-w-0 flex items-center justify-between gap-2 px-2 py-2 lg:py-1 text-xs cursor-pointer text-left ${
         active ? 'bg-[#0058e6] text-white font-bold' : 'text-black hover:bg-[#c2d7f2]'
       }`}
     >

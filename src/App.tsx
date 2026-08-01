@@ -33,6 +33,7 @@ import {
 import { getPreferredInstrumentId, setPreferredInstrumentId } from './utils/instrumentPreference';
 import { preloadSoundfont } from './engine/AudioEngine';
 import { useTabNavigation } from './hooks/useTabNavigation';
+import { useImmersiveStore } from './stores/useImmersiveStore';
 import { useCifraFavorites, useFavoritesBootSync } from './hooks/useCifraFavorites';
 import { FavoritosDashboard } from './pages/favoritos/FavoritosDashboard';
 import { CifrasApp } from './pages/cifras/CifrasApp';
@@ -252,6 +253,19 @@ function App() {
     }
     prevTimingRouteRef.current = isTimingRoute;
   }, [isTimingRoute]);
+
+  // A rolagem automática da cifra pede a mesma coisa que o editor de timing: altura. Mesma
+  // forma do efeito acima — recolhe ao ligar, devolve ao desligar.
+  const immersive = useImmersiveStore(s => s.immersive);
+  const prevImmersiveRef = React.useRef(false);
+  useEffect(() => {
+    if (immersive && !prevImmersiveRef.current) {
+      setIsTaskbarCollapsed(true);
+    } else if (!immersive && prevImmersiveRef.current) {
+      setIsTaskbarCollapsed(false);
+    }
+    prevImmersiveRef.current = immersive;
+  }, [immersive]);
 
   // Reverse sync: if taskbar is manually shown while editor is docked+expanded, minimize editor
   const prevTaskbarCollapsedRef = React.useRef(false);
