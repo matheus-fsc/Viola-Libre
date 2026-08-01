@@ -566,6 +566,9 @@ function App() {
       className="min-h-screen flex flex-col justify-between overflow-x-hidden font-sans select-none relative"
       style={{ paddingBottom: sequencerPad }}
     >
+      {/* Texto acessível para crawlers: visualmente oculto, mas presente no DOM para SEO. */}
+      <h1 className="sr-only">Viola Libre — Cifras, Acordes e Teoria Musical para Viola Caipira, Violão e Cavaquinho</h1>
+      <p className="sr-only">Explore cifras, visualize acordes no braço do instrumento, descubra afinações e estude teoria musical. Livre, sem anúncios e open source.</p>
       {/* Com uma aba aberta, a janela flutua sobre a própria área de trabalho desfocada.
           Fora na rota de timing, que ocupa a viewport inteira e não deixa nada à mostra. */}
       {activeTab !== 'desktop' && !isTimingRoute && <DesktopBackdrop />}
@@ -651,7 +654,7 @@ function App() {
                 className="w-[21px] h-[21px] rounded bg-[#0058e6] border border-white flex items-center justify-center font-bold text-xs hover:bg-[#3a8bfb] focus:outline-none cursor-pointer"
                 title="Minimizar (área de trabalho)"
               >
-                _
+              <span aria-hidden="true">_</span>
               </button>
               <button 
                 onClick={() => goToTab('favorites')}
@@ -665,7 +668,7 @@ function App() {
                 className="w-[21px] h-[21px] rounded bg-[#cc3300] border border-white flex items-center justify-center font-bold text-xs hover:bg-red-500 focus:outline-none cursor-pointer"
                 title="Sobre"
               >
-                ✕
+                <span aria-hidden="true">✕</span>
               </button>
             </div>
           </div>
