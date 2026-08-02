@@ -152,23 +152,31 @@ export const InteractiveFretboard: React.FC<InteractiveFretboardProps> = ({
                   </div>
 
                   {/* Nut (fret 0) open string column */}
-                  <div 
+                  {/* Era um <div onClick> com um <button> decorativo dentro — o oposto do
+                      que deveria ser. O div não recebia foco nem tinha nome, e o botão de
+                      dentro (pointer-events-none) entrava na ordem de tabulação sem fazer
+                      nada. Agora o clicável é o botão, e o miolo é só pintura. */}
+                  <button
+                    type="button"
                     onClick={() => handleCellClick(sIdx, 0)}
+                    aria-pressed={activeFretVal === 0}
+                    aria-label={`Corda ${sIdx + 1} (${midiToNoteName(openMidi, useFlats)}) solta`}
                     className="w-[30px] flex justify-center items-center relative h-full cursor-pointer hover:bg-black/5"
                   >
                     {/* Metal bar nut */}
                     <div className="absolute right-0 top-0 bottom-0 w-1 bg-[#C5A37F] border-r border-black/80"></div>
-                    
-                    <button
-                      className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold font-mono border pointer-events-none select-none z-10 ${
+
+                    <span
+                      aria-hidden="true"
+                      className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold font-mono border select-none z-10 ${
                         activeFretVal === 0
                           ? 'bg-[#228b22] text-white border-white'
                           : 'bg-[#d4d0c8]/30 text-gray-300 border-gray-400'
                       }`}
                     >
                       {activeFretVal === 0 ? "0" : ""}
-                    </button>
-                  </div>
+                    </span>
+                  </button>
 
                   {/* Fret Boxes 1 to 12 */}
                   {Array.from({ length: maxFrets }).map((_, fIdx) => {
@@ -177,9 +185,12 @@ export const InteractiveFretboard: React.FC<InteractiveFretboardProps> = ({
                     const noteName = getNoteAtFret(sIdx, fret);
                     
                     return (
-                      <div 
-                        key={`cell-${sIdx}-${fret}`} 
+                      <button
+                        type="button"
+                        key={`cell-${sIdx}-${fret}`}
                         onClick={() => handleCellClick(sIdx, fret)}
+                        aria-pressed={isActive}
+                        aria-label={`Corda ${sIdx + 1}, casa ${fret} — ${noteName}`}
                         className="flex-1 h-full border-r border-[#ece9d8]/40 flex justify-center items-center relative cursor-pointer hover:bg-black/5 group"
                       >
                         {/* Metal fret wire */}
@@ -204,17 +215,19 @@ export const InteractiveFretboard: React.FC<InteractiveFretboardProps> = ({
                           <div className="absolute w-2.5 h-2.5 rounded-full bg-white/20 z-0 transform translate-y-2"></div>
                         )}
 
-                        {/* Clickable fret finger box */}
-                        <button
-                          className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold font-mono border pointer-events-none select-none z-10 transition-all ${
+                        {/* Marcador do dedo: pintura, não controle. O nome da casa já é
+                            anunciado pelo aria-label do botão que envolve tudo. */}
+                        <span
+                          aria-hidden="true"
+                          className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold font-mono border select-none z-10 transition-all ${
                             isActive
                               ? 'bg-[#0058e6] text-white border-white scale-110 shadow-md'
                               : 'bg-transparent border-transparent text-transparent group-hover:text-white/60'
                           }`}
                         >
                           {isActive ? noteName.replace('#', '♯').replace('b', '♭') : noteName}
-                        </button>
-                      </div>
+                        </span>
+                      </button>
                     );
                   })}
 
@@ -267,7 +280,7 @@ export const InteractiveFretboard: React.FC<InteractiveFretboardProps> = ({
           
           <div className="flex-1 h-[55px] overflow-y-auto bg-white border border-[#808080] p-1 flex flex-col gap-1 retro-scrollbar">
             {detectedChords.length === 0 ? (
-              <span className="text-[10px] text-gray-400 italic text-center block mt-3">Nenhum acorde mapeado</span>
+              <span className="text-[10px] text-gray-600 italic text-center block mt-3">Nenhum acorde mapeado</span>
             ) : (
               detectedChords.map((match, idx) => (
                 <div 

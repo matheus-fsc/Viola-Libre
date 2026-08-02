@@ -197,7 +197,7 @@ export const AssistedModeOverlay: React.FC = () => {
         </div>
         <button
           onClick={exitAssisted}
-          className="text-[9px] text-gray-400 hover:text-gray-600 text-center"
+          className="text-[9px] text-gray-600 hover:text-gray-600 text-center"
         >
           Cancelar modo guiado
         </button>

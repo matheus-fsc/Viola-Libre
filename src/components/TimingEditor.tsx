@@ -663,7 +663,7 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
                 {/* BPM + Duração lado a lado */}
                 <div className="p-2 border-b border-gray-200 grid grid-cols-2 gap-2">
                   <div className="flex flex-col gap-1.5 min-w-0">
-                    <p className="font-bold text-[10px] uppercase text-gray-500 tracking-wider">BPM <span className="normal-case font-normal text-gray-400">(opc.)</span></p>
+                    <p className="font-bold text-[10px] uppercase text-gray-500 tracking-wider">BPM <span className="normal-case font-normal text-gray-600">(opc.)</span></p>
                     <div className="flex gap-1 items-center">
                       <input
                         type="number"
@@ -702,7 +702,7 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
 
                 {/* Alias */}
                 <div className="p-2 border-b border-gray-200 flex flex-col gap-1">
-                  <p className="font-bold text-[10px] uppercase text-gray-500 tracking-wider">Apelido <span className="normal-case font-normal text-gray-400">(opcional)</span></p>
+                  <p className="font-bold text-[10px] uppercase text-gray-500 tracking-wider">Apelido <span className="normal-case font-normal text-gray-600">(opcional)</span></p>
                   <input
                     type="text"
                     value={editorAlias}
@@ -826,7 +826,7 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
                     <div className="p-2 border-b border-gray-200 flex flex-col gap-1">
                       <p className="font-bold text-[10px] uppercase text-gray-500 tracking-wider">
                         Trechos vinculados
-                        <span className="ml-1 font-normal normal-case text-gray-400">({linkedSections.length})</span>
+                        <span className="ml-1 font-normal normal-case text-gray-600">({linkedSections.length})</span>
                       </p>
                       <div className="flex flex-col gap-0.5">
                         {linkedSections.map(r => {
@@ -870,7 +870,7 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
                     <div className="flex items-center justify-between">
                       <p className="font-bold text-[10px] uppercase text-gray-500 tracking-wider">
                         Trechos
-                        {sortedSections.length > 0 && <span className="ml-1 font-normal normal-case text-gray-400">({sortedSections.length})</span>}
+                        {sortedSections.length > 0 && <span className="ml-1 font-normal normal-case text-gray-600">({sortedSections.length})</span>}
                       </p>
                       <button
                         onClick={() => setSectionFormOpen(v => !v)}
@@ -927,7 +927,7 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
                           />
                         </div>
 
-                        <p className="text-[9px] text-gray-400 text-center">
+                        <p className="text-[9px] text-gray-600 text-center">
                           💡 Arraste na régua abaixo pra preencher início/fim
                         </p>
 
@@ -989,7 +989,7 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
                   <div className="p-2 border-b border-gray-200 flex flex-col gap-1.5">
                     <p className="font-bold text-[10px] uppercase text-gray-500 tracking-wider">
                       Marcadores de Partitura
-                      {sortedMarkers.length > 0 && <span className="ml-1 font-normal normal-case text-gray-400">({sortedMarkers.length})</span>}
+                      {sortedMarkers.length > 0 && <span className="ml-1 font-normal normal-case text-gray-600">({sortedMarkers.length})</span>}
                     </p>
 
                     {/* Link selector — shown after creating/clicking a linkable marker */}
@@ -1008,7 +1008,7 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
                             <span className="font-mono text-sm shrink-0" style={{ color: srcMeta.pinColor }}>{srcMeta.symbol}</span>
                             <span className="font-bold text-[10px]">Qual destino?</span>
                             <button onClick={() => { setPendingLinkSource(null); setLinkCandidates([]); }}
-                              className="ml-auto text-[9px] text-gray-400 hover:text-gray-600">✕</button>
+                              className="ml-auto text-[9px] text-gray-600 hover:text-gray-600">✕</button>
                           </div>
                           <div className="flex flex-col gap-0.5">
                             {linkCandidates.map(c => {
@@ -1025,7 +1025,7 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
                               );
                             })}
                             <button onClick={() => confirmLink(undefined)}
-                              className="text-[9px] text-gray-400 hover:text-gray-600 text-left px-1 mt-0.5">
+                              className="text-[9px] text-gray-600 hover:text-gray-600 text-left px-1 mt-0.5">
                               ✕ remover vínculo
                             </button>
                           </div>
@@ -1045,7 +1045,7 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
                               <span className="font-mono shrink-0 w-6 text-center font-bold" style={{ color: m.pinColor }}>{m.symbol}</span>
                               <span className="flex-1 font-bold truncate">{m.name}</span>
                               {targetMk && (
-                                <span className="text-[8px] text-gray-400 shrink-0 font-mono">
+                                <span className="text-[8px] text-gray-600 shrink-0 font-mono">
                                   → {MARKER_META[targetMk.type].symbol} {formatSeconds(targetMk.time)}
                                 </span>
                               )}

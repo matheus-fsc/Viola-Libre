@@ -85,7 +85,7 @@ const NoteBadge = React.memo<NoteBadgeProps>(({
       {/* Drag Handle ::: */}
       {cellWidth >= 100 && (
         <span 
-          className="text-[9px] font-bold text-gray-400 select-none px-0.5 shrink-0 cursor-grab"
+          className="text-[9px] font-bold text-gray-600 select-none px-0.5 shrink-0 cursor-grab"
           title="Arraste para mover no tempo ou transpor"
         >
           ::::

@@ -310,6 +310,7 @@ export function FavoritosDashboard() {
               {editingCategory === cat.id ? (
                 <input
                   autoFocus
+                  aria-label={`Renomear a categoria ${cat.name}`}
                   defaultValue={cat.name}
                   onBlur={e => {
                     const name = e.target.value.trim();
@@ -352,6 +353,7 @@ export function FavoritosDashboard() {
 
           <div className="flex gap-1 mt-1 pt-2 border-t border-dashed border-[#808080]">
             <input
+              aria-label="Nome da nova categoria"
               value={newCategory}
               onChange={e => setNewCategory(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') handleCreateCategory(); }}
@@ -378,12 +380,13 @@ export function FavoritosDashboard() {
               <input
                 value={query}
                 onChange={e => setQuery(e.target.value)}
+                aria-label="Buscar nos favoritos por música ou artista"
                 placeholder="Buscar por música ou artista"
                 className="flex-1 min-w-0 py-1.5 text-xs outline-none bg-transparent"
               />
               {query && (
-                <button onClick={() => setQuery('')} className="text-gray-500 hover:text-black cursor-pointer shrink-0">
-                  <X size={12} />
+                <button onClick={() => setQuery('')} aria-label="Limpar busca" className="text-gray-500 hover:text-black cursor-pointer shrink-0">
+                  <X size={12} aria-hidden="true" />
                 </button>
               )}
             </div>

@@ -1,8 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { FolderOpen, FileText, Layers, Flame, Heart } from 'lucide-react';
 import { getSongs, getCifra, type Song } from '../../services/api';
+import { prettifySlug } from '../../services/cifraFavorites';
 import { useArtistSongFilter, type ArtistSongTab } from '../../hooks/useArtistSongFilter';
+import { useSeo } from '../../hooks/useSeo';
+import { useJsonLd, breadcrumbJsonLd } from '../../hooks/useJsonLd';
 import { TopSongsHighlight } from './TopSongsHighlight';
 
 const isPrincipal = (v?: string) => (v || '').toLowerCase().includes('principal');
@@ -71,14 +74,38 @@ export const SongList: React.FC = () => {
     return () => timers.forEach(clearTimeout);
   }, [songs, artistSlug]); // visibleCount removido intencionalmente
 
-  const artistName = artistSlug ? artistSlug.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : 'Artista';
+  const artistName = artistSlug ? prettifySlug(artistSlug) : 'Artista';
+
+  // "Cifras de X" e não "Músicas de X": é assim que a busca é digitada. O contador de
+  // músicas entra na descrição quando já chegou, porque número concreto rende mais
+  // clique do que promessa genérica.
+  useSeo({
+    title: `Cifras de ${artistName}`,
+    description: dedupedSongs.length
+      ? `${dedupedSongs.length} cifras de ${artistName} para viola caipira, violão e cavaquinho, com os acordes no braço do instrumento e troca de tom.`
+      : `Cifras de ${artistName} para viola caipira, violão e cavaquinho, com os acordes no braço do instrumento e troca de tom.`,
+    path: `/cifras/${artistSlug ?? ''}`,
+  });
+  useJsonLd(
+    useMemo(
+      () =>
+        breadcrumbJsonLd([
+          { name: 'Cifras', path: '/cifras' },
+          { name: artistName, path: `/cifras/${artistSlug ?? ''}` },
+        ]),
+      [artistName, artistSlug],
+    ),
+  );
 
   return (
     <div className="flex flex-col h-full bg-[var(--color-winxp-bg)] p-2">
       <div className="winxp-gradient-blue text-white px-2 py-1 flex items-center font-bold text-sm mb-2 rounded-t select-none justify-between">
         <div className="flex items-center gap-2">
-          <FolderOpen size={16} />
-          Músicas de {artistName}
+          <FolderOpen size={16} aria-hidden="true" />
+          {/* A barra de título É o cabeçalho da página — marcá-la como <h1> não muda
+              nada visualmente e dá a quem navega por leitor de tela o mesmo ponto de
+              referência que a barra dá a quem enxerga. */}
+          <h1 className="font-bold text-sm">Músicas de {artistName}</h1>
         </div>
         <button
           onClick={() => navigate('/cifras')}
@@ -97,7 +124,7 @@ export const SongList: React.FC = () => {
           <div className="flex flex-col gap-2">
             <TopSongsHighlight
               songs={top20}
-              onSelect={(song) => navigate(`/cifras/${artistSlug}/${song.slug}`)}
+              hrefFor={(song) => `/cifras/${artistSlug}/${song.slug}`}
             />
 
             {dedupedSongs.length > 0 && (
@@ -105,6 +132,7 @@ export const SongList: React.FC = () => {
                 <div className="flex items-center w-full mb-2">
                   <input
                     type="text"
+                    aria-label="Buscar música deste artista"
                     placeholder="Buscar música deste artista..."
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
@@ -132,10 +160,10 @@ export const SongList: React.FC = () => {
             {visibleSongs.map(song => {
               const nVersions = versionCount.get(song.title.trim().toLowerCase()) || 1;
               return (
-                <div
+                <Link
                   key={song.id}
-                  onClick={() => navigate(`/cifras/${artistSlug}/${song.slug}`)}
-                  className="flex items-center p-2 hover:bg-[#316ac5] hover:text-white cursor-pointer select-none group border border-transparent hover:border-dotted hover:border-white transition-none"
+                  to={`/cifras/${artistSlug}/${song.slug}`}
+                  className="flex items-center p-2 hover:bg-[#316ac5] hover:text-white cursor-pointer select-none group border border-transparent hover:border-dotted hover:border-white transition-none text-inherit no-underline"
                 >
                   <div className="mr-3 text-gray-500 group-hover:text-white">
                     <FileText size={18} />
@@ -148,7 +176,7 @@ export const SongList: React.FC = () => {
                       <Layers size={12} /> {nVersions} variações
                     </span>
                   )}
-                </div>
+                </Link>
               );
             })}
 

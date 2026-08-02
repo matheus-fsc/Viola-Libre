@@ -71,6 +71,7 @@ export function MobileCifraBar({ destinos, aberto, onAbrir, rolando, transporte 
           />
           <div
             role="dialog"
+            aria-modal="true"
             aria-label={folha.rotulo}
             className="fixed inset-x-0 bottom-0 z-50 md:hidden bevel-out bg-[var(--color-winxp-panel)] border-t-2 border-white max-h-[75vh] flex flex-col pb-[env(safe-area-inset-bottom)]"
           >
@@ -172,19 +173,28 @@ export function LinhaAjuste({ rotulo, dica, children }: {
 }
 
 /** −/valor/+ com alvos de toque de 36px. */
-export function Stepper({ onMenos, onMais, children, rotuloMenos = '−', rotuloMais = '+' }: {
+export function Stepper({ onMenos, onMais, children, rotuloMenos = '−', rotuloMais = '+', nome }: {
   onMenos(): void;
   onMais(): void;
   children: ReactNode;
   rotuloMenos?: string;
   rotuloMais?: string;
+  /**
+   * O que este stepper ajusta ("BPM", "tom da música"). Vira o nome acessível dos
+   * dois botões.
+   *
+   * Sem ele o leitor de tela lê só o glifo — "−½", "◀" — que fora do contexto visual
+   * da linha não diz o que muda nem em que direção. Quem enxerga resolve pelo rótulo
+   * ao lado; quem navega por leitor de tela ouve os botões isolados.
+   */
+  nome?: string;
 }) {
   const btn = 'bevel-out bg-[var(--color-winxp-panel)] px-2.5 py-1.5 text-xs font-bold min-w-[36px] active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white';
   return (
     <div className="flex items-center gap-1">
-      <button onClick={onMenos} className={btn}>{rotuloMenos}</button>
+      <button onClick={onMenos} className={btn} aria-label={nome ? `Diminuir ${nome}` : undefined}>{rotuloMenos}</button>
       <span className="font-mono text-xs font-bold min-w-[52px] text-center">{children}</span>
-      <button onClick={onMais} className={btn}>{rotuloMais}</button>
+      <button onClick={onMais} className={btn} aria-label={nome ? `Aumentar ${nome}` : undefined}>{rotuloMais}</button>
     </div>
   );
 }

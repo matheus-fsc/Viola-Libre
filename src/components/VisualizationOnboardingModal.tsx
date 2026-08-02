@@ -2,9 +2,18 @@ import React from 'react';
 import { useVisualizationStore } from '../stores/useVisualizationStore';
 import { PRESET_INSTRUMENTS } from '../engine/tunings';
 import { FretboardDiagram } from './FretboardDiagram';
+import { useDialog } from '../hooks/useDialog';
 
 export const VisualizationOnboardingModal: React.FC = () => {
   const { stringOrder, setStringOrder } = useVisualizationStore();
+
+  // Antes do return adiantado: hook não pode ser condicional. Sem `onClose` de
+  // propósito — aqui a escolha é obrigatória e não existe "fechar sem responder",
+  // então o Esc não teria o que fazer.
+  const { ref: dialogRef, props: dialogProps } = useDialog({
+    titleId: 'titulo-onboarding-visualizacao',
+    active: stringOrder === null,
+  });
 
   if (stringOrder !== null) return null;
 
@@ -26,9 +35,9 @@ export const VisualizationOnboardingModal: React.FC = () => {
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
-      <div className="bg-[#ece9d8] border-[3px] border-[#0058e6] shadow-2xl rounded-t-lg flex flex-col w-full max-w-2xl max-h-[90vh] overflow-hidden">
+      <div ref={dialogRef} {...dialogProps} className="bg-[#ece9d8] border-[3px] border-[#0058e6] shadow-2xl rounded-t-lg flex flex-col w-full max-w-2xl max-h-[90vh] overflow-hidden">
         <div className="bg-gradient-to-r from-[#0a246a] to-[#3a6ea5] text-white px-3 py-1.5 flex justify-between items-center rounded-t-sm border-b-2 border-[#002fa7] select-none">
-          <span className="font-bold text-sm tracking-wide font-mono">
+          <span id="titulo-onboarding-visualizacao" className="font-bold text-sm tracking-wide font-mono">
             Preferência de Visualização
           </span>
         </div>

@@ -118,6 +118,7 @@ export function SeletorDeTom({ songKey, offset, onSelect, aberto, onAbrir, gatil
           <div className="fixed inset-0 z-30 bg-black/30" onClick={() => onAbrir(false)} aria-hidden />
           <div
             role="dialog"
+            aria-modal="true"
             aria-label="Escolher o tom"
             className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-40 w-[360px] max-w-[92vw] bg-[#ece9d8] bevel-out shadow-xl select-none"
           >

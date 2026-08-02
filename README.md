@@ -132,6 +132,8 @@ A aplicação sobe em `http://localhost:5173`.
 | `npm run test`    | Roda a suíte de testes (Vitest).                 |
 | `npm run lint`    | Verifica o código com ESLint.                    |
 | `npm run librejs:verify` | Confere se o build atende ao GNU LibreJS.  |
+| `npm run sitemap` | Regenera `public/sitemap.xml` a partir do acervo (bate na API). |
+| `npm run sitemap:verify` | Confere o sitemap contra o `robots.txt` e os limites do protocolo. |
 
 ---
 
@@ -176,6 +178,48 @@ código gerado em tempo de execução. A conformidade vale para o que é publica
 
 ---
 
+## Indexação e acessibilidade
+
+O site é uma SPA: uma única `index.html` e todo o resto montado no cliente. Isso cria
+dois problemas que não aparecem sozinhos, e ambos já morderam este projeto.
+
+**Metadados por rota.** O `index.html` traz título, descrição e `<link rel="canonical">`
+como fallback para quem não executa JavaScript. Se ficassem só nisso, toda rota se
+declararia duplicata da home — foi exatamente o que aconteceu enquanto a canônica esteve
+fixa. Quem resolve é o `useSeo` (`src/hooks/useSeo.ts`), que **atualiza** as tags já
+existentes no `<head>` em vez de acrescentar novas, garantindo uma de cada. As seções
+fixas ficam em `src/utils/seoRoutes.ts`; as rotas de cifra montam o seu a partir da
+música carregada.
+
+> Ao criar uma rota nova, chame `useSeo` nela. Sem isso ela herda os metadados da
+> anterior, e o Google a trata como cópia.
+
+**Sitemap.** `public/sitemap.xml` é gerado (`npm run sitemap`), não escrito à mão — o
+acervo tem ~133 mil artistas e ~490 mil cifras, e uma lista manual envelhece no dia
+seguinte. A seleção é **curada**: páginas fixas, artistas em destaque por gênero e as
+músicas mais vistas e curtidas. Despejar meio milhão de URLs renderizadas no cliente
+gastaria o orçamento de rastreio sem indexar nada; o teto cresce por variável de
+ambiente (`SITEMAP_MAX_URLS`) conforme o site ganha autoridade.
+
+O gerador **não** roda no `npm run build`, de propósito: a API fica atrás de nginx +
+fail2ban e derruba rajadas — com concorrência 8, 80% das requisições falhavam *em
+silêncio*, produzindo um sitemap curto de aparência saudável. Ele faz uma requisição
+por vez, com pausa, e reporta a taxa de falha ao final. Quem mantém o arquivo atualizado
+é o cron em `.github/workflows/sitemap.yml`.
+
+`npm run sitemap:verify` roda no CI e cruza o sitemap com o `robots.txt`. Essa checagem
+existe por um bug que ficou vivo vários deploys: o `robots.txt` trazia `Disallow: /cifras`
+e mantinha o acervo inteiro fora do Google. Anunciar uma URL no sitemap e proibir seu
+rastreio é contradição, e agora ela reprova o build.
+
+**Acessibilidade.** O tema Windows XP usa `select-none` e bordas em relevo, o que
+historicamente levou a `focus:outline-none` espalhado por ~40 pontos sem nada no lugar.
+A regra `:focus-visible` em `src/index.css` é o piso: ela usa `!important` de propósito,
+porque a utility do Tailwind tem especificidade maior e venceria. Não a remova para
+"limpar" o CSS — ela é a única coisa que dá indicador de foco a quem navega por teclado.
+
+---
+
 ## Como contribuir
 
 Contribuições são bem-vindas — de correções de acordes a novos recursos.
@@ -188,7 +232,7 @@ Contribuições são bem-vindas — de correções de acordes a novos recursos.
 4. **Motor sem UI.** Lógica musical vai em `src/engine/` (pura, testável); componentes só consomem.
 5. **Antes de abrir o PR**, garanta que passa:
    ```bash
-   npm run lint && npm run test && npm run build && npm run librejs:verify
+   npm run lint && npm run test && npm run build && npm run librejs:verify && npm run sitemap:verify
    ```
 6. **Abra um Pull Request** descrevendo a mudança. Toda contribuição fica sob a licença AGPL-3.0.
 

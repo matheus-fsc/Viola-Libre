@@ -34,6 +34,10 @@ import { getPreferredInstrumentId, setPreferredInstrumentId } from './utils/inst
 import { preloadSoundfont } from './engine/AudioEngine';
 import { ArrowLeft } from 'lucide-react';
 import { useTabNavigation, TAB_LABEL } from './hooks/useTabNavigation';
+import { useSeo } from './hooks/useSeo';
+import { useDialog } from './hooks/useDialog';
+import { useJsonLd, websiteJsonLd } from './hooks/useJsonLd';
+import { TAB_SEO } from './utils/seoRoutes';
 import { useImmersiveStore } from './stores/useImmersiveStore';
 import { useCifraFavorites, useFavoritesBootSync } from './hooks/useCifraFavorites';
 import { FavoritosDashboard } from './pages/favoritos/FavoritosDashboard';
@@ -213,6 +217,13 @@ function App() {
   const { activeTab, goToTab } = useTabNavigation();
   const isTimingRoute = /\/cifras\/[^/]+\/[^/]+\/timing$/.test(pathname);
 
+  // Metadados de busca das seções fixas. A subárvore de cifras responde pelos seus
+  // (o título depende da música), então aqui ela recebe `null` para não sobrescrever.
+  useSeo(activeTab === 'cifras' ? null : TAB_SEO[activeTab]);
+  // A caixa de busca do Google e a identidade do site pertencem à home, e só a ela:
+  // repetir em toda rota não acrescenta nada e polui o head.
+  useJsonLd(activeTab === 'desktop' ? websiteJsonLd : null);
+
   // Taskbar collapse state
   const [isTaskbarCollapsed, setIsTaskbarCollapsed] = useState(false);
 
@@ -223,6 +234,15 @@ function App() {
     else if (activeTab === 'minhascifras') setWipPopup('minhascifras');
     else if (isTimingRoute) setWipPopup('timing');
   }, [activeTab, isTimingRoute]);
+
+  // Os dois diálogos do App vivem como JSX condicional, não como componentes, então os
+  // hooks ficam aqui e são ligados/desligados pelo `active`. As funções de fechar
+  // precisam ser estáveis (useCallback): recriadas a cada render, refariam o efeito do
+  // diálogo — e com ele o foco inicial — sem parar.
+  const fecharSobre = React.useCallback(() => setShowAboutModal(false), []);
+  const fecharWip = React.useCallback(() => setWipPopup(null), []);
+  const { ref: sobreRef, props: sobreProps } = useDialog({ onClose: fecharSobre, titleId: 'titulo-sobre', active: showAboutModal });
+  const { ref: wipRef, props: wipProps } = useDialog({ onClose: fecharWip, titleId: 'titulo-wip', active: Boolean(wipPopup) });
 
   // Layout states for hybrid window / docked visualizer
   const [isEditorOpen, setIsEditorOpen] = useState(true);
@@ -566,9 +586,26 @@ function App() {
       className="min-h-screen flex flex-col justify-between overflow-x-hidden font-sans select-none relative"
       style={{ paddingBottom: sequencerPad }}
     >
-      {/* Texto acessível para crawlers: visualmente oculto, mas presente no DOM para SEO. */}
-      <h1 className="sr-only">Viola Libre — Cifras, Acordes e Teoria Musical para Viola Caipira, Violão e Cavaquinho</h1>
-      <p className="sr-only">Explore cifras, visualize acordes no braço do instrumento, descubra afinações e estude teoria musical. Livre, sem anúncios e open source.</p>
+      {/* Título da página para leitor de tela e para o buscador: visualmente oculto,
+          mas é o <h1> de verdade da rota.
+
+          Precisa variar por aba. Um h1 fixo dizendo "Viola Libre — Cifras, Acordes e
+          Teoria Musical" fazia toda página se anunciar como a home, tanto para quem
+          navega por cabeçalhos quanto para o Google.
+
+          Fora na subárvore de cifras: lá o h1 é o nome do artista ou da música, e quem
+          o renderiza é a própria página — dois h1 competindo seria pior que nenhum. */}
+      {activeTab !== 'cifras' && (
+        <>
+          <h1 className="sr-only">{TAB_SEO[activeTab].title}</h1>
+          <p className="sr-only">{TAB_SEO[activeTab].description}</p>
+        </>
+      )}
+
+      {/* Primeiro item do Tab em qualquer página: pula a faixa de abas e a barra de
+          tarefas e vai direto ao conteúdo. Sem ele, chegar na cifra por teclado custa
+          percorrer toda a navegação — em toda página, toda vez. */}
+      <a href="#conteudo" className="skip-link">Pular para o conteúdo</a>
       {/* Com uma aba aberta, a janela flutua sobre a própria área de trabalho desfocada.
           Fora na rota de timing, que ocupa a viewport inteira e não deixa nada à mostra. */}
       {activeTab !== 'desktop' && !isTimingRoute && <DesktopBackdrop />}
@@ -593,8 +630,16 @@ function App() {
       }`}>
         
         {/* Na raiz não há janela aberta: vê-se a área de trabalho (desktop no XP, menu de
-            apps no celular). Toda outra rota abre a janela do app por cima dela. */}
-        {activeTab === 'desktop' ? <Desktop /> : (
+            apps no celular). Toda outra rota abre a janela do app por cima dela.
+
+            O <main> precisa existir nos dois caminhos. Ele nasceu só dentro da janela, e
+            com isso a home — a página mais visitada — era a única sem landmark de
+            conteúdo e sem alvo para o "pular para o conteúdo". */}
+        {activeTab === 'desktop' ? (
+          <main id="conteudo" className="w-full">
+            <Desktop />
+          </main>
+        ) : (
 
         /* Main Application Window */
         /* Maximizada no telefone: sem canto arredondado e sem borda lateral, porque o
@@ -679,7 +724,10 @@ function App() {
           {/* touch-pan-x: no mobile o arraste na barra de abas fica travado no eixo X.
               Sem isso o dedo "puxa" a página junto na diagonal e a barra parece solta.
               overscroll-x-contain: evita o overscroll encadear em voltar-página/bounce. */}
-          <div className="flex pl-2 gap-1 bg-[#ece9d8] border-b border-[#d4d0c8] select-none pt-2 z-10 overflow-x-auto overflow-y-hidden touch-pan-x overscroll-x-contain no-scrollbar whitespace-nowrap">
+          <nav
+            aria-label="Seções do site"
+            className="flex pl-2 gap-1 bg-[#ece9d8] border-b border-[#d4d0c8] select-none pt-2 z-10 overflow-x-auto overflow-y-hidden touch-pan-x overscroll-x-contain no-scrollbar whitespace-nowrap"
+          >
             <button
               onClick={() => goToTab('cifras')}
               className={`shrink-0 px-2 sm:px-4 py-1.5 font-mono text-[10px] sm:text-xs font-bold rounded-t border-2 border-b-0 cursor-pointer ${
@@ -750,7 +798,12 @@ function App() {
               <span className="hidden sm:inline">Tirando de Ouvido</span>
               <span className="inline sm:hidden">Ouvido</span>
             </button>
-          </div>
+          </nav>
+
+          {/* Alvo do "pular para o conteúdo" e único landmark de conteúdo da página.
+              Antes daqui não havia <main> nenhum no projeto, então leitor de tela não
+              tinha como saber onde a navegação acaba e a cifra começa. */}
+          <main id="conteudo">
 
           {/* Conditional tab rendering */}
           {activeTab === 'cifras' && (
@@ -971,7 +1024,7 @@ function App() {
                   </div>
 
                   {favorites.length === 0 ? (
-                    <div className="text-center text-gray-400 py-10 italic text-sm select-none">
+                    <div className="text-center text-gray-600 py-10 italic text-sm select-none">
                       Nenhuma posição favoritada. Clique no ícone da estrela em qualquer diagrama acima para guardar a digitação aqui.
                     </div>
                   ) : (
@@ -1112,6 +1165,8 @@ function App() {
             </div>
           )}
 
+          </main>
+
         </div>
         )}
 
@@ -1153,8 +1208,8 @@ function App() {
             
             <div className="max-h-[350px] overflow-y-auto bg-white border-2 border-[#808080] border-r-white border-bottom-white p-4 font-mono retro-scrollbar flex flex-wrap gap-4 justify-center">
               {cifraVoicings.length === 0 ? (
-                <div className="text-center text-gray-400 py-16 italic text-sm w-full flex flex-col items-center justify-center gap-2">
-                  <IconNotepad className="w-6 h-6 text-gray-400" />
+                <div className="text-center text-gray-600 py-16 italic text-sm w-full flex flex-col items-center justify-center gap-2">
+                  <IconNotepad className="w-6 h-6 text-gray-600" />
                   <span>Nenhum acorde adicionado à cifra. Vá na aba "Dicionário de Acordes" e clique no ícone do bloco de notas para salvar as posições da música aqui!</span>
                 </div>
               ) : (
@@ -1249,11 +1304,11 @@ function App() {
       {/* --- ABOUT MODAL WINDOW --- */}
       {showAboutModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="w-[450px] bg-[#ece9d8] border-[3px] border-[#0058e6] rounded-t-lg shadow-2xl">
+          <div ref={sobreRef} {...sobreProps} className="w-[450px] bg-[#ece9d8] border-[3px] border-[#0058e6] rounded-t-lg shadow-2xl">
             <div className="winxp-gradient-blue text-white px-3 py-1 flex justify-between items-center rounded-t-md font-bold text-sm select-none">
               <span className="flex items-center gap-1.5">
-                <IconHelp className="w-4 h-4 text-white" />
-                <span>Sobre o Viola Libre</span>
+                <IconHelp className="w-4 h-4 text-white" aria-hidden="true" />
+                <span id="titulo-sobre">Sobre o Viola Libre</span>
               </span>
               <button 
                 onClick={() => setShowAboutModal(false)}
@@ -1268,7 +1323,7 @@ function App() {
                 <div>
                   <h2 className="text-base font-bold text-black mb-1">Viola Libre v1.1</h2>
                   <p className="text-gray-600">O Cifrário Matemático da Música Tradicional</p>
-                  <p className="text-gray-400 mt-0.5">Licença: Livre / Open Source</p>
+                  <p className="text-gray-600 mt-0.5">Licença: Livre / Open Source</p>
                 </div>
               </div>
               
@@ -1451,10 +1506,12 @@ function App() {
       {wipPopup && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40" onClick={() => setWipPopup(null)}>
           <div
+            ref={wipRef}
+            {...wipProps}
             className="bg-[#ece9d8] border-[3px] border-[#0058e6] rounded-t-lg shadow-2xl w-[90vw] max-w-md"
             onClick={e => e.stopPropagation()}
           >
-            <div className="winxp-gradient-blue text-white px-3 py-1.5 flex items-center gap-2 font-bold text-xs sm:text-sm font-mono border-b-2 border-[#002fa7] select-none rounded-t">
+            <div id="titulo-wip" className="winxp-gradient-blue text-white px-3 py-1.5 flex items-center gap-2 font-bold text-xs sm:text-sm font-mono border-b-2 border-[#002fa7] select-none rounded-t">
               ⚠️ Aviso
             </div>
             <div className="p-4 sm:p-6 flex flex-col gap-3 text-sm text-black/90">

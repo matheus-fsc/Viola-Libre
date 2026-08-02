@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { loginEditor, storeEditorSession, type EditorSession } from '../services/authApi';
+import { useDialog } from '../hooks/useDialog';
 
 interface EditorLoginModalProps {
   onClose: () => void;
@@ -8,6 +9,7 @@ interface EditorLoginModalProps {
 }
 
 export const EditorLoginModal: React.FC<EditorLoginModalProps> = ({ onClose, onLoginSuccess, isAuthenticated }) => {
+  const { ref: dialogRef, props: dialogProps } = useDialog({ onClose, titleId: 'titulo-login-editor' });
   const [tokenInput, setTokenInput] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -61,10 +63,10 @@ export const EditorLoginModal: React.FC<EditorLoginModalProps> = ({ onClose, onL
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 font-mono">
-      <div className="w-[400px] bg-[#ece9d8] border-[3px] border-[#0058e6] rounded-t-lg shadow-2xl">
+      <div ref={dialogRef} {...dialogProps} className="w-[400px] bg-[#ece9d8] border-[3px] border-[#0058e6] rounded-t-lg shadow-2xl">
         <div className="winxp-gradient-blue text-white px-3 py-1.5 flex justify-between items-center rounded-t-md border-b-2 border-[#002fa7] select-none font-bold text-sm">
           <span className="flex items-center gap-2">
-            <span>🔑 Acesso Restrito (Editor)</span>
+            <span id="titulo-login-editor">🔑 Acesso Restrito (Editor)</span>
           </span>
           <button 
             onClick={onClose}
@@ -95,8 +97,12 @@ export const EditorLoginModal: React.FC<EditorLoginModalProps> = ({ onClose, onL
               </p>
               
               <div className="flex flex-col gap-1">
-                <label className="font-bold text-gray-800">Token de Editor:</label>
-                <input 
+                {/* htmlFor/id: sem o par, a <label> é só texto ao lado da caixa — o
+                    leitor de tela anuncia "campo de senha, em branco" e clicar no
+                    rótulo não foca o campo. */}
+                <label htmlFor="token-editor" className="font-bold text-gray-800">Token de Editor:</label>
+                <input
+                  id="token-editor"
                   type="password"
                   value={tokenInput}
                   onChange={(e) => {

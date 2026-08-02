@@ -66,14 +66,14 @@ export const TabTransposerBlock: React.FC<Props> = ({
         {recognized && !isSameInstrument ? (
           <>
             <span className="text-[9px] text-gray-500 italic truncate max-w-[90px]" title={sourceName}>{sourceName}</span>
-            <span className="text-[9px] text-gray-400">→</span>
+            <span className="text-[9px] text-gray-600">→</span>
             <span className="text-[9px] text-[#002fa7]">{targetLabel}</span>
-            <span className="text-[9px] text-gray-400 ml-1">· {TAB_POSITIONS[posIdx].label}</span>
+            <span className="text-[9px] text-gray-600 ml-1">· {TAB_POSITIONS[posIdx].label}</span>
           </>
         ) : recognized ? (
-          <span className="text-[9px] text-gray-400 italic">{sourceName}</span>
+          <span className="text-[9px] text-gray-600 italic">{sourceName}</span>
         ) : (
-          <span className="text-[9px] text-gray-400 italic">não reconhecida</span>
+          <span className="text-[9px] text-gray-600 italic">não reconhecida</span>
         )}
       </div>
       {renderedSystems.map((txt, i) => (

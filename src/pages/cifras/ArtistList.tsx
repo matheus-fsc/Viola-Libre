@@ -1,7 +1,8 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { InfiniteLoader } from '../../components/InfiniteLoader';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Flame, Heart, FileText, Mic2, Music, Guitar, TrendingUp } from 'lucide-react';
+import { useSeo } from '../../hooks/useSeo';
 
 // ─── Genre flag SVGs ──────────────────────────────────────────────────────────
 // Simplified cute flags used as button backgrounds in the genre grid.
@@ -238,7 +239,18 @@ export const ArtistList: React.FC = () => {
   const [visibleCount, setVisibleCount] = useState(32);
   const [selectedLetter, setSelectedLetter] = useState<string | null>(null);
 
-  const navigate = useNavigate();
+
+  // A busca vira URL (`?busca=`), e cada termo digitado seria uma página nova aos olhos
+  // do Google — espaço de rastreamento infinito, sem conteúdo próprio. O robots.txt já
+  // barra; o noindex cobre quem chegar por um link compartilhado. A canônica aponta
+  // sempre para /cifras limpo, que é a página que de fato existe.
+  useSeo({
+    title: 'Cifras — Explore por Artista e Música',
+    description:
+      'Acervo livre de cifras para viola caipira, violão e cavaquinho. Busque por artista ou música e veja os acordes desenhados no braço do instrumento.',
+    path: '/cifras',
+    noindex: Boolean(debouncedSearch) || searchMode !== 'artistas',
+  });
 
   // Debounce da busca (evita requests a cada tecla). Roda em todos os modos, não só em
   // 'artistas': quem consome `debouncedSearch` já se protege sozinho, e a sincronia da URL
@@ -464,9 +476,17 @@ export const ArtistList: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full bg-[var(--color-winxp-bg)] p-2">
+      {/* O <h1> vive à parte da barra de título porque a barra é `hidden` no celular, e
+          um cabeçalho em display:none não existe para leitor de tela nenhum. Aqui ele
+          está sempre no DOM, em qualquer largura. */}
+      <h1 className="sr-only">Cifras para viola caipira, violão e cavaquinho</h1>
+
       {/* Window Header — só no desktop. No celular a app bar logo acima já diz "Explore
           Cifras": repetir o rótulo custa 44px de altura pra não informar nada. */}
-      <div className="hidden md:flex winxp-gradient-blue text-white px-2 py-1 items-center font-bold text-sm mb-2 rounded-t select-none">
+      <div
+        aria-hidden="true"
+        className="hidden md:flex winxp-gradient-blue text-white px-2 py-1 items-center font-bold text-sm mb-2 rounded-t select-none"
+      >
         <Music size={16} className="mr-2" />
         Explorador de Cifras
       </div>
@@ -541,6 +561,7 @@ export const ArtistList: React.FC = () => {
           <div className="flex items-center w-full mb-4">
             <input
               type="text"
+              aria-label={searchMode === 'artistas' ? 'Buscar pelo nome do artista' : 'Buscar pelo nome da música'}
               placeholder={searchMode === 'artistas' ? "Buscar pelo nome do artista..." : "Buscar nome da música (mín. 2 letras)..."}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -596,10 +617,10 @@ export const ArtistList: React.FC = () => {
               <div className="flex flex-col gap-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                   {pagedArtists.map(artist => (
-                    <div
+                    <Link
                       key={artist.id}
-                      onClick={() => navigate(`/cifras/${artist.slug}`)}
-                      className="bevel-out bg-[var(--color-winxp-panel)] p-2 flex items-center cursor-pointer hover:bg-[#e0dfd6] active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white select-none"
+                      to={`/cifras/${artist.slug}`}
+                      className="bevel-out bg-[var(--color-winxp-panel)] p-2 flex items-center cursor-pointer hover:bg-[#e0dfd6] active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white select-none text-inherit no-underline"
                       style={{ contentVisibility: 'auto', containIntrinsicSize: '0 52px' }}
                     >
                       <div className="w-8 h-8 mr-3 bg-white bevel-in flex items-center justify-center text-lg text-gray-600 group-hover:text-[#316ac5]">
@@ -609,7 +630,7 @@ export const ArtistList: React.FC = () => {
                         <span className="font-bold text-sm truncate">{artist.name}</span>
                         {artist.genre && <span className="text-[10px] text-gray-500 uppercase">{artist.genre}</span>}
                       </div>
-                    </div>
+                    </Link>
                   ))}
                   {pagedArtists.length === 0 && !isLoadingPage && search === debouncedSearch && (
                     <div className="col-span-full text-center text-sm text-gray-500 py-8">
@@ -641,10 +662,10 @@ export const ArtistList: React.FC = () => {
               ) : (
                 <div className="flex flex-col gap-2">
                   {songResults.slice(0, visibleCount).map(song => (
-                    <div
+                    <Link
                       key={song.id}
-                      onClick={() => navigate(`/cifras/${song.artist_slug}/${song.slug}`)}
-                      className="flex items-center p-2 hover:bg-[#316ac5] hover:text-white cursor-pointer select-none group border border-transparent hover:border-dotted hover:border-white transition-none"
+                      to={`/cifras/${song.artist_slug}/${song.slug}`}
+                      className="flex items-center p-2 hover:bg-[#316ac5] hover:text-white cursor-pointer select-none group border border-transparent hover:border-dotted hover:border-white transition-none text-inherit no-underline"
                     >
                       <div className="mr-3 text-gray-500 group-hover:text-white">
                         <FileText size={18} />
@@ -660,7 +681,7 @@ export const ArtistList: React.FC = () => {
                           </span>
                         )}
                       </div>
-                    </div>
+                    </Link>
                   ))}
                   {songResults.length === 0 && search.length >= 2 && (
                     <div className="text-center text-sm text-gray-500 py-8">
@@ -694,12 +715,12 @@ export const ArtistList: React.FC = () => {
                     )}
                   </h3>
                   {songResults.slice(0, visibleCount).map((song, index) => (
-                    <div
+                    <Link
                       key={song.id}
-                      onClick={() => navigate(`/cifras/${song.artist_slug}/${song.slug}`)}
-                      className="flex items-center p-2 hover:bg-[#316ac5] hover:text-white cursor-pointer select-none group border border-transparent hover:border-dotted hover:border-white transition-none"
+                      to={`/cifras/${song.artist_slug}/${song.slug}`}
+                      className="flex items-center p-2 hover:bg-[#316ac5] hover:text-white cursor-pointer select-none group border border-transparent hover:border-dotted hover:border-white transition-none text-inherit no-underline"
                     >
-                      <div className="w-6 font-bold text-gray-400 group-hover:text-white">
+                      <div className="w-6 font-bold text-gray-600 group-hover:text-white">
                         {index + 1}º
                       </div>
                       <div className="mr-3 text-gray-500 group-hover:text-white">
@@ -711,7 +732,7 @@ export const ArtistList: React.FC = () => {
                           <span className="text-xs text-gray-500 group-hover:text-gray-200">{song.artist_name}</span>
                         </div>
                       </div>
-                    </div>
+                    </Link>
                   ))}
                   {songResults.length === 0 && (
                     <div className="text-center text-sm text-gray-500 py-8">
@@ -785,17 +806,17 @@ export const ArtistList: React.FC = () => {
                     <>
                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                         {generoArtists.slice(0, visibleCount).map(artist => (
-                          <div
+                          <Link
                             key={artist.id}
-                            onClick={() => navigate(`/cifras/${artist.slug}`)}
-                            className="bevel-out bg-[var(--color-winxp-panel)] p-2 flex items-center cursor-pointer hover:bg-[#e0dfd6] active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white select-none"
+                            to={`/cifras/${artist.slug}`}
+                            className="bevel-out bg-[var(--color-winxp-panel)] p-2 flex items-center cursor-pointer hover:bg-[#e0dfd6] active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white select-none text-inherit no-underline"
                             style={{ contentVisibility: 'auto', containIntrinsicSize: '0 52px' }}
                           >
                             <div className="w-8 h-8 mr-3 bg-white bevel-in flex items-center justify-center text-lg text-gray-600 group-hover:text-[#316ac5]">
                               <Mic2 size={18} />
                             </div>
                             <span className="font-bold text-sm truncate">{artist.name}</span>
-                          </div>
+                          </Link>
                         ))}
                       </div>
 

@@ -44,7 +44,7 @@ export const InfiniteLoader: React.FC<Props> = ({
 
   return (
     <div ref={sentinelRef} className="flex justify-center py-4">
-      <span className="text-xs text-gray-400 animate-pulse">{label}</span>
+      <span className="text-xs text-gray-600 animate-pulse">{label}</span>
     </div>
   );
 };

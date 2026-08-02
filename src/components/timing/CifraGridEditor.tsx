@@ -267,7 +267,7 @@ export const CifraGridEditor: React.FC<CifraGridEditorProps> = ({
           return (
             <div key={bi} ref={el => { lineRefs.current[block.idx] = el; }}
               className={`sticky top-0 z-10 flex items-center gap-2 px-3 py-1 border-t border-b font-bold text-[10px] uppercase tracking-wider ${isInstr ? 'bg-green-100 border-green-300 text-green-800' : 'bg-blue-100 border-blue-200 text-blue-800'}`}>
-              <span className="text-gray-400 font-normal w-6 text-right shrink-0 font-mono text-[9px]">{block.idx + 1}</span>
+              <span className="text-gray-600 font-normal w-6 text-right shrink-0 font-mono text-[9px]">{block.idx + 1}</span>
               <span>{isInstr ? '🎸' : '♪'} {block.label}</span>
             </div>
           );

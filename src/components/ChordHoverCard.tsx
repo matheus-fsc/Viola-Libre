@@ -120,7 +120,7 @@ export const ChordHoverCard: React.FC<ChordHoverCardProps> = ({
         {voicing ? (
           <MiniFretboard voicing={voicing} tuning={tuning} width={BOARD_W} />
         ) : (
-          <div className="h-[74px] flex items-center justify-center text-[10px] text-gray-400">
+          <div className="h-[74px] flex items-center justify-center text-[10px] text-gray-600">
             sem posição
           </div>
         )}

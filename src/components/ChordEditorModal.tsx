@@ -10,6 +10,7 @@ import {
 import { AudioEngine } from '../engine/AudioEngine';
 import { useEditorSession, rankChord, buildChordId } from '../services/authApi';
 import { useVisualizationStore } from '../stores/useVisualizationStore';
+import { useDialog } from '../hooks/useDialog';
 import { useNotationStore } from '../stores/useNotationStore';
 import { VisualizationOnboardingModal } from './VisualizationOnboardingModal';
 import { SeletorDeNotacao } from './SeletorDeNotacao';
@@ -40,6 +41,7 @@ export const ChordEditorModal: React.FC<ChordEditorModalProps> = ({
   onApply,
   onClose,
 }) => {
+  const { ref: dialogRef, props: dialogProps } = useDialog({ onClose, titleId: 'titulo-editor-acorde' });
   const numStrings = tuning.strings.length;
 
   const normalizedInitial = useMemo(() => {
@@ -130,12 +132,14 @@ export const ChordEditorModal: React.FC<ChordEditorModalProps> = ({
       onClick={onClose}
     >
       <div
+        ref={dialogRef}
+        {...dialogProps}
         className="bg-[#ece9d8] border-2 border-white border-r-[#808080] border-b-[#808080] shadow-2xl w-full max-w-[820px] max-h-[92vh] overflow-y-auto retro-scrollbar"
         onClick={e => e.stopPropagation()}
       >
         {/* Title bar */}
         <div className="bg-gradient-to-r from-[#0a246a] to-[#3a6ea5] text-white px-3 py-1.5 flex justify-between items-center select-none">
-          <span className="font-bold text-sm">Modificar acorde: <span className="font-mono">{chordName}</span></span>
+          <span id="titulo-editor-acorde" className="font-bold text-sm">Modificar acorde: <span className="font-mono">{chordName}</span></span>
           <button onClick={onClose} className="w-5 h-5 flex items-center justify-center bg-[#ce4a3a] border border-white text-white font-bold text-xs hover:bg-[#e25a48] leading-none" title="Fechar">×</button>
         </div>
 
@@ -243,7 +247,7 @@ export const ChordEditorModal: React.FC<ChordEditorModalProps> = ({
               <span className="text-[9px] text-gray-500 font-bold block">Resulta em</span>
               <span className="text-sm font-bold text-[#002fa7]">{detected[0]?.chordName ?? '—'}</span>
               {detected.length > 1 && (
-                <span className="text-[9px] text-gray-400 block truncate">tb: {detected.slice(1).map(d => d.chordName).join(', ')}</span>
+                <span className="text-[9px] text-gray-600 block truncate">tb: {detected.slice(1).map(d => d.chordName).join(', ')}</span>
               )}
             </div>
             <div className="bg-white border border-[#808080] p-2 font-mono">

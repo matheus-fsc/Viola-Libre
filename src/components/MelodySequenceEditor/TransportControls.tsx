@@ -40,6 +40,7 @@ export const TransportControls: React.FC<TransportControlsProps> = ({
           <span>Tempo:</span>
           <input
             type="range"
+            aria-label="Andamento em BPM"
             min="60"
             max="220"
             value={bpm}

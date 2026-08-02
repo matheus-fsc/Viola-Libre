@@ -34,7 +34,7 @@ export const AutoScrollPreview: React.FC = () => {
         {activeRegion ? (
           <span className="text-[#005500] font-bold">▶ {activeRegion.label || activeRegion.kind}</span>
         ) : (
-          <span className="text-gray-400 italic">— sem seção vinculada neste tempo (gap) —</span>
+          <span className="text-gray-600 italic">— sem seção vinculada neste tempo (gap) —</span>
         )}
         <span className="ml-auto font-mono text-gray-500">{formatSeconds(currentTime)}</span>
       </div>

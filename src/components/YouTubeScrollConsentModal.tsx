@@ -26,9 +26,19 @@ export const YouTubeScrollConsentModal: React.FC<YouTubeScrollConsentModalProps>
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4">
-      <div className="bg-[#ece9d8] border-[3px] border-[#0058e6] shadow-2xl rounded-t-lg flex flex-col w-full max-w-lg overflow-hidden">
+      {/* Sem role="dialog" o leitor de tela anunciava isto como texto solto no meio da
+          cifra, sem dizer que a página estava esperando uma decisão. `aria-modal` avisa
+          que o resto ficou inerte, e o aria-labelledby faz o título ser lido na entrada. */}
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="titulo-rolagem-precisa"
+        className="bg-[#ece9d8] border-[3px] border-[#0058e6] shadow-2xl rounded-t-lg flex flex-col w-full max-w-lg overflow-hidden"
+      >
         <div className="bg-gradient-to-r from-[#0a246a] to-[#3a6ea5] text-white px-3 py-1.5 flex justify-between items-center rounded-t-sm border-b-2 border-[#002fa7] select-none">
-          <span className="font-bold text-sm tracking-wide font-mono">Rolagem precisa</span>
+          <span id="titulo-rolagem-precisa" className="font-bold text-sm tracking-wide font-mono">
+            Rolagem precisa
+          </span>
         </div>
 
         <div className="p-4 sm:p-5 flex flex-col gap-3 font-mono text-sm text-gray-800">
@@ -47,18 +57,31 @@ export const YouTubeScrollConsentModal: React.FC<YouTubeScrollConsentModalProps>
             Privacidade.
           </p>
 
-          <div className="flex flex-wrap gap-2 justify-end pt-1">
+          {/* No telefone os botões empilham em largura total, com folga entre eles e
+              alvo de 44px — dedo erra mais que mouse, e aqui um toque errado decide
+              uma permissão. No desktop voltam a ficar lado a lado.
+
+              Aqui havia um `flex-col-reverse`, para deixar o "Não" embaixo na zona do
+              polegar. Saiu: ele invertia a ordem visual em relação à ordem do DOM, e
+              quem navega por teclado recebia o foco primeiro no botão que via por
+              último. Ordem de leitura, foco e pintura agora são a mesma, nas duas
+              larguras.
+
+              A troca é consciente: um "sim" por engano se desfaz no interruptor da
+              Política de Privacidade, enquanto uma ordem de foco invertida não tem
+              como o usuário contornar. */}
+          <div className="flex flex-col sm:flex-row sm:justify-end gap-3 sm:gap-2 pt-2">
             <button
               type="button"
               onClick={() => answer(false)}
-              className="bevel-out bg-[var(--color-winxp-panel)] px-3 py-1 text-xs font-bold border border-gray-400 hover:bg-white cursor-pointer"
+              className="bevel-out bg-[var(--color-winxp-panel)] w-full sm:w-auto min-h-[44px] sm:min-h-0 px-3 py-2 sm:py-1 text-[13px] sm:text-xs font-bold border border-gray-400 hover:bg-white cursor-pointer touch-manipulation"
             >
               Não, seguir pelo BPM
             </button>
             <button
               type="button"
               onClick={() => answer(true)}
-              className="bg-[#0058e6] text-white px-3 py-1 font-bold text-xs rounded hover:bg-[#3a8bfb] cursor-pointer"
+              className="bg-[#0058e6] text-white w-full sm:w-auto min-h-[44px] sm:min-h-0 px-3 py-2 sm:py-1 font-bold text-[13px] sm:text-xs rounded hover:bg-[#3a8bfb] cursor-pointer touch-manipulation"
             >
               Sim, usar a rolagem precisa
             </button>

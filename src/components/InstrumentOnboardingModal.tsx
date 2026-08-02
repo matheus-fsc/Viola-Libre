@@ -1,6 +1,7 @@
 import React from 'react';
 import type { Instrument } from '../engine/types';
 import { PRESET_INSTRUMENTS } from '../engine/tunings';
+import { useDialog } from '../hooks/useDialog';
 
 interface Props {
   onSelect: (inst: Instrument) => void;
@@ -8,11 +9,14 @@ interface Props {
 }
 
 export const InstrumentOnboardingModal: React.FC<Props> = ({ onSelect, onSkip }) => {
+  // Esc equivale a "decidir depois": é a saída sem escolher, que já existe no botão.
+  const { ref: dialogRef, props: dialogProps } = useDialog({ onClose: onSkip, titleId: 'titulo-onboarding-instrumento' });
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 font-mono">
-      <div className="w-[480px] max-w-full bg-[#ece9d8] border-[3px] border-[#0058e6] rounded-t-lg shadow-2xl">
+      <div ref={dialogRef} {...dialogProps} className="w-[480px] max-w-full bg-[#ece9d8] border-[3px] border-[#0058e6] rounded-t-lg shadow-2xl">
         <div className="winxp-gradient-blue text-white px-3 py-1.5 flex items-center rounded-t-md font-bold text-sm select-none">
-          <span>🎸 Qual é o seu instrumento?</span>
+          <span id="titulo-onboarding-instrumento">🎸 Qual é o seu instrumento?</span>
         </div>
 
         <div className="p-5 flex flex-col gap-4 text-xs">

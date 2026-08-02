@@ -8,6 +8,14 @@
   width: 100%;
   white-space: normal;
   overflow-wrap: break-word;
+
+  /* O contêiner raiz do app tem `select-none` para que arrastar a janela e as abas
+     não saia pintando texto de azul, como manda o tema XP. Só que isso descia por
+     herança até aqui e deixava a cifra impossível de selecionar ou copiar — num
+     site de cifras, justamente a única coisa que alguém quer levar embora.
+     A regra do tema continua valendo em toda a moldura; o conteúdo é a exceção. */
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 @media (max-width: 767px) {

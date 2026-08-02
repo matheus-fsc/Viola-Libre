@@ -1086,7 +1086,7 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
             <div className="flex flex-wrap items-center gap-3">
               {/* File Input */}
               <div className="flex flex-col gap-1">
-                <label className="font-bold text-gray-600 text-[10px]">Carregar Arquivo de Áudio:</label>
+                <label htmlFor="sample-file-upload" className="font-bold text-gray-600 text-[10px]">Carregar Arquivo de Áudio:</label>
                 <div className="relative">
                   <input
                     type="file"
@@ -1333,7 +1333,7 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
             <span className="font-bold text-gray-600 block mb-2">Pool de Notas Ativas (Diferentes Pitch Classes encontradas):</span>
             <div className="flex flex-wrap gap-1.5">
               {activePcs.size === 0 ? (
-                <span className="text-gray-400 italic text-[11px]">Nenhuma nota no pool. Toque no braço ou adicione acordes acima.</span>
+                <span className="text-gray-600 italic text-[11px]">Nenhuma nota no pool. Toque no braço ou adicione acordes acima.</span>
               ) : (
                 Array.from(activePcs).map(pc => (
                   <span
@@ -1367,7 +1367,7 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
             
             <div className="flex flex-wrap gap-1.5 min-h-[50px] items-center p-2 bg-[#ece9d8]/30 border border-dotted border-gray-400 rounded">
               {selectedChords.length === 0 ? (
-                <span className="text-gray-400 italic text-[11px]">Nenhum acorde adicionado ainda.</span>
+                <span className="text-gray-600 italic text-[11px]">Nenhum acorde adicionado ainda.</span>
               ) : (
                 selectedChords.map(c => (
                   <span 
@@ -1396,7 +1396,7 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
 
             <div className="flex-1 overflow-y-auto max-h-[300px] flex flex-col gap-2 pr-1 retro-scrollbar">
               {activePcs.size === 0 ? (
-                <div className="text-gray-400 italic text-[11px] text-center py-8">
+                <div className="text-gray-600 italic text-[11px] text-center py-8">
                   Adicione notas no braço ou insira acordes ao lado para ver os tons correspondentes.
                 </div>
               ) : (
@@ -1473,7 +1473,7 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
             </span>
             
             {melody.length === 0 ? (
-              <div className="text-gray-400 italic text-[11px] text-center py-4">
+              <div className="text-gray-600 italic text-[11px] text-center py-4">
                 Monte uma melodia para ver sugestões de acordes harmonizados.
               </div>
             ) : (
@@ -1498,7 +1498,7 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
                             Contém: {rec.matchingNotes.join(', ')}
                           </span>
                         ) : (
-                          <span className="text-[9px] text-gray-400 block truncate">
+                          <span className="text-[9px] text-gray-600 block truncate">
                             Nenhuma nota compartilhada
                           </span>
                         )}

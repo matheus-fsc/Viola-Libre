@@ -138,6 +138,72 @@ body {
   scrollbar-width: none;  /* Firefox */
 }
 
+/* ───────────────────────────────────────────────────────────────────────────
+   Foco visível — piso de acessibilidade
+
+   O projeto usa `focus:outline-none` em ~40 lugares, herdado do costume de matar
+   o anel padrão do navegador porque ele destoa do tema XP. Só que quase nenhum
+   deles põe algo no lugar: quem navega por teclado ficava sem saber onde está,
+   que é falha direta do WCAG 2.4.7.
+
+   O `!important` é deliberado e não é preguiça: `.focus\:outline-none:focus` tem
+   especificidade maior que `:focus-visible`, então sem ele a regra perde para a
+   utility em todos aqueles pontos. Como piso de acessibilidade, esta regra deve
+   mesmo ganhar de qualquer utilitário — inclusive dos que vierem depois.
+
+   `:focus-visible` (e não `:focus`) é o que mantém o visual intacto no mouse: o
+   anel só aparece para teclado e tecnologia assistiva.
+
+   PRETO + BRANCO, e não o laranja do tema, por medição. A WCAG 1.4.11 pede 3:1 para
+   indicadores, e o laranja XP (#ff7f27) dá 2,07:1 sobre o bege, 1,64:1 sobre o painel
+   e 1,89:1 sobre o teal da área de trabalho — reprova em 8 dos 9 fundos do tema. É
+   chamativo para quem enxerga bem e quase invisível para quem não enxerga.
+
+   O anel de duas cores resolve o problema de um tema com fundos claros E escuros:
+   qualquer que seja o fundo, uma das duas bordas contrasta. O pior caso medido é
+   4,77:1 (branco sobre o teal), acima do mínimo com folga. O branco fica colado ao
+   elemento e o preto por fora, então o conjunto se lê como um só anel. */
+:focus-visible {
+  outline: 3px solid #000000 !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 2px #ffffff !important;
+  border-radius: 1px;
+}
+
+/* Link "pular para o conteúdo": fora da tela até receber foco, e então cai no
+   canto superior esquerdo como primeiro item do Tab. É o que evita percorrer a
+   faixa de abas inteira a cada página para chegar na cifra. */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+}
+.skip-link:focus {
+  left: 0.5rem;
+  top: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: var(--color-winxp-bg);
+  color: #000;
+  font-weight: bold;
+  font-size: 0.875rem;
+  border: 2px solid var(--color-winxp-blue-dark);
+}
+
+/* Respeita quem pediu menos animação no sistema. As pulsações do braço e as
+   transições do tema são decorativas; para quem tem sensibilidade vestibular
+   elas não são. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* TimingEditor — top block (player | wizards+trechos), desktop layout. A dedicated class
    (rather than an inline/arbitrary Tailwind grid-cols) because the width-breakpoint stacking
    rule (Fase 2 of the layout refactor) needs a plain @media override on grid-template-columns,

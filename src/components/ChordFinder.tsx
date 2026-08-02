@@ -405,13 +405,14 @@ export const ChordFinder: React.FC<ChordFinderProps> = ({
           <button
             disabled={quality !== 'M' && quality !== 'm'}
             onClick={() => updateChord(quality, seventh, !has9, hasb5, has11)}
+            aria-pressed={has9}
             className={`text-[11px] font-mono py-1 border select-none cursor-pointer flex justify-center items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed ${
               has9
                 ? 'bg-gradient-to-b from-[#0058e6] to-[#3a8bfb] text-white border-[#002fa7] font-bold'
                 : 'bg-[#ece9d8] hover:bg-white border-white border-r-[#808080] border-bottom-[#808080]'
             }`}
           >
-            <input type="checkbox" checked={has9} disabled={quality !== 'M' && quality !== 'm'} readOnly className="pointer-events-none scale-90" />
+            <input type="checkbox" checked={has9} disabled={quality !== 'M' && quality !== 'm'} readOnly aria-hidden="true" tabIndex={-1} className="pointer-events-none scale-90" />
             <span>Nona (9)</span>
           </button>
 
@@ -419,13 +420,14 @@ export const ChordFinder: React.FC<ChordFinderProps> = ({
           <button
             disabled={quality !== 'M' && quality !== 'm'}
             onClick={() => updateChord(quality, seventh, has9, hasb5, !has11)}
+            aria-pressed={has11}
             className={`text-[11px] font-mono py-1 border select-none cursor-pointer flex justify-center items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed ${
               has11
                 ? 'bg-gradient-to-b from-[#0058e6] to-[#3a8bfb] text-white border-[#002fa7] font-bold'
                 : 'bg-[#ece9d8] hover:bg-white border-white border-r-[#808080] border-bottom-[#808080]'
             }`}
           >
-            <input type="checkbox" checked={has11} disabled={quality !== 'M' && quality !== 'm'} readOnly className="pointer-events-none scale-90" />
+            <input type="checkbox" checked={has11} disabled={quality !== 'M' && quality !== 'm'} readOnly aria-hidden="true" tabIndex={-1} className="pointer-events-none scale-90" />
             <span>11ª (11)</span>
           </button>
 
@@ -433,13 +435,14 @@ export const ChordFinder: React.FC<ChordFinderProps> = ({
           <button
             disabled={quality !== 'M' && quality !== 'm'}
             onClick={() => updateChord(quality, seventh, has9, !hasb5, has11)}
+            aria-pressed={hasb5}
             className={`text-[11px] font-mono py-1 border select-none cursor-pointer flex justify-center items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed ${
               hasb5
                 ? 'bg-gradient-to-b from-[#0058e6] to-[#3a8bfb] text-white border-[#002fa7] font-bold'
                 : 'bg-[#ece9d8] hover:bg-white border-white border-r-[#808080] border-bottom-[#808080]'
             }`}
           >
-            <input type="checkbox" checked={hasb5} disabled={quality !== 'M' && quality !== 'm'} readOnly className="pointer-events-none scale-90" />
+            <input type="checkbox" checked={hasb5} disabled={quality !== 'M' && quality !== 'm'} readOnly aria-hidden="true" tabIndex={-1} className="pointer-events-none scale-90" />
             <span>5ª Bemol</span>
           </button>
         </div>

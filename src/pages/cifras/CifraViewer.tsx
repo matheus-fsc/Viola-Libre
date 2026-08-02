@@ -22,6 +22,9 @@ import '../../components/Cifras.css';
 import { extractYouTubeId, fetchBestTiming, type TimingContribution } from '../../services/timingApi';
 import { fetchYouTubeDuration } from '../../services/youtubeApi';
 import { useYouTubeJsConsent } from '../../hooks/useYouTubeJsAllowed';
+import { useSeo } from '../../hooks/useSeo';
+import { useJsonLd, breadcrumbJsonLd } from '../../hooks/useJsonLd';
+import { prettifySlug } from '../../services/cifraFavorites';
 import { YouTubeScrollConsentModal } from '../../components/YouTubeScrollConsentModal';
 import { getIsMobile, useIsMobile } from '../../hooks/useIsMobile';
 import { useImmersiveStore } from '../../stores/useImmersiveStore';
@@ -1391,6 +1394,39 @@ export const CifraViewer: React.FC = () => {
     return () => { cancelled = true; };
   }, [autoScroll, videoDuration, showVideo, cifra?.duration, timingMedia?.duration, sourceVideoUrl, ytConsent]);
 
+  // ——— Metadados de busca ———————————————————————————————————————————————
+  // Estas são as páginas que realmente trazem gente da busca: ninguém procura
+  // "Viola Libre", procura "cifra de tocando em frente". Ficam antes dos returns
+  // adiantados porque hook não pode ser condicional.
+  const artistName = artistSlug ? prettifySlug(artistSlug) : '';
+  const cifraPath = `/cifras/${artistSlug ?? ''}/${songSlug ?? ''}`;
+
+  useSeo(
+    cifra
+      ? {
+          title: `${cifra.title} — ${artistName} (Cifra)`,
+          description: `Cifra de ${cifra.title}, de ${artistName}, com os acordes desenhados no braço da viola caipira, violão e cavaquinho. Troque o tom e veja as variações de cada acorde.`,
+          path: cifraPath,
+        }
+      : // Enquanto carrega — ou quando a música não existe — não se escreve nada:
+        // gravar um título provisório deixaria "Carregando…" como o título indexado
+        // se o rastreador tirasse a foto naquele instante.
+        null,
+  );
+  useJsonLd(
+    useMemo(
+      () =>
+        cifra
+          ? breadcrumbJsonLd([
+              { name: 'Cifras', path: '/cifras' },
+              { name: artistName, path: `/cifras/${artistSlug ?? ''}` },
+              { name: cifra.title, path: cifraPath },
+            ])
+          : null,
+      [cifra, artistName, artistSlug, cifraPath],
+    ),
+  );
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full bg-[var(--color-winxp-bg)] text-sm text-gray-600">
@@ -1491,6 +1527,7 @@ export const CifraViewer: React.FC = () => {
                       <div className="flex gap-1">
                         <input
                           readOnly
+                          aria-label="Hash da sequência salva"
                           value={savedHash}
                           className="bevel-in bg-white px-2 py-0.5 text-[10px] font-mono flex-1 min-w-0 text-gray-800"
                         />
@@ -1538,7 +1575,7 @@ export const CifraViewer: React.FC = () => {
                         {recentSeqs.map(seq => (
                           <div key={seq.hash} className="flex items-center gap-1 bg-white border border-gray-200 px-1 py-0.5">
                             <span className="flex-1 text-[10px] truncate">
-                              {seq.title} <span className="text-gray-400 font-mono">({seq.hash.slice(0, 8)}…)</span>
+                              {seq.title} <span className="text-gray-600 font-mono">({seq.hash.slice(0, 8)}…)</span>
                             </span>
                             <button
                               onClick={() => handleDeleteSeq(seq.hash)}
@@ -1560,6 +1597,7 @@ export const CifraViewer: React.FC = () => {
                   <p className="text-gray-600 text-[10px]">Digite o hash para carregar uma sequência salva:</p>
                   <div className="flex gap-1">
                     <input
+                      aria-label="Hash da sequência a carregar"
                       value={loadHashInput}
                       onChange={e => setLoadHashInput(e.target.value.trim())}
                       onKeyDown={e => e.key === 'Enter' && handleLoadSeq(loadHashInput)}
@@ -1583,7 +1621,7 @@ export const CifraViewer: React.FC = () => {
                           <div key={seq.hash} className="flex items-center gap-1 bg-white border border-gray-200 px-1 py-0.5">
                             <div className="flex-1 min-w-0">
                               <div className="text-[10px] truncate font-bold">{seq.title}</div>
-                              <div className="text-[9px] text-gray-400 font-mono truncate">{seq.hash}</div>
+                              <div className="text-[9px] text-gray-600 font-mono truncate">{seq.hash}</div>
                             </div>
                             <button
                               onClick={() => handleLoadSeq(seq.hash)}
@@ -1614,8 +1652,10 @@ export const CifraViewer: React.FC = () => {
       {/* Window Header */}
       <div className="winxp-gradient-blue text-white px-2 py-1 flex items-center justify-between font-bold text-sm mb-2 rounded-t select-none">
         <div className="flex items-center gap-2 truncate">
-          <FileText size={16} />
-          <span className="truncate">{cifra.title} - {artistSlug}</span>
+          <FileText size={16} aria-hidden="true" />
+          {/* O <h1> da página. Era um <span> com o slug cru ("tocando-em-frente"):
+              o nome legível serve igualmente a quem lê e a quem indexa. */}
+          <h1 className="truncate font-bold text-sm">{cifra.title} — {artistName}</h1>
         </div>
         <button 
           onClick={() => navigate(`/cifras/${artistSlug}`)}
@@ -1724,7 +1764,7 @@ export const CifraViewer: React.FC = () => {
             <div className="flex flex-col gap-0.5">
               <label className="font-bold text-[10px] uppercase text-gray-500 flex items-center justify-between">
                 <span>BPM {bpmModified && <span className="text-[#cc3300]">*</span>}</span>
-                {cifra.bpm != null && <span className="font-normal text-gray-400 text-[9px]">API: {cifra.bpm}</span>}
+                {cifra.bpm != null && <span className="font-normal text-gray-600 text-[9px]">API: {cifra.bpm}</span>}
               </label>
               <div className="flex items-center gap-1">
                 <button onClick={() => setLocalBpm(p => Math.max(20, (p ?? effectiveBpm ?? 100) - 1))} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white">−</button>
@@ -1735,11 +1775,11 @@ export const CifraViewer: React.FC = () => {
                 <button onClick={() => setLocalBpm(null)} className="bevel-out bg-[var(--color-winxp-panel)] px-1.5 py-0.5 text-xs w-full border border-gray-400 hover:bg-white" title="Restaurar BPM da API">↺ Restaurar</button>
               )}
               {durationStr && (
-                <span className="text-[9px] text-gray-400 text-center" title={durationFromVideo ? 'Duração medida no vídeo da source' : 'Duração vinda da API'}>
+                <span className="text-[9px] text-gray-600 text-center" title={durationFromVideo ? 'Duração medida no vídeo da source' : 'Duração vinda da API'}>
                   ⏱ {durationStr}{durationFromVideo && ' 📺'}
                 </span>
               )}
-              <button disabled className="bevel-out bg-[#f0f0f0] px-2 py-0.5 text-[9px] w-full border border-gray-300 text-gray-400 cursor-not-allowed" title="Em breve: contribua com BPM e duração para a comunidade">↑ Enviar BPM</button>
+              <button disabled className="bevel-out bg-[#f0f0f0] px-2 py-0.5 text-[9px] w-full border border-gray-300 text-gray-600 cursor-not-allowed" title="Em breve: contribua com BPM e duração para a comunidade">↑ Enviar BPM</button>
               {sourceVideoUrl && (
                 <button
                   onClick={() => setShowVideo(v => !v)}
@@ -2040,7 +2080,7 @@ export const CifraViewer: React.FC = () => {
                             onChange={e => { setVoicingFilter(f => ({ ...f, prioritizeEasy: e.target.checked })); setVariationIndices({}); }} />
                           Priorizar acordes fáceis
                         </label>
-                        <p className="text-gray-400 px-1 text-[9px] leading-tight mt-0.5">Exibe só acordes sem barra, sem abafamento interno e até traste 5</p>
+                        <p className="text-gray-600 px-1 text-[9px] leading-tight mt-0.5">Exibe só acordes sem barra, sem abafamento interno e até traste 5</p>
                       </div>
                       <div className="border-t border-gray-400 mt-2 pt-2 flex justify-end">
                         <button
@@ -2477,6 +2517,7 @@ export const CifraViewer: React.FC = () => {
                     </LinhaAjuste>
                     <LinhaAjuste rotulo="Ajuste fino" dica="Meio tom por vez">
                       <Stepper
+                        nome="ajuste fino do tom (meio tom)"
                         rotuloMenos="-½" rotuloMais="+½"
                         onMenos={() => setTransposeOffset(p => p - 1)}
                         onMais={() => setTransposeOffset(p => p + 1)}
@@ -2517,6 +2558,7 @@ export const CifraViewer: React.FC = () => {
                   </LinhaAjuste>
                   <LinhaAjuste rotulo="Posição da tab" dica="Onde a tab é escrita no braço">
                     <Stepper
+                      nome="posição da tab no braço"
                       rotuloMenos="◀" rotuloMais="▶"
                       onMenos={() => setTabPosIdx(p => (p - 1 + TAB_POSITIONS.length) % TAB_POSITIONS.length)}
                       onMais={() => setTabPosIdx(p => (p + 1) % TAB_POSITIONS.length)}
@@ -2547,6 +2589,7 @@ export const CifraViewer: React.FC = () => {
                   <GrupoAjustes titulo="Andamento">
                     <LinhaAjuste rotulo="BPM" dica={durationStr ? `Duração ⏱ ${durationStr}${durationFromVideo ? ' 📺' : ''}` : (cifra.bpm != null ? `API: ${cifra.bpm}` : undefined)}>
                       <Stepper
+                        nome="BPM"
                         onMenos={() => setLocalBpm(p => Math.max(20, (p ?? effectiveBpm ?? 100) - 1))}
                         onMais={() => setLocalBpm(p => Math.min(300, (p ?? effectiveBpm ?? 100) + 1))}
                       >

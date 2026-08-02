@@ -284,8 +284,9 @@ function CifraViewer({ cifra, onEdit, onBack }: {
         </button>
 
         <div className="flex items-center gap-2">
-          <label className="text-[10px] font-mono font-bold text-gray-700 shrink-0">BPM:</label>
+          <label htmlFor="bpm-minhas-cifras" className="text-[10px] font-mono font-bold text-gray-700 shrink-0">BPM:</label>
           <input
+            id="bpm-minhas-cifras"
             type="range"
             min={40} max={220} value={bpm}
             onChange={e => setBpm(Number(e.target.value))}
@@ -475,6 +476,7 @@ function CifraEditor({ initial, onSave, onCancel, onDelete }: {
               <div className="flex items-center gap-2">
                 <input
                   type="range"
+                  aria-label="Andamento em BPM"
                   min={40} max={220} value={bpm}
                   onChange={e => setBpm(Number(e.target.value))}
                   className="flex-1 cursor-pointer"
@@ -552,7 +554,7 @@ function CifraEditor({ initial, onSave, onCancel, onDelete }: {
 
           <div className="flex-1 overflow-y-auto p-4 retro-scrollbar">
             {!title && !content ? (
-              <div className="text-center text-gray-400 italic text-xs font-mono py-16 select-none">
+              <div className="text-center text-gray-600 italic text-xs font-mono py-16 select-none">
                 A pré-visualização aparece aqui enquanto você digita...
               </div>
             ) : (

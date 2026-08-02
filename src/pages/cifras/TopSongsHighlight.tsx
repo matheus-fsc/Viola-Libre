@@ -1,13 +1,22 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { Flame } from 'lucide-react';
 import type { SongWithStats } from '../../services/mockArtistStats';
 
 interface Props {
   songs: SongWithStats[];
-  onSelect: (song: SongWithStats) => void;
+  /**
+   * Rota de cada música. Substituiu o antigo `onSelect`: com a URL em mãos, o cartão
+   * vira <Link> de verdade em vez de <div onClick>.
+   *
+   * Não é preciosismo — sem href não há navegação por teclado, o leitor de tela não
+   * anuncia "link", abrir em nova aba não funciona e nenhum rastreador de busca segue
+   * o caminho até a cifra.
+   */
+  hrefFor: (song: SongWithStats) => string;
 }
 
-export const TopSongsHighlight: React.FC<Props> = ({ songs, onSelect }) => {
+export const TopSongsHighlight: React.FC<Props> = ({ songs, hrefFor }) => {
   if (songs.length === 0) return null;
 
   return (
@@ -20,14 +29,14 @@ export const TopSongsHighlight: React.FC<Props> = ({ songs, onSelect }) => {
       </h3>
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
         {songs.map((song, index) => (
-          <div
+          <Link
             key={song.id}
-            onClick={() => onSelect(song)}
-            className="bevel-out bg-[var(--color-winxp-panel)] p-2 flex items-center gap-2 cursor-pointer hover:bg-[#e0dfd6] active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white select-none"
+            to={hrefFor(song)}
+            className="bevel-out bg-[var(--color-winxp-panel)] p-2 flex items-center gap-2 cursor-pointer hover:bg-[#e0dfd6] active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white select-none text-inherit no-underline"
           >
-            <span className="w-6 text-center font-bold text-gray-500">{index + 1}º</span>
+            <span className="w-6 text-center font-bold text-gray-500" aria-hidden="true">{index + 1}º</span>
             <span className="flex-1 truncate text-sm font-bold">{song.title}</span>
-          </div>
+          </Link>
         ))}
       </div>
     </div>

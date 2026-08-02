@@ -1535,7 +1535,7 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
             title="Foque aqui para usar atalhos do teclado (Delete, ←/→, +/-, D)"
           >
             {melody.length === 0 ? (
-              <span className="p-4 text-gray-400 italic text-[11px] whitespace-normal">Nenhuma nota tocada. Toque no braço acima para construir a melodia passo a passo!</span>
+              <span className="p-4 text-gray-600 italic text-[11px] whitespace-normal">Nenhuma nota tocada. Toque no braço acima para construir a melodia passo a passo!</span>
             ) : (
               <div className="relative inline-block min-w-full min-w-max">
                 {/* Playhead Pin (using high-performance CSS translateX layout translation) */}

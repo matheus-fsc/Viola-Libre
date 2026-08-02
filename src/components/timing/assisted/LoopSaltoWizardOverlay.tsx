@@ -48,7 +48,7 @@ export const LoopSaltoWizardOverlay: React.FC = () => {
             <p className="font-bold text-[11px] text-[#002fa7]">Marcar repetição</p>
             <p className="text-[10px] text-gray-600">Posicione no início e pressione <kbd className="font-mono bg-gray-200 px-1 rounded">⏎</kbd> para marcar</p>
           </div>
-          <button onClick={exitAssisted} className="text-gray-400 hover:text-gray-600 text-[10px] shrink-0">✕</button>
+          <button onClick={exitAssisted} className="text-gray-600 hover:text-gray-600 text-[10px] shrink-0">✕</button>
         </div>
       </div>
     );

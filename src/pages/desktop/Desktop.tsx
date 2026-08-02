@@ -363,7 +363,7 @@ const EmAltaPanel: React.FC<{ className?: string }> = ({ className = '' }) => {
               to={`/cifras/${song.artist_slug}/${song.slug}`}
               className="flex items-center gap-2 px-2 py-1.5 hover:bg-[#316ac5] hover:text-white group"
             >
-              <span className="w-5 shrink-0 text-xs font-bold text-gray-400 group-hover:text-white">{i + 1}º</span>
+              <span className="w-5 shrink-0 text-xs font-bold text-gray-600 group-hover:text-white">{i + 1}º</span>
               <span className="flex flex-col min-w-0">
                 <span className="text-sm font-bold truncate">{song.title}</span>
                 <span className="text-xs text-gray-500 group-hover:text-gray-200 truncate">{song.artist_name}</span>
