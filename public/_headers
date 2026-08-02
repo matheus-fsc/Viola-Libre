@@ -1,8 +1,7 @@
-# static.cloudflareinsights.com saiu do script-src de propósito: o beacon do
-# Cloudflare Web Analytics é JavaScript não-livre injetado pelo Cloudflare em
-# toda resposta HTML, e basta ele para o LibreJS condenar a página inteira.
-# Tirar daqui só o bloqueia no navegador — ele PARA de ser injetado quando o Web
-# Analytics é desligado no painel do Cloudflare, e isso precisa ser feito lá.
+# O script-src enumera todo JavaScript que pode rodar aqui, e cada entrada precisa
+# ser software livre ou estar declarada em /jslicense.html — é o que mantém o site
+# utilizável com o GNU LibreJS. Acrescentar um host aqui é decidir carregar código
+# de terceiro: confira a licença antes.
 /*
   Content-Security-Policy: default-src 'self'; script-src 'self' https://www.youtube.com https://s.ytimg.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self' https://api.violalibre.com.br http://api.roadrunner-arctic.ts.net https://api.roadrunner-arctic.ts.net https://gleitz.github.io; frame-src https://www.youtube.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
   X-Frame-Options: DENY

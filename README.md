@@ -163,10 +163,11 @@ Duas decisões de produto vêm junto:
   automática pergunta antes de medir a duração da música num player escondido. Recusar não
   quebra nada: a rolagem volta a deduzir o tempo pelo BPM. A resposta fica guardada e pode
   ser trocada na Política de Privacidade.
-- **Cloudflare Web Analytics.** O beacon é JavaScript não-livre injetado pelo Cloudflare em
-  toda resposta HTML — basta ele para condenar a página inteira. O CSP em `public/_headers`
-  não o autoriza mais, mas **isso só impede a execução**: para parar a injeção é preciso
-  desligar o Web Analytics no painel do Cloudflare.
+- **Sem medidor de audiência.** Nenhum script de estatísticas roda no navegador de quem
+  visita. As métricas que o projeto usa são as do lado do servidor, que não dependem de
+  JavaScript algum. O `script-src` em `public/_headers` é a lista completa do que pode
+  executar aqui — acrescentar um host é decidir carregar código de terceiro, e a licença
+  precisa ser conferida antes.
 
 Para testar: `npm run build && npm run preview` e abra o preview com a extensão ligada.
 O `npm run dev` **não** passa no LibreJS, e não deve mesmo — o servidor de desenvolvimento

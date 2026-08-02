@@ -107,9 +107,8 @@ export const PoliticaPrivacidade: React.FC = () => (
       <Lista>
         <li>
           <strong>Cloudflare:</strong> entrega o site e o protege. Todo o tráfego passa por
-          ele. O serviço de estatísticas da Cloudflare foi desligado: o script dele é
-          JavaScript proprietário, e a política de segurança do site (o CSP em{' '}
-          <code>public/_headers</code>) não autoriza mais que ele seja executado.
+          ele, então ele vê o seu endereço IP e registra o acesso do lado do servidor. Não há
+          medidor de audiência: nenhum script de estatísticas é carregado no seu navegador.
         </li>
         <li>
           <strong>YouTube (Google):</strong> os vídeos das cifras. O script do YouTube é
