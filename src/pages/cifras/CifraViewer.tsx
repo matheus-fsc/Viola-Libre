@@ -2112,9 +2112,13 @@ export const CifraViewer: React.FC = () => {
                 const favoriteEntries = favoritesById[chordId] ?? [];
                 const popularList = pickPopularVoicings(favoriteEntries, songSlug);
                 const rawVoicings = displayedVoicings[idx] ?? [];
+                // Mesma proteção do dicionário: curadoria e voto do público vêm do
+                // servidor e podem ser de outro instrumento enquanto a resposta nova não
+                // chega. Forma com número de cordas diferente do braço atual é descartada.
                 const voicings = applyCurationOrder(
                   rawVoicings,
-                  frontShapesFor(voicingOrderMode, popularList, curatedList),
+                  frontShapesFor(voicingOrderMode, popularList, curatedList)
+                    .filter(f => f.length === currentTuning.strings.length),
                   (fretsArray) => buildVoicingFromFrets(fretsArray, currentTuning, false)
                 );
 
@@ -2127,8 +2131,11 @@ export const CifraViewer: React.FC = () => {
 
                 const generatedVoicing = voicings.length > 0 ? voicings[effectiveIdx] : null;
                 // A user-edited shape (from the chord editor) overrides the generated one.
+                // A forma editada à mão fica guardada por nome de acorde, sem registro de
+                // qual instrumento a originou — então trocar de instrumento pode trazer
+                // uma forma de outro braço. Só vale se o número de cordas bater.
                 const customFrets = customVoicings[chordName];
-                const bestVoicing = customFrets
+                const bestVoicing = customFrets && customFrets.length === currentTuning.strings.length
                   ? buildVoicingFromFrets(customFrets, currentTuning, false)
                   : generatedVoicing;
 

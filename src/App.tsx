@@ -521,9 +521,14 @@ function App() {
   const curatedVoicings = useMemo(() => pickCuratedVoicings(chordRankings), [chordRankings]);
 
   const orderedVoicings = useMemo(() => {
+    // As curadorias vêm do servidor por efeito assíncrono, então ao trocar de
+    // instrumento elas continuam sendo as do ANTERIOR até a nova resposta chegar.
+    // Uma forma de 6 cordas não é uma forma num braço de 5 — descartar é a leitura
+    // correta, e é o que evitava a tela branca ao sair do violão para a viola.
+    const numStrings = selectedTuning.strings.length;
     return applyCurationOrder(
       filteredVoicings,
-      curatedVoicings.map(c => c.fretsArray),
+      curatedVoicings.map(c => c.fretsArray).filter(f => f.length === numStrings),
       (fretsArray) => buildVoicingFromFrets(fretsArray, selectedTuning, false)
     );
   }, [filteredVoicings, curatedVoicings, selectedTuning]);

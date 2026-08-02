@@ -161,6 +161,18 @@ export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
   const stringOrder = useVisualizationStore(state => state.stringOrder);
   const isInverted = forceInverted !== undefined ? forceInverted : stringOrder === 'inverted';
 
+  // Rede de proteção: um voicing só faz sentido sobre a afinação para a qual foi
+  // calculado. Ao trocar de instrumento existe uma janela de um render em que
+  // formas do instrumento ANTERIOR ainda estão no estado enquanto `tuning` já é o
+  // novo — e desenhar 6 posições num braço de 5 cordas lia `notes[5]`, que é
+  // undefined, e derrubava o app inteiro (tela branca) por causa do `.replace`.
+  //
+  // Depois dos hooks, nunca antes: um return adiantado acima deles mudaria a ordem
+  // de chamada entre renders, que é justamente o que o React proíbe.
+  //
+  // Não renderizar por um frame é invisível; quebrar a árvore do React não é.
+  if (frets.length !== numStrings || notes.length !== numStrings) return null;
+
   // Determine fret range to display
   const frettedOnly = frets.filter(f => f > 0);
   const minFret = frettedOnly.length > 0 ? Math.min(...frettedOnly) : 1;

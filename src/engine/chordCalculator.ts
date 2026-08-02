@@ -566,7 +566,15 @@ export function getVoicingDifficulty(
 // note names, barre/mute info and difficulty so it can be rendered like a generated one.
 export function buildVoicingFromFrets(frets: number[], tuning: Tuning, useFlats = false): Voicing {
   const p = evaluatePlayability(frets);
-  const notes = frets.map((fret, sIdx) => (fret < 0 ? 'X' : midiToNoteName(tuning.strings[sIdx] + fret, useFlats)));
+  // `tuning.strings[sIdx]` é undefined quando `frets` tem mais posições que o
+  // instrumento tem cordas — acontece com forma guardada de um instrumento e
+  // reconstruída sobre outro. Sem a checagem, o undefined vira NaN, o NaN indexa
+  // NOTE_NAMES fora do array e a nota sai undefined, estourando em quem for
+  // formatá-la. Corda que não existe é corda que não soa.
+  const notes = frets.map((fret, sIdx) => {
+    const openMidi = tuning.strings[sIdx];
+    return fret < 0 || openMidi === undefined ? 'X' : midiToNoteName(openMidi + fret, useFlats);
+  });
   return {
     frets: [...frets],
     notes,
