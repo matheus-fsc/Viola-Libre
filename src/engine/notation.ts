@@ -18,7 +18,7 @@
 export type NotationStandard = 'pt-BR' | 'intl';
 
 export const NOTATION_STANDARDS: { id: NotationStandard; label: string }[] = [
-  { id: 'pt-BR', label: 'Brasileiro (Cifra Club)' },
+  { id: 'pt-BR', label: 'Brasileiro' },
   { id: 'intl', label: 'Internacional' },
 ];
 

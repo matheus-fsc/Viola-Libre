@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Ellipsis, Eye, FileText, Guitar, Heart, Music2, Pencil, Pin, Play, RotateCcw, Save, Video } from 'lucide-react';
+import { Ellipsis, Eye, FileText, Guitar, Heart, Music2, Pencil, Pin, Play, Printer, RotateCcw, Save, Video } from 'lucide-react';
 import {
   getCifra, incrementView, type CifraDetail,
   saveSequencia, loadSequencia, updateSequencia, deleteSequencia,
@@ -1401,6 +1401,11 @@ export const CifraViewer: React.FC = () => {
   const artistName = artistSlug ? prettifySlug(artistSlug) : '';
   const cifraPath = `/cifras/${artistSlug ?? ''}/${songSlug ?? ''}`;
 
+  // A folha de impressão nasce no mesmo ponto em que o músico está lendo: tom, instrumento,
+  // afinação e posição da tab viajam pela URL, e não por store, para que o link continue
+  // valendo se ele mandar para outra pessoa ou abrir numa aba nova.
+  const printPath = `${cifraPath}/print?tom=${transposeOffset}&inst=${encodeURIComponent(selectedInstId)}&afin=${encodeURIComponent(selectedTuningId)}&pos=${tabPosIdx}`;
+
   useSeo(
     cifra
       ? {
@@ -1792,6 +1797,9 @@ export const CifraViewer: React.FC = () => {
               <button onClick={() => navigate(`/cifras/${artistSlug}/${songSlug}/timing`)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-[9px] w-full border border-gray-400 font-bold hover:bg-white text-black">
                 ✏️ Timing
               </button>
+              <button onClick={() => navigate(printPath)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-[9px] w-full border border-gray-400 font-bold hover:bg-white text-black flex items-center justify-center gap-1" title="Abrir a folha de impressão">
+                <Printer size={11} /> Imprimir
+              </button>
             </div>
 
             {/* Auto-scroll */}
@@ -1971,6 +1979,9 @@ export const CifraViewer: React.FC = () => {
                 </button>
                 <button onClick={() => navigate(`/cifras/${artistSlug}/${songSlug}/timing`)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-1 sm:px-3 text-xs font-bold border border-gray-400 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white text-black hover:bg-white" title="Contribuir timing">
                   ✏️ <span className="hidden sm:inline">Contribuir timing</span>
+                </button>
+                <button onClick={() => navigate(printPath)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-1 sm:px-3 text-xs font-bold border border-gray-400 flex items-center gap-1 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white text-black hover:bg-white" title="Abrir a folha de impressão">
+                  <Printer size={13} className="text-gray-600" /> <span className="hidden sm:inline">Imprimir</span>
                 </button>
                 {sourceVideoUrl && (
                   <button
@@ -2621,6 +2632,9 @@ export const CifraViewer: React.FC = () => {
                       </BotaoFolha>
                       <BotaoFolha onClick={() => navigate(`/cifras/${artistSlug}/${songSlug}/timing`)}>
                         <Pencil size={13} /> Timing
+                      </BotaoFolha>
+                      <BotaoFolha onClick={() => { setFolhaAberta(null); navigate(printPath); }}>
+                        <Printer size={13} /> Imprimir
                       </BotaoFolha>
                       {sourceVideoUrl && (
                         <BotaoFolha ativo={showVideo} onClick={() => { setFolhaAberta(null); setShowVideo(v => !v); }}>

@@ -190,6 +190,17 @@ body {
   border: 2px solid var(--color-winxp-blue-dark);
 }
 
+/* O link de rótulos do LibreJS mora no HTML servido, fora de #root, e por isso vem
+   DEPOIS de toda a página no fluxo — ao imprimir, ele sozinho gerava uma segunda folha.
+   Escondê-lo na mídia de impressão não afeta o LibreJS em nada: a extensão lê o link do
+   DOM antes de qualquer JavaScript rodar e nunca avalia estilo de @media print. Na tela
+   ele continua visível, que é onde a GNU pede que o usuário consiga achá-lo. */
+@media print {
+  .rotulos-librejs {
+    display: none;
+  }
+}
+
 /* Respeita quem pediu menos animação no sistema. As pulsações do braço e as
    transições do tema são decorativas; para quem tem sensibilidade vestibular
    elas não são. */

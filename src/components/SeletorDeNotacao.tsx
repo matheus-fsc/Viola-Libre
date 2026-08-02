@@ -1,8 +1,8 @@
 /*
  * Escolher como os acordes reconhecidos são ESCRITOS.
  *
- * O mesmo acorde tem grafias diferentes conforme o padrão: o F–A–C–G que o Cifra Club
- * escreve "F9" o mundo escreve "Fadd9", e o "B°" brasileiro é o "Bdim7" internacional.
+ * O mesmo acorde tem grafias diferentes conforme o padrão: o F–A–C–G que a cifra
+ * brasileira escreve "F9" o mundo escreve "Fadd9", e o "B°" daqui é o "Bdim7" lá fora.
  * A tabela do motor tem 17 grupos desses sinônimos, e antes deste seletor o desempate era
  * o nome mais curto — que fazia F–A–C–G virar "F2", grafia que ninguém usa aqui.
  *
@@ -39,9 +39,7 @@ export function SeletorDeNotacao({ embutido = false, className = '' }: Props) {
               onClick={() => setStandard(id)}
               aria-pressed={selecionado}
               /* flex-1 + min-w-0: as duas casas dividem a largura em vez de estourar, então
-                 a mesma peça serve no painel do desktop e na folha do telefone. O rótulo
-                 longo ("Brasileiro (Cifra Club)") quebraria numa tela estreita, por isso o
-                 nome curto some abaixo de sm e o título completo fica no `title`. */
+                 a mesma peça serve no painel do desktop e na folha do telefone. */
               className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-0.5 px-1 py-1.5 border leading-none cursor-pointer ${
                 selecionado
                   ? 'bg-[#316ac5] text-white border-[#316ac5]'
@@ -49,10 +47,7 @@ export function SeletorDeNotacao({ embutido = false, className = '' }: Props) {
               }`}
               title={label}
             >
-              <span className="text-[11px] font-bold truncate max-w-full">
-                <span className="sm:hidden">{id === 'pt-BR' ? 'Brasileiro' : 'Internacional'}</span>
-                <span className="hidden sm:inline">{label}</span>
-              </span>
+              <span className="text-[11px] font-bold truncate max-w-full">{label}</span>
               <span className={`text-[8px] font-normal truncate max-w-full ${selecionado ? 'text-white/75' : 'text-gray-500'}`}>
                 {AMOSTRA[id]}
               </span>

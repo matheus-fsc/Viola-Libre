@@ -21,6 +21,9 @@ Disallow: /minhascifras
 # conteúdo duplicado.
 Disallow: /cifras/*/timing
 
+# Folha de impressão: mesma cifra de /cifras/artista/musica, só que formatada para papel.
+Disallow: /cifras/*/print
+
 # Resultado de busca interna: espaço de rastreamento infinito (uma URL por termo
 # digitado) e nenhuma delas tem conteúdo próprio — só recorta o que já está
 # indexado. `modo` é estado de UI, mesma página.

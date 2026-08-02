@@ -1,0 +1,274 @@
+/*
+ * Folha de impressão da cifra — /cifras/:artista/:musica/print
+ *
+ * Esta tela é a única do site que não vive dentro da janela XP: ela existe para virar
+ * papel. Por isso a régua aqui é milímetro e não pixel.
+ *
+ * A paginação NÃO é do navegador. Cada folha é um <article> de altura fixa e cada coluna
+ * é uma caixa de altura fixa; quem decide o que cabe onde é o paginador em JS
+ * (CifraPrintPage). Foi o único jeito de atender duas coisas que o CSS multicol não faz:
+ *   · transbordo virar FOLHA nova, com o conteúdo descendo — multicol só sabe criar mais
+ *     uma coluna ao lado, que saía para fora do papel;
+ *   · a prévia mostrar exatamente o que sai impresso, já que agora os dois leem a mesma
+ *     divisão em vez de cada um fragmentar por conta própria.
+ *
+ * As medidas de fonte e espaçamento chegam por variável CSS (--cifra-print-*), escritas
+ * pelo menu de personalização. Deixá-las como variável evita recriar o HTML da cifra a
+ * cada ajuste de slider: o navegador só reflui, e o paginador só remede.
+ */
+
+/* Uma folha A4 de verdade: 210 × 297 mm, com o `@page margin` de 10mm virando padding.
+   Assim a área útil (190 × 277 mm menos a margem extra) é exatamente a do papel — e o
+   vazio que sobra no pé quando se diminui a fonte é o vazio que vai sobrar impresso. */
+.folha-impressao {
+  box-sizing: border-box;
+  width: 210mm;
+  max-width: 100%;
+  height: 297mm;
+  margin: 0 auto;
+  background: #ffffff;
+  color: #000000;
+  /* A margem extra do menu entra aqui TAMBÉM na tela: enquanto ela só existia dentro do
+     @media print, mexer no controle não mudava nada à vista e ele parecia quebrado. */
+  padding: calc(10mm + var(--cifra-print-margem-extra, 0mm));
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* As folhas empilham na tela com um respiro entre elas. */
+.folha-pilha {
+  display: flex;
+  flex-direction: column;
+  gap: 6mm;
+  min-width: 0;
+}
+
+/* ── Formas dos acordes ────────────────────────────────────────────────────────
+   Os diagramas vão no alto da primeira folha, como um "dicionário" da música: quem está
+   aprendendo consulta a forma ali em cima em vez de decorar. */
+.folha-acordes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3mm;
+  justify-content: flex-start;
+  margin-bottom: 4mm;
+  padding-bottom: 3mm;
+  border-bottom: 1px solid #bbb;
+  flex-shrink: 0;
+}
+
+.folha-acorde {
+  /* Largura fixa: o diagrama é `w-full` por dentro, então sem isto cada card ficaria do
+     tamanho do nome do acorde e os braços sairiam de tamanhos diferentes. 24mm põe sete
+     por linha numa folha A4 sem espremer. */
+  width: 24mm;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1mm;
+}
+
+/* O rodapé do diagrama (dificuldade + notas) é o bloco logo depois do braço. Numa carta
+   de 24mm ele vira duas linhas ilegíveis coladas uma na outra, e não é o que se consulta
+   no meio de uma música — some nos dois meios, tela e papel. */
+.folha-acorde svg + div {
+  display: none;
+}
+
+/* O controle de trocar/editar a forma é da tela: no papel fica só o desenho. */
+.folha-acorde-controles {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 10px;
+}
+
+.folha-cabecalho {
+  border-bottom: 1.5px solid #000;
+  padding-bottom: 2mm;
+  margin-bottom: 4mm;
+  flex-shrink: 0;
+}
+
+.folha-cabecalho h1 {
+  font-size: 1.7em;
+  font-weight: 700;
+  line-height: 1.15;
+  margin: 0;
+}
+
+.folha-cabecalho .folha-artista {
+  font-size: 1.1em;
+  margin: 0;
+}
+
+.folha-cabecalho .folha-meta {
+  font-size: 0.9em;
+  color: #444;
+  margin-top: 1mm;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 3mm;
+}
+
+/* ── Corpo ─────────────────────────────────────────────────────────────────────
+   Colunas de verdade (caixas lado a lado), não `column-count`. O paginador já decidiu o
+   que vai em cada uma; aqui é só desenhar. */
+.folha-corpo {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  gap: 8mm;
+  align-items: stretch;
+}
+
+.folha-coluna {
+  flex: 1 1 0;
+  min-width: 0;
+  /* Visível de propósito: o "puxar para trás" deixa a coluna passar do fim e entrar na
+     margem de baixo, e é aí que a linha puxada aparece. Quem apara o excesso é a folha
+     (`.folha-impressao { overflow: hidden }`), na borda do papel — que é o limite real. */
+  overflow: visible;
+}
+
+.folha-corpo .folha-coluna + .folha-coluna {
+  border-left: 1px solid #d8d8d8;
+  padding-left: 8mm;
+  margin-left: -4mm;
+}
+
+/* Modo tesoura: cada linha vira alvo de clique para marcar onde a coluna quebra. */
+.folha-corpo-tesoura .cifra-line:hover {
+  outline: 1px dashed #316ac5;
+  outline-offset: 1px;
+  cursor: cell;
+  background: #eaf1ff;
+}
+
+/* O conteúdo reusa o CSS do visualizador (Cifras.css) — mesmas classes .cifra-line e
+   .cifra-word. Aqui só se ajusta o que é próprio do papel.
+
+   Tamanho, entrelinha e família NÃO estão aqui: vêm inline, do React (ver `estiloTexto` em
+   CifraPrintPage). Por variável CSS, um `.cifra-viewer-content` já existente mantinha o
+   `font-size` antigo enquanto um elemento novo no mesmo pai pegava o novo — e o paginador
+   media a folha com a fonte de antes. O medidor recebe o mesmo objeto de estilo, que é o
+   que garante que ele meça a tipografia que a folha realmente usa. */
+.folha-corpo .cifra-viewer-content {
+  color: #000;
+}
+
+.folha-corpo .cifra-viewer-content b {
+  color: var(--cifra-print-chord-color, #002fa7);
+  cursor: default;
+}
+
+.folha-corpo .cifra-viewer-content b:hover {
+  color: var(--cifra-print-chord-color, #002fa7);
+  text-decoration: none;
+}
+
+/* Tablatura: monospace puro, sem refluxo. Se não couber na coluna, encolhe a fonte junto
+   com o resto — quebrar a linha de uma tab a destruiria.
+   Padding e não margin: o paginador soma alturas medidas uma a uma, e margem que colapsa
+   entre irmãos faria a soma não bater com a folha. */
+.folha-tab {
+  padding: 2mm 0;
+}
+
+.folha-tab-titulo {
+  font-size: 0.75em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #555;
+}
+
+.folha-tab pre {
+  margin: 0;
+  font-family: 'Fira Code', 'Courier New', Courier, monospace;
+  font-size: 0.92em;
+  line-height: 1.3;
+  white-space: pre;
+  overflow: hidden;
+  color: #333;
+}
+
+.folha-rodape {
+  margin-top: 3mm;
+  padding-top: 2mm;
+  border-top: 1px solid #bbb;
+  font-size: 0.8em;
+  color: #666;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 4mm;
+}
+
+/* Não há medidor no HTML: a área útil, o cabeçalho e o rodapé são medidos pela geometria
+   da primeira folha, e as alturas das linhas saem de um nó descartável criado a cada
+   medição (ver `medir` em CifraPrintPage). Um medidor fixo e escondido já existiu aqui e
+   não funciona: depois do primeiro layout aquela subárvore congela e as medidas param de
+   acompanhar a tipografia — a folha era paginada pela fonte de quando a página abriu. */
+
+/* ── Papel ─────────────────────────────────────────────────────────────────────
+   `margin: 0` no `@page` não é economia de espaço: é o que apaga a data, o título, a URL e
+   o "1/1" que o navegador desenha por conta própria. Ele pinta essas linhas DENTRO da
+   margem da página — sem margem, não há onde pintá-las, e some junto o espaço que elas
+   ocupavam. A margem do papel passa a ser padding da folha, que é nosso e já existia para
+   a tela; assim prévia e impressão usam exatamente a mesma medida.
+
+   `size: A4` porque a folha inteira é construída em 210 × 297 mm. Em Carta o navegador
+   ajusta a escala; deixar `auto` faria uma folha de 297mm sangrar para uma segunda página
+   nos 279mm da Carta. */
+@page {
+  size: A4;
+  margin: 0;
+}
+
+@media print {
+  /* A tela empilha barra, menu e folhas com flexbox e altura de viewport. Nada disso
+     sobrevive à paginação — um contêiner flex com `min-height:100vh` faz o Chrome
+     imprimir a primeira página e cortar o resto. */
+  .tela-impressao {
+    display: block !important;
+    min-height: 0 !important;
+    background: #ffffff !important;
+    padding: 0 !important;
+  }
+
+  .folha-conteudo,
+  .folha-pilha {
+    display: block !important;
+    padding: 0 !important;
+    gap: 0 !important;
+  }
+
+  /* Largura, altura e padding são os MESMOS da tela — não há mais nada a converter, já que
+     o `@page` não reserva margem nenhuma. Cada folha é uma página, e o `break-after`
+     separa uma da outra exatamente onde o paginador dividiu.
+
+     `overflow: hidden` fica: além de aparar uma fração de pixel que criaria uma página em
+     branco, ele não corta a linha do "puxar para trás" — ela vive no padding, dentro da
+     caixa. */
+  .folha-impressao {
+    margin: 0;
+    box-shadow: none;
+    break-after: page;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* A última folha não pede página nova: pediria uma em branco no fim. */
+  .folha-impressao:last-child {
+    break-after: auto;
+  }
+
+  /* Tudo que é controle de tela não vai para o papel. Por último, para ganhar dos
+     `display: block !important` acima em caso de empate de especificidade. */
+  .sem-impressao {
+    display: none !important;
+  }
+}

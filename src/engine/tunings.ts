@@ -513,10 +513,10 @@ export const CHORD_FORMULAS: ChordFormula[] = [
     requiredIntervals: [0, 5]
   },
   {
-    // Notação BR (Cifra Club e afins): '9' puro é tríade + nona, SEM sétima — o mesmo que
-    // 'add9'. A nona dominante se escreve '7(9)' ou '7/9', que já têm entrada própria.
-    // Verificado na fonte: o diagrama de F9 do Cifra Club é x-x-3-2-1-3 = F A C G (sem Eb),
-    // e cifras usam os dois símbolos lado a lado na mesma música (Corcovado: C9 e C7(9)).
+    // Notação BR: '9' puro é tríade + nona, SEM sétima — o mesmo que 'add9'. A nona
+    // dominante se escreve '7(9)' ou '7/9', que já têm entrada própria.
+    // Conferido no corpus: o diagrama de F9 é x-x-3-2-1-3 = F A C G (sem Eb), e cifras
+    // usam os dois símbolos lado a lado na mesma música (Corcovado: C9 e C7(9)).
     name: "Nona Adicionada (notação BR)",
     suffix: "9",
     intervals: [0, 4, 7, 14],
@@ -603,8 +603,8 @@ export const CHORD_FORMULAS: ChordFormula[] = [
   {
     // Notação BR: '°' (e 'º', 'o') é o acorde de QUATRO notas — a sétima diminuta. Por isso
     // '°7' quase não aparece em cifra brasileira: o 7 já está subentendido no símbolo.
-    // Verificado na fonte: o diagrama de Bº do Cifra Club é X-2-3-1-3-1 = B D F G# ([0,3,6,9]),
-    // e o próprio markup rotula as cordas com as notas, confirmando a leitura.
+    // Conferido no corpus: o diagrama de Bº é X-2-3-1-3-1 = B D F G# ([0,3,6,9]), e o
+    // próprio markup rotula as cordas com as notas, confirmando a leitura.
     // A tríade diminuta pura fica com 'dim' (grafia internacional) — ver SUFFIX_ALIASES.
     name: "Diminuto com Sétima (notação BR)",
     suffix: "°",
