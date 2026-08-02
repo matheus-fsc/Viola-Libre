@@ -601,10 +601,15 @@ export const CHORD_FORMULAS: ChordFormula[] = [
     requiredIntervals: [0, 3, 14]
   },
   {
-    name: "Diminuto",
+    // Notação BR: '°' (e 'º', 'o') é o acorde de QUATRO notas — a sétima diminuta. Por isso
+    // '°7' quase não aparece em cifra brasileira: o 7 já está subentendido no símbolo.
+    // Verificado na fonte: o diagrama de Bº do Cifra Club é X-2-3-1-3-1 = B D F G# ([0,3,6,9]),
+    // e o próprio markup rotula as cordas com as notas, confirmando a leitura.
+    // A tríade diminuta pura fica com 'dim' (grafia internacional) — ver SUFFIX_ALIASES.
+    name: "Diminuto com Sétima (notação BR)",
     suffix: "°",
-    intervals: [0, 3, 6],
-    requiredIntervals: [0, 3, 6]
+    intervals: [0, 3, 6, 9],
+    requiredIntervals: [0, 3, 6, 9]
   },
   {
     name: "Diminuto com Sétima",

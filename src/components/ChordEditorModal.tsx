@@ -10,7 +10,9 @@ import {
 import { AudioEngine } from '../engine/AudioEngine';
 import { useEditorSession, rankChord, buildChordId } from '../services/authApi';
 import { useVisualizationStore } from '../stores/useVisualizationStore';
+import { useNotationStore } from '../stores/useNotationStore';
 import { VisualizationOnboardingModal } from './VisualizationOnboardingModal';
+import { SeletorDeNotacao } from './SeletorDeNotacao';
 
 interface ChordEditorModalProps {
   chordName: string;
@@ -61,13 +63,14 @@ export const ChordEditorModal: React.FC<ChordEditorModalProps> = ({
   }, [chordName]);
 
   const { stringOrder, setStringOrder } = useVisualizationStore();
+  const notacao = useNotationStore(s => s.standard);
   const isInverted = stringOrder === 'inverted';
 
   const pcAt = (sIdx: number, fret: number) => (tuning.strings[sIdx] + fret) % 12;
   const noteAt = (sIdx: number, fret: number) =>
     fret < 0 ? 'X' : midiToNoteName(tuning.strings[sIdx] + fret, useFlats);
 
-  const detected = useMemo(() => detectChord(frets, tuning).slice(0, 3), [frets, tuning]);
+  const detected = useMemo(() => detectChord(frets, tuning, notacao).slice(0, 3), [frets, tuning, notacao]);
   const difficulty = useMemo(() => getVoicingDifficulty(frets), [frets]);
 
   const setCell = (sIdx: number, fret: number) => {
@@ -253,6 +256,13 @@ export const ChordEditorModal: React.FC<ChordEditorModalProps> = ({
                 {frets.map((f, i) => (f === -1 ? null : noteAt(i, f))).filter(Boolean).join(', ') || '—'}
               </span>
             </div>
+          </div>
+
+          {/* Notação — fica colado no "Resulta em" acima porque é o campo que ele governa:
+              o mesmo desenho de acorde muda de nome conforme o padrão. */}
+          <div className="bg-white border border-[#808080] font-mono">
+            <span className="text-[9px] text-gray-500 font-bold block px-2 pt-2">Notação</span>
+            <SeletorDeNotacao embutido />
           </div>
 
           {/* Actions */}

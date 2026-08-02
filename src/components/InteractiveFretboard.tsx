@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { Tuning, Instrument } from '../engine/types';
 import { detectChord, midiToNoteName, shouldUseFlats } from '../engine/chordCalculator';
+import { useNotationStore } from '../stores/useNotationStore';
 
 interface InteractiveFretboardProps {
   selectedInstrument: Instrument;
@@ -36,13 +37,15 @@ export const InteractiveFretboard: React.FC<InteractiveFretboardProps> = ({
     }
   }, [selectedTuning, loadedFrets, numStrings]);
 
-  // Derive detected chords whenever active frets or tuning changes
+  const notacao = useNotationStore(s => s.standard);
+
+  // Derive detected chords whenever active frets, tuning or notation standard changes
   const detectedChords = React.useMemo(() => {
     if (activeFrets.length === numStrings) {
-      return detectChord(activeFrets, selectedTuning);
+      return detectChord(activeFrets, selectedTuning, notacao);
     }
     return [];
-  }, [activeFrets, selectedTuning, numStrings]);
+  }, [activeFrets, selectedTuning, numStrings, notacao]);
 
   const handleCellClick = (stringIdx: number, fret: number) => {
     const next = [...activeFrets];

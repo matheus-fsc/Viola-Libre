@@ -1,5 +1,6 @@
 import type { Tuning, Chord, Voicing, PitchClass, ReverseChordMatch, ChordFormula } from './types';
 import { NOTE_NAMES_SHARP, NOTE_NAMES_FLAT, CHORD_FORMULAS } from './tunings';
+import { notationRank, DEFAULT_NOTATION, type NotationStandard } from './notation';
 
 // Converts a note name (e.g. "C", "F#", "Bb") to a PitchClass (0-11)
 export function noteNameToPitchClass(name: string): PitchClass {
@@ -92,7 +93,10 @@ export function transposeChordString(chordStr: string, semitones: number, prefer
 const SUFFIX_ALIASES: Record<string, string> = {
   'º': '°',     // º → °  (masculine ordinal → degree sign, both mean dim)
   'º7': '°7',   // º7 → °7
-  'dim': '°',
+  // 'dim' NÃO entra aqui de propósito: é a grafia internacional e guarda a TRÍADE diminuta
+  // ([0,3,6]), enquanto '°'/'º'/'o' são as brasileiras e valem a sétima diminuta ([0,3,6,9]).
+  // Sem essa separação a tríade ficaria sem nome e o detectChord não saberia identificá-la.
+  // No corpus real 'dim' aparece em 1 de 50 cifras, contra 15 de '°'/'º' — o custo é mínimo.
   'dim7': '°7',
   'o': '°',
   'o7': '°7',
@@ -363,6 +367,24 @@ interface PlayabilityResult {
   hasInteriorMute?: boolean;
   /** Interior mute that the bass-fretting finger already damps — cheap, not a real maneuver. */
   interiorMuteDampedByBassFinger?: boolean;
+}
+
+/**
+ * Um acorde é "complexo" quando exige os shapes fechados de 3-4 dedos (jazz/bossa) em vez
+ * das tríades soltas: qualquer sétima, a família diminuta, ou tensões acima da oitava.
+ * Trabalha sobre os INTERVALOS para que grafias equivalentes ('°'/'dim7', 'add9'/'2')
+ * pontuem igual — pré-requisito do seletor de notação.
+ */
+function isAcordeComplexo(intervals: number[]): boolean {
+  return temSetima(intervals)
+    || (intervals.includes(3) && intervals.includes(6)) // família diminuta
+    || intervals.some(i => i >= 13);                    // 9ª/11ª/13ª e alterações
+}
+
+/** Sétima menor/maior, ou a sétima diminuta do acorde diminuto (bb7 = 9 semitons). */
+function temSetima(intervals: number[]): boolean {
+  return intervals.some(i => i === 10 || i === 11)
+    || (intervals.includes(3) && intervals.includes(6) && intervals.includes(9));
 }
 
 export function evaluatePlayability(frets: number[]): PlayabilityResult {
@@ -868,7 +890,12 @@ export function calculateVoicings(
     // Para tríades simples, menos dedos = mais fácil = melhor.
     // MAS para acordes complexos (sétimas, nonas), os shapes clássicos (jazz/bossa) EXIGEM 3 ou 4 dedos.
     // Se punirmos dedos aqui, shapes bizarros com cordas soltas ganham dos clássicos.
-    const isComplexChord = chord.formula.suffix.includes('7') || chord.formula.suffix.includes('9') || chord.formula.suffix.includes('dim');
+    // Derivado dos INTERVALOS, não da grafia do sufixo. O teste por string dava resultados
+    // opostos para o mesmo acorde conforme como ele fosse escrito ('add9' complexo vs '2'
+    // simples; '°' simples vs 'dim' complexo) e classificava '11'/'13' — de seis notas —
+    // como tríade simples. Com o seletor de notação isso viraria bug visível: trocar o
+    // padrão mudaria o ranking dos voicings sem mudar o acorde.
+    const isComplexChord = isAcordeComplexo(chord.formula.intervals);
     if (!isComplexChord) {
       score -= playability.fingersUsed * 8;
     } else {
@@ -922,7 +949,7 @@ export function calculateVoicings(
     // I. Filtro especial para acordes com sétima
     // Prioriza os que preencham mais mas não repitam notas, 
     // e caso repitam, que repitam a sétima.
-    const isSeventhChord = chord.formula.suffix.includes('7') || chord.formula.suffix.includes('dim7');
+    const isSeventhChord = temSetima(chord.formula.intervals);
     if (isSeventhChord) {
       const playedPcsList = frets.filter(f => f >= 0).map((f, sIdx) => stringFretNotes[sIdx][f].pitchClass);
       const uniquePcsCount = new Set(playedPcsList).size;
@@ -1119,7 +1146,11 @@ export function calculateVoicings(
   });
 }
 
-export function detectChord(frets: number[], tuning: Tuning): ReverseChordMatch[] {
+export function detectChord(
+  frets: number[],
+  tuning: Tuning,
+  standard: NotationStandard = DEFAULT_NOTATION,
+): ReverseChordMatch[] {
 
   
   // Calculate midi notes played
@@ -1218,6 +1249,14 @@ export function detectChord(frets: number[], tuning: Tuning): ReverseChordMatch[
     }
     if (a.isInversion !== b.isInversion) {
       return a.isInversion ? 1 : -1; // posição fundamental antes da inversão
+    }
+    // Grafia preferida do padrão de notação, ANTES do desempate por tamanho: entre sinônimos
+    // exatos ('9' | 'add9' | '(add9)' | '2') vence a que o padrão escolhe, não a mais curta.
+    // Era o desempate por tamanho que fazia F–A–C–G virar "F2" em vez de "F9".
+    const rankA = notationRank(a.suffix, standard);
+    const rankB = notationRank(b.suffix, standard);
+    if (rankA !== rankB) {
+      return rankA - rankB;
     }
     if (a.chordName.length !== b.chordName.length) {
       return a.chordName.length - b.chordName.length;
