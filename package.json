@@ -10,7 +10,9 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "librejs:verify": "node scripts/librejs-verify.mjs"
+    "librejs:verify": "node scripts/librejs-verify.mjs",
+    "sitemap": "node scripts/gen-sitemap.mjs",
+    "sitemap:verify": "node scripts/sitemap-verify.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.1",

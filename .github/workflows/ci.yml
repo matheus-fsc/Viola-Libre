@@ -51,3 +51,11 @@ jobs:
       - name: Conformidade LibreJS
         if: ${{ !cancelled() }}
         run: npm run librejs:verify
+
+      # Não gera o sitemap (isso bate na API e é feito à parte) — apenas confere o
+      # arquivo versionado. A checagem que importa é o cruzamento com o robots.txt:
+      # já houve `Disallow: /cifras` em produção bloqueando o acervo inteiro, e nada
+      # no processo apontava a contradição.
+      - name: Sitemap x robots.txt
+        if: ${{ !cancelled() }}
+        run: npm run sitemap:verify

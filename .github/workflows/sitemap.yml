@@ -1,0 +1,64 @@
+name: Atualizar sitemap
+
+# O sitemap acompanha o ACERVO, não o código: ele envelhece quando entram artistas e
+# cifras novas, o que não tem relação com o ritmo de commits. Por isso roda no
+# calendário, e não no build.
+#
+# Fora do deploy de propósito: a API fica atrás de nginx + fail2ban e derruba rajadas,
+# então gerar isto a cada publicação seria o projeto batendo na própria API — de um IP
+# do Cloudflare Pages que a proteção não conhece.
+on:
+  schedule:
+    # Segunda-feira, 06:00 UTC (03:00 em Brasília) — fora do horário de uso.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+# Só uma execução por vez: duas gerações simultâneas bateriam na API em dobro e ainda
+# dariam conflito de push.
+concurrency:
+  group: sitemap
+  cancel-in-progress: false
+
+jobs:
+  atualizar:
+    name: Gerar e commitar o sitemap
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      # A geração é lenta de propósito (uma requisição por vez, com pausa). Ver o
+      # comentário sobre ritmo em scripts/sitemap-shared.mjs: aumentar a concorrência
+      # não deixa mais rápido, deixa incompleto em silêncio.
+      - name: Gerar o sitemap
+        run: npm run sitemap
+        timeout-minutes: 30
+
+      - name: Conferir contra o robots.txt
+        run: npm run sitemap:verify
+
+      - name: Commitar se houve mudança
+        run: |
+          if git diff --quiet -- public/sitemap.xml; then
+            echo "Sitemap sem alterações — nada a commitar."
+            exit 0
+          fi
+          git config user.name  'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add public/sitemap.xml
+          git commit -m 'chore(sitemap): atualiza a partir do acervo
+
+          Gerado por .github/workflows/sitemap.yml.'
+          git push

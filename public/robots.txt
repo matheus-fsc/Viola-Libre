@@ -1,8 +1,30 @@
 # Viola Libre
-# Ferramenta livre de teoria musical e visualização de acordes.
+# Cifras, acordes e teoria musical livre para viola caipira, violão e cavaquinho.
+#
+# O acervo de cifras (/cifras) é público e DEVE ser rastreável: é o que faz alguém
+# chegar aqui pela busca. Já esteve bloqueado por engano, e o efeito era o site
+# inteiro fora do índice do Google.
+#
+# Atenção: a Cloudflare injeta um bloco `User-agent: *` próprio antes deste. Quando
+# dois grupos casam com o mesmo robô, eles são FUNDIDOS e vence a regra de caminho
+# mais longo — então um `Disallow:` aqui derruba o `Allow: /` de lá. Bloqueie apenas
+# o que realmente não deve ser indexado.
 
 User-agent: *
-Disallow: /cifras
+
+# Rascunho local do usuário: vive no navegador dele, não existe no servidor e não
+# tem conteúdo público algum a oferecer.
 Disallow: /minhascifras
+
+# Ferramentas de edição, não conteúdo. São a mesma cifra que já está indexada em
+# /cifras/artista/musica, só que numa tela de trabalho — indexar as duas seria
+# conteúdo duplicado.
+Disallow: /cifras/*/timing
+
+# Resultado de busca interna: espaço de rastreamento infinito (uma URL por termo
+# digitado) e nenhuma delas tem conteúdo próprio — só recorta o que já está
+# indexado. `modo` é estado de UI, mesma página.
+Disallow: /*?*busca=
+Disallow: /*?*modo=
 
 Sitemap: https://violalibre.com.br/sitemap.xml
