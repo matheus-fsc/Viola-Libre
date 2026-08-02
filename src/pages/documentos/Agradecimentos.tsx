@@ -28,6 +28,12 @@ export const Agradecimentos: React.FC = () => (
           do projeto. A fagulha inicial que fez tudo isso acontecer, e que continua
           contribuindo ativamente para a plataforma.
         </li>
+        <li>
+          Nino Coutinho (<Link href="https://www.youtube.com/@johndowland/videos">YouTube</Link>,{' '}
+          <Link href="https://www.tiktok.com/@coutinhonino">TikTok</Link>), colaborou e colabora
+          ativamente com a revisão dos voicings e digitações, sanando dúvidas teóricas e ajudando
+          a refinar musicalmente os algoritmos do projeto.
+        </li>
       </Lista>
       <p className="text-gray-600 italic mt-1">
         Esta lista continua sendo montada. Quem contribuiu está sendo consultado, um a um,
