@@ -61,6 +61,18 @@
       </p>
       <p>Este site precisa de JavaScript habilitado para funcionar.</p>
     </noscript>
+    <!--
+      Rótulos de licença para o GNU LibreJS.
+
+      Precisa estar aqui, no HTML servido e fora de #root: o LibreJS decide se
+      libera o bundle ANTES de o React montar, então um link renderizado pelo
+      rodapé em React chegaria tarde demais. A página /jslicense.html é gerada a
+      cada build por scripts/librejs-labels.mjs, porque o nome dos arquivos com
+      hash muda junto com o conteúdo.
+    -->
+    <p style="text-align:center;font:12px/1.6 system-ui,sans-serif;padding:.75rem;margin:0;opacity:.75">
+      <a href="/jslicense.html" rel="jslicense">Informações de licença do JavaScript</a>
+    </p>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

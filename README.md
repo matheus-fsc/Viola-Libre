@@ -127,10 +127,51 @@ A aplicação sobe em `http://localhost:5173`.
 | Comando           | O que faz                                        |
 | ----------------- | ------------------------------------------------ |
 | `npm run dev`     | Servidor de desenvolvimento com hot-reload.      |
-| `npm run build`   | Type-check (`tsc -b`) e build de produção.       |
+| `npm run build`   | Type-check (`tsc -b`), build de produção e rótulos de licença. |
 | `npm run preview` | Serve localmente o build de produção.            |
 | `npm run test`    | Roda a suíte de testes (Vitest).                 |
 | `npm run lint`    | Verifica o código com ESLint.                    |
+| `npm run librejs:verify` | Confere se o build atende ao GNU LibreJS.  |
+
+---
+
+## Software livre de ponta a ponta (GNU LibreJS)
+
+Não basta o repositório ser livre: o JavaScript que chega ao navegador de quem usa o site
+também precisa ser — e precisa *provar* que é, de um jeito que uma máquina entenda. É isso
+que o [GNU LibreJS](https://www.gnu.org/software/librejs/) exige, e sem essa prova ele
+bloqueia o bundle e o site fica em branco para quem usa a extensão.
+
+O problema prático é que o Vite gera um nome com hash a cada build
+(`assets/index-BvBM4xs7.js`), então nenhuma declaração escrita à mão sobrevive ao próximo
+deploy. Por isso os rótulos são **gerados**, não mantidos:
+
+- `scripts/librejs-labels.mjs` roda no fim do `npm run build`. Ele carimba o par
+  `@license` / `@license-end` dentro de cada `.js` emitido, empacota com `git archive` o
+  fonte correspondente ao commit que gerou aquele bundle e escreve `dist/jslicense.html`
+  com a tabela de [Web Labels](https://www.gnu.org/licenses/javascript-labels.html).
+- `index.html` traz o `<a href="/jslicense.html" rel="jslicense">` **fora de `#root`**. Tem
+  que ser no HTML servido: o LibreJS decide se libera o bundle antes de o React montar, e
+  um link renderizado pelo rodapé chegaria tarde demais.
+- `scripts/librejs-verify.mjs` (`npm run librejs:verify`) refaz a conferência e falha o CI
+  se aparecer um chunk sem rótulo, um `<script>` inline sem licença ou uma biblioteca de CDN.
+
+Duas decisões de produto vêm junto:
+
+- **YouTube.** A IFrame API do YouTube é software proprietário, então o script nunca é
+  injetado por conta própria. O player aparece como um convite explícito, e a rolagem
+  automática pergunta antes de medir a duração da música num player escondido. Recusar não
+  quebra nada: a rolagem volta a deduzir o tempo pelo BPM. A resposta fica guardada e pode
+  ser trocada na Política de Privacidade.
+- **Cloudflare Web Analytics.** O beacon é JavaScript não-livre injetado pelo Cloudflare em
+  toda resposta HTML — basta ele para condenar a página inteira. O CSP em `public/_headers`
+  não o autoriza mais, mas **isso só impede a execução**: para parar a injeção é preciso
+  desligar o Web Analytics no painel do Cloudflare.
+
+Para testar: `npm run build && npm run preview` e abra o preview com a extensão ligada.
+O `npm run dev` **não** passa no LibreJS, e não deve mesmo — o servidor de desenvolvimento
+serve os módulos sem bundle e ainda injeta o cliente de HMR e o React Refresh, que são
+código gerado em tempo de execução. A conformidade vale para o que é publicado.
 
 ---
 
@@ -146,7 +187,7 @@ Contribuições são bem-vindas — de correções de acordes a novos recursos.
 4. **Motor sem UI.** Lógica musical vai em `src/engine/` (pura, testável); componentes só consomem.
 5. **Antes de abrir o PR**, garanta que passa:
    ```bash
-   npm run lint && npm run test && npm run build
+   npm run lint && npm run test && npm run build && npm run librejs:verify
    ```
 6. **Abra um Pull Request** descrevendo a mudança. Toda contribuição fica sob a licença AGPL-3.0.
 

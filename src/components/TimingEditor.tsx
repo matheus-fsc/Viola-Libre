@@ -21,6 +21,8 @@ import { useLineLinkWizardStore } from '../stores/useLineLinkWizardStore';
 import { LineLinkWizardOverlay } from './timing/assisted/LineLinkWizardOverlay';
 import { AutoScrollPreview } from './timing/AutoScrollPreview';
 import { loadYouTubeApi } from '../services/youtubeApi';
+import { YouTubeJsGate } from './YouTubeJsGate';
+import { useYouTubeJsAllowed } from '../hooks/useYouTubeJsAllowed';
 
 const SECTION_LINE_RE = /^\[([^\]]+)\]$/;
 
@@ -169,6 +171,9 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
   const [loadingContribs, setLoadingContribs] = useState(false);
   const [communityLoaded, setCommunityLoaded] = useState(false);
 
+  // O player do YouTube depende de JS não-livre e só carrega sob consentimento.
+  const ytAllowed = useYouTubeJsAllowed();
+
   // DOM refs — only elements that must be kept in the component
   const ytContainerRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -218,6 +223,9 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
   // ── YouTube player ────────────────────────────────────────────────────────
   useEffect(() => {
     if (mediaType !== 'youtube' || !mediaUrl) return;
+    // Sem autorização o script não-livre do YouTube nem chega a ser pedido; o
+    // editor segue funcionando com a duração digitada à mão.
+    if (!ytAllowed) return;
     const videoId = extractYouTubeId(mediaUrl);
     if (!videoId) return;
 
@@ -241,7 +249,7 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
     }).catch(() => { /* sem player: o editor segue com a duração digitada à mão */ });
 
     return () => { cancelled = true; clearYtPlayer(); };
-  }, [mediaUrl, mediaType]);
+  }, [mediaUrl, mediaType, ytAllowed]);
 
   // ── Audio polling (tick delegated to store) ────────────────────────────────
   useEffect(() => {
@@ -628,7 +636,11 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
                     </button>
                   </div>
 
-                  {mediaType === 'youtube' && <div ref={ytContainerRef} className="w-full" style={{ height: 120 }} />}
+                  {mediaType === 'youtube' && (
+                    ytAllowed
+                      ? <div ref={ytContainerRef} className="w-full" style={{ height: 120 }} />
+                      : <YouTubeJsGate compact className="w-full bevel-in bg-white" />
+                  )}
                   {mediaType === 'audio' && mediaUrl && (
                     <audio
                       ref={audioRef}

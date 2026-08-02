@@ -1,5 +1,6 @@
 import React from 'react';
 import { DocumentoPage, Section, Lista, Link } from '../../components/DocumentoPage';
+import { YouTubeJsConsentControl } from '../../components/YouTubeJsGate';
 
 const CONTACT_EMAIL = 'suporte@violalibre.com.br';
 const REPO_URL = 'https://github.com/matheus-fsc/Viola-Libre';
@@ -106,16 +107,18 @@ export const PoliticaPrivacidade: React.FC = () => (
       <Lista>
         <li>
           <strong>Cloudflare:</strong> entrega o site e o protege. Todo o tráfego passa por
-          ele. Usamos também o serviço de estatísticas da Cloudflare, que conta visitas e
-          mede desempenho de forma agregada, sem cookies de publicidade e sem identificar
-          visitantes individualmente.
+          ele. O serviço de estatísticas da Cloudflare foi desligado: o script dele é
+          JavaScript proprietário, e a política de segurança do site (o CSP em{' '}
+          <code>public/_headers</code>) não autoriza mais que ele seja executado.
         </li>
         <li>
-          <strong>YouTube (Google):</strong> os vídeos das cifras. O script do YouTube só é
-          carregado quando você abre o painel de vídeo ou aciona a rolagem automática numa
-          música cuja duração ainda não é conhecida. Enquanto isso não acontece, o YouTube não
-          é contatado. Quando é, ele pode gravar cookies e coletar dados conforme a política de
-          privacidade do Google.
+          <strong>YouTube (Google):</strong> os vídeos das cifras. O script do YouTube é
+          software proprietário e <strong>nunca</strong> é carregado por conta própria: ele só
+          entra depois que você clica no botão que pede essa autorização, no lugar onde o vídeo
+          apareceria. Enquanto você não autorizar, o YouTube não é contatado e nenhuma outra
+          parte do site deixa de funcionar. Depois de autorizado, ele pode gravar cookies e
+          coletar dados conforme a política de privacidade do Google.
+          <YouTubeJsConsentControl />
         </li>
         <li>
           <strong>GitHub:</strong> hospeda os bancos de som usados para tocar os acordes. São

@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { extractYouTubeId } from '../services/timingApi';
 import { loadYouTubeApi, type YTPlayer } from '../services/youtubeApi';
+import { YouTubeJsGate } from './YouTubeJsGate';
+import { useYouTubeJsAllowed } from '../hooks/useYouTubeJsAllowed';
 
 // Estados do player do YouTube que interessam aqui (a API devolve números crus).
 const YT_STATE_PLAYING = 1;
@@ -37,6 +39,8 @@ export const SourceVideoPanel: React.FC<SourceVideoPanelProps> = ({
   const [wide, setWide] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [failed, setFailed] = useState(false);
+  // O player só nasce depois que a pessoa autoriza o JS não-livre do YouTube.
+  const ytAllowed = useYouTubeJsAllowed();
 
   const hostWrapRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YTPlayer | null>(null);
@@ -49,7 +53,7 @@ export const SourceVideoPanel: React.FC<SourceVideoPanelProps> = ({
 
   useEffect(() => {
     const wrap = hostWrapRef.current;
-    if (!videoId || !wrap) return;
+    if (!videoId || !wrap || !ytAllowed) return;
 
     let cancelled = false;
     // O YT.Player SUBSTITUI pelo <iframe> o elemento que recebe. Entregamos um nó
@@ -83,7 +87,7 @@ export const SourceVideoPanel: React.FC<SourceVideoPanelProps> = ({
       playerRef.current = null;
       wrap.replaceChildren();
     };
-  }, [videoId]);
+  }, [videoId, ytAllowed]);
 
   const togglePlay = useCallback(() => {
     const p = playerRef.current;
@@ -129,13 +133,17 @@ export const SourceVideoPanel: React.FC<SourceVideoPanelProps> = ({
         style={collapsed ? { height: 0 } : undefined}
       >
         <div ref={hostWrapRef} className="absolute inset-0" />
-        {(!videoId || failed) && (
+        {!videoId ? (
           <div className="absolute inset-0 flex items-center justify-center text-center text-[11px] text-white/80 px-3">
-            {videoId
-              ? 'Não foi possível carregar o player do YouTube.'
-              : 'O link da source não é um vídeo reconhecido do YouTube.'}
+            O link da source não é um vídeo reconhecido do YouTube.
           </div>
-        )}
+        ) : !ytAllowed ? (
+          <YouTubeJsGate className="absolute inset-0 bg-[#1a1a1a] text-white/90 [&_a]:text-white" />
+        ) : failed ? (
+          <div className="absolute inset-0 flex items-center justify-center text-center text-[11px] text-white/80 px-3">
+            Não foi possível carregar o player do YouTube.
+          </div>
+        ) : null}
       </div>
 
       <div className="px-2 py-0.5 text-[9px] text-gray-600 flex items-center justify-between gap-2">

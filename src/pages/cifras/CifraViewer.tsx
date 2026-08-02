@@ -21,6 +21,8 @@ import { splitHtmlByTabs, TAB_POSITIONS, type ContentSegment } from '../../engin
 import '../../components/Cifras.css';
 import { extractYouTubeId, fetchBestTiming, type TimingContribution } from '../../services/timingApi';
 import { fetchYouTubeDuration } from '../../services/youtubeApi';
+import { useYouTubeJsConsent } from '../../hooks/useYouTubeJsAllowed';
+import { YouTubeScrollConsentModal } from '../../components/YouTubeScrollConsentModal';
 import { getIsMobile, useIsMobile } from '../../hooks/useIsMobile';
 import { useImmersiveStore } from '../../stores/useImmersiveStore';
 import { MobileCifraBar, TransporteMobile, GrupoAjustes, LinhaAjuste, Stepper, BotaoFolha } from './MobileCifraBar';
@@ -246,6 +248,9 @@ export const CifraViewer: React.FC = () => {
   // depois que o músico abre o vídeo — ninguém carrega um iframe do YouTube sem pedir).
   const [showVideo, setShowVideo] = useState(false);
   const [videoDuration, setVideoDuration] = useState<number | null>(null);
+  // Medir a duração no YouTube depende de JS não-livre: a rolagem pergunta antes.
+  const ytConsent = useYouTubeJsConsent();
+  const [askScrollConsent, setAskScrollConsent] = useState(false);
   const [scrollFrac, setScrollFrac] = useState(0);
   const [lyricsPopup, setLyricsPopup] = useState<ChordAnchor | null>(null);
   const [currentSection, setCurrentSection] = useState<string | null>(null);
@@ -1373,12 +1378,18 @@ export const CifraViewer: React.FC = () => {
     const videoId = sourceVideoUrl ? extractYouTubeId(sourceVideoUrl) : null;
     if (!videoId) return;
 
+    // Medir custa carregar o JS não-livre do YouTube e contar ao Google qual
+    // vídeo está sendo estudado. Não dá para fazer isso escondido atrás de um
+    // botão que só diz "Rolar": pergunta-se uma vez, e a resposta fica valendo.
+    if (ytConsent === 'nao-perguntado') { setAskScrollConsent(true); return; }
+    if (ytConsent === 'nao') return;
+
     let cancelled = false;
     fetchYouTubeDuration(videoId).then(seconds => {
       if (!cancelled && seconds > 0) setVideoDuration(seconds);
     });
     return () => { cancelled = true; };
-  }, [autoScroll, videoDuration, showVideo, cifra?.duration, timingMedia?.duration, sourceVideoUrl]);
+  }, [autoScroll, videoDuration, showVideo, cifra?.duration, timingMedia?.duration, sourceVideoUrl, ytConsent]);
 
   if (loading) {
     return (
@@ -2306,6 +2317,13 @@ export const CifraViewer: React.FC = () => {
           onClose={() => setShowVideo(false)}
           onDurationDetected={handleVideoDuration}
         />
+      )}
+
+      {/* Permissão para medir a duração no YouTube. Aparece no primeiro "Rolar"
+          de uma música sem duração conhecida — e só uma vez: a resposta, seja
+          qual for, fica guardada. */}
+      {askScrollConsent && (
+        <YouTubeScrollConsentModal onAnswered={() => setAskScrollConsent(false)} />
       )}
 
       {/* Barra de posição — fixa na viewport para continuar alcançável durante o

@@ -43,3 +43,11 @@ jobs:
       - name: Testes (Vitest)
         if: ${{ !cancelled() }}
         run: npm test
+
+      # O nome dos arquivos do bundle muda a cada build, então os rótulos de
+      # licença são gerados pelo próprio `npm run build`. Este passo confere que
+      # o resultado ficou mesmo em conformidade — sem ele, uma mudança no
+      # pipeline quebraria o site para quem usa LibreJS sem nenhum aviso.
+      - name: Conformidade LibreJS
+        if: ${{ !cancelled() }}
+        run: npm run librejs:verify
