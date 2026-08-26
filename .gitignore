@@ -50,3 +50,8 @@ docs/
 # Dumps/backups do banco de produção — nunca versionar (o .zip tem centenas de MB)
 cifras_data_backup.zip
 *.sqlite.zip
+
+# Instruções locais do Claude Code — valem só nesta máquina.
+# O guia de agentes que vale para todo mundo é o AGENTS.md, esse sim versionado.
+CLAUDE.md
+.claude/
