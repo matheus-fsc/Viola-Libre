@@ -4,7 +4,7 @@
  * Licenciado sob a GNU AGPL-3.0 — veja o arquivo LICENSE na raiz do projeto.
  */
 import React, { useState, useEffect, useMemo } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import type { Instrument, Tuning, Voicing } from './engine/types';
 import { PRESET_INSTRUMENTS, NOTE_NAMES_SHARP, NOTE_NAMES_FLAT } from './engine/tunings';
 import { buildChord, buildVoicingFromFrets, calculateVoicings, shouldUseFlats, noteNameToPitchClass, evaluatePlayability } from './engine/chordCalculator';
@@ -215,6 +215,18 @@ function App() {
   // parou em cada aba (goToTab volta pra lá em vez da raiz).
   const { pathname } = useLocation();
   const { activeTab, goToTab } = useTabNavigation();
+  const navigate = useNavigate();
+
+  // A seta da app bar do celular é a ÚNICA afordância de voltar naquela largura — a barra
+  // de título da cifra e da lista escondem a delas justamente para não haver duas setas
+  // com destinos diferentes na mesma tela. Então é esta que precisa desfazer o passo
+  // anterior de verdade: quem veio de /cifras?letra=E tem que voltar para a letra E, na
+  // mesma posição, e não para o menu. `history.state.idx` é o índice da entrada na pilha
+  // do React Router; zero significa primeira da aba (link direto), e aí não há passo a
+  // desfazer — o menu é o destino honesto. Lido no corpo do componente de propósito: ele
+  // re-renderiza a cada navegação, então o valor acompanha.
+  const temPassoAnterior = (window.history.state?.idx ?? 0) > 0;
+  const rotuloVoltar = temPassoAnterior ? 'Voltar' : 'Voltar ao menu';
   const isTimingRoute = /\/cifras\/[^/]+\/[^/]+\/timing$/.test(pathname);
 
   // Metadados de busca das seções fixas. A subárvore de cifras responde pelos seus
@@ -659,10 +671,10 @@ function App() {
               O ⓘ herda o que o ✕ fazia (abrir o Sobre), que era o único caminho pro modal. */}
           <div className="md:hidden winxp-gradient-blue text-white px-1.5 py-1.5 flex items-center gap-1 border-b-2 border-[#002fa7] select-none">
             <button
-              onClick={() => goToTab('desktop')}
+              onClick={() => (temPassoAnterior ? navigate(-1) : goToTab('desktop'))}
               className="w-8 h-8 shrink-0 rounded flex items-center justify-center hover:bg-white/20 active:bg-white/30 focus:outline-none cursor-pointer"
-              aria-label="Voltar ao menu"
-              title="Voltar ao menu"
+              aria-label={rotuloVoltar}
+              title={rotuloVoltar}
             >
               <ArrowLeft size={18} strokeWidth={2.5} />
             </button>

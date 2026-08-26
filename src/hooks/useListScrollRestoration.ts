@@ -44,6 +44,27 @@ const ITEM_ATTR = 'data-item-lista';
 const MAX_FRAMES = 300;
 /** Quadros com o alvo parado que bastam para considerar a página assentada (~0,3s). */
 const FRAMES_ESTAVEIS = 20;
+/**
+ * Espera até a rolagem parar para reler a âncora.
+ *
+ * Um quadro depois do scroll o layout ainda está se mexendo: os itens com
+ * `content-visibility` só trocam a altura estimada pela real ao entrar na tela. Medido no
+ * telefone, o item no topo era o #32 a -70px logo após rolar e o #36 a -14px meio segundo
+ * depois — gravar no primeiro quadro guardava uma âncora de um layout que deixou de valer,
+ * e a volta caía três linhas fora.
+ */
+const ASSENTAR_MS = 200;
+
+/**
+ * Quadros de vigia depois de assentar (~1s).
+ *
+ * Assentar não é acabar: a grade de artistas usa `content-visibility: auto` com altura
+ * estimada, e cada item que entra na tela troca a estimativa pela altura real, empurrando
+ * o que está acima. No telefone, com uma coluna só, o erro acumulado de dezenas de linhas
+ * deslocava a leitura em três itens depois que a restauração já tinha largado. A vigia
+ * segue corrigindo enquanto ninguém encostar na rolagem.
+ */
+const VIGIA_FRAMES = 60;
 
 /**
  * Identidade da entrada do histórico em que esta lista está.
@@ -172,14 +193,22 @@ export function useListScrollRestoration(count: number, ready: boolean): void {
     if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
 
     let raf = 0;
+    let assentar = 0;
     const agendar = () => {
-      if (raf) return;
-      raf = requestAnimationFrame(() => { raf = 0; salvar(); });
+      // Duas gravações de propósito. A do quadro seguinte é o piso: barata, e garante uma
+      // posição aproximada se a pessoa rolar e clicar num link no mesmo instante. A da
+      // parada é a boa, com o layout já assentado — ela sobrescreve a primeira.
+      if (!raf) raf = requestAnimationFrame(() => { raf = 0; salvar(); });
+      clearTimeout(assentar);
+      assentar = setTimeout(salvar, ASSENTAR_MS);
     };
     window.addEventListener('scroll', agendar, { passive: true });
     return () => {
       window.removeEventListener('scroll', agendar);
       cancelAnimationFrame(raf);
+      // Cancelar as duas é o que descarta a rolagem ao topo da navegação: o evento dela
+      // agenda, e esta limpeza — ainda na mesma tarefa — chega antes de qualquer uma rodar.
+      clearTimeout(assentar);
       if ('scrollRestoration' in history) history.scrollRestoration = anterior;
     };
   }, [salvar]);
@@ -202,17 +231,33 @@ export function useListScrollRestoration(count: number, ready: boolean): void {
     if (!snapshot.y && snapshot.idx === undefined) return;
 
     restaurandoRef.current = true;
+    let interrompido = false;
+    const desistir = () => { interrompido = true; };
+    const GESTOS = ['wheel', 'touchstart', 'pointerdown', 'keydown'] as const;
+    for (const g of GESTOS) window.addEventListener(g, desistir, { passive: true });
+
     let frames = 0;
     let estaveis = 0;
+    let vigia = 0;
     let ultimoAlvo = -1;
     let raf = 0;
 
     const encerrar = () => {
       doneRef.current = true;
       restaurandoRef.current = false;
+      for (const g of GESTOS) window.removeEventListener(g, desistir);
     };
 
     const tick = () => {
+      // Encostou na rolagem? A pessoa passa na frente. O sinal é a ENTRADA dela, não a
+      // variação de `scrollY`: o scroll anchoring do Chrome mexe na posição sozinho
+      // sempre que algo acima muda de altura — que é exatamente o que acontece aqui — e
+      // inferir intenção a partir disso abortava a restauração no primeiro quadro.
+      if (interrompido) {
+        encerrar();
+        return;
+      }
+
       // Alvo pela âncora; sem item marcado (ou antes de ele existir), cai no pixel salvo
       // limitado ao que a página comporta agora.
       const alcance = document.documentElement.scrollHeight - window.innerHeight;
@@ -224,10 +269,12 @@ export function useListScrollRestoration(count: number, ready: boolean): void {
       estaveis = Math.abs(alvo - ultimoAlvo) <= 1 ? estaveis + 1 : 0;
       ultimoAlvo = alvo;
 
-      // Só encerra parado NA âncora: assentar no pixel de reserva enquanto o item ainda
-      // não chegou seria dar por boa uma posição que a lista completa vai desmentir.
+      // Só conta como assentado parado NA âncora: assentar no pixel de reserva enquanto o
+      // item ainda não chegou seria dar por boa uma posição que a lista vai desmentir.
       const naAncora = porAncora !== null || snapshot.idx === undefined;
-      if ((estaveis >= FRAMES_ESTAVEIS && naAncora) || frames++ >= MAX_FRAMES) {
+      if (estaveis >= FRAMES_ESTAVEIS && naAncora) vigia++;
+
+      if (vigia >= VIGIA_FRAMES || frames++ >= MAX_FRAMES) {
         encerrar();
         return;
       }
@@ -235,6 +282,10 @@ export function useListScrollRestoration(count: number, ready: boolean): void {
     };
 
     raf = requestAnimationFrame(tick);
-    return () => { cancelAnimationFrame(raf); restaurandoRef.current = false; };
+    return () => {
+      cancelAnimationFrame(raf);
+      restaurandoRef.current = false;
+      for (const g of GESTOS) window.removeEventListener(g, desistir);
+    };
   }, [snapshot, ready]);
 }
