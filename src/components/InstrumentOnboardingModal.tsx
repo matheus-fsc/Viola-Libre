@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import type { Instrument } from '../engine/types';
 import { PRESET_INSTRUMENTS } from '../engine/tunings';
 import { useDialog } from '../hooks/useDialog';
@@ -43,6 +43,37 @@ export const InstrumentOnboardingModal: React.FC<Props> = ({ onSelect, onSkip })
   // Esc equivale a "decidir depois": é a saída sem escolher, que já existe no botão.
   const { ref: dialogRef, props: dialogProps } = useDialog({ onClose: onSkip, titleId: 'titulo-onboarding-instrumento' });
 
+  /**
+   * Dica de que a lista continua abaixo.
+   *
+   * A barra de rolagem não resolve sozinha: no telefone ela é fina, some quando ninguém
+   * está rolando, e no `retro-scrollbar` mal contrasta com o painel. O que costuma avisar
+   * é um botão cortado ao meio na borda — mas isso é acidente de altura. Quando a folha
+   * termina exatamente no fim de uma linha, nada corta, e a lista parece completa.
+   *
+   * Daí a reticência: aparece só enquanto sobra conteúdo, e some ao chegar no fim.
+   */
+  const corpoRef = useRef<HTMLDivElement>(null);
+  const [temMais, setTemMais] = useState(false);
+
+  useEffect(() => {
+    const el = corpoRef.current;
+    if (!el) return;
+    // Folga de 4px: arredondamento de zoom ou de densidade de tela não deve manter a dica
+    // acesa quando já se está no fim.
+    const medir = () => setTemMais(el.scrollHeight - el.clientHeight - el.scrollTop > 4);
+    el.addEventListener('scroll', medir, { passive: true });
+    // O ResizeObserver dispara uma vez ao começar a observar, e é de lá que sai a medida
+    // inicial — assim o efeito não chama setState no próprio corpo. Ele também cobre a
+    // virada de tela e a mudança de altura da folha, que mudam o que cabe.
+    const observador = new ResizeObserver(medir);
+    observador.observe(el);
+    return () => {
+      el.removeEventListener('scroll', medir);
+      observador.disconnect();
+    };
+  }, []);
+
   // No telefone o diálogo é uma folha que sobe pela borda de baixo, e não uma janela
   // centralizada: janela é metáfora de desktop, e ali no meio da tela as catorze opções
   // caíam longe do polegar. Encostada embaixo, a folha cresce para cima e o primeiro toque
@@ -67,29 +98,48 @@ export const InstrumentOnboardingModal: React.FC<Props> = ({ onSelect, onSkip })
           <span id="titulo-onboarding-instrumento">🎸 Qual é o seu instrumento?</span>
         </div>
 
-        <div className="px-4 sm:px-5 pt-4 sm:pt-5 pb-4 flex flex-col gap-4 text-xs min-h-0 overflow-y-auto retro-scrollbar">
-          <p className="text-gray-700 leading-relaxed">
-            Escolha seu instrumento principal para carregarmos automaticamente a afinação
-            certa sempre que você abrir uma cifra ou o dicionário de acordes. Dá pra trocar
-            a qualquer momento depois.
-          </p>
+        {/* O invólucro existe só para ancorar a dica de rolagem sobre a borda de baixo do
+            miolo — dentro dele a dica rolaria junto com a lista, que é o oposto do que ela
+            precisa fazer. */}
+        <div className="relative flex min-h-0 flex-col">
+          <div ref={corpoRef} className="px-4 sm:px-5 pt-4 sm:pt-5 pb-4 flex flex-col gap-4 text-xs min-h-0 overflow-y-auto retro-scrollbar">
+            <p className="text-gray-700 leading-relaxed">
+              Escolha seu instrumento principal para carregarmos automaticamente a afinação
+              certa sempre que você abrir uma cifra ou o dicionário de acordes. Dá pra trocar
+              a qualquer momento depois.
+            </p>
 
-          {/* `items-stretch` deixa os botões de uma linha com a mesma altura mesmo quando
-              um deles quebra em duas linhas — sem isso, "Violão/Guitarra" ficaria mais alto
-              que os vizinhos na largura de telefone. `leading-tight` e `hyphens-none` mantêm
-              a quebra contida e sempre na barra, nunca no meio de "Guitarra".
-              `min-h-12` (48px) é o piso de alvo de toque; no desktop, onde se aponta com o
-              mouse, o botão volta a ter a altura do próprio conteúdo. */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 items-stretch">
-            {PRESET_INSTRUMENTS.map(inst => (
-              <button
-                key={inst.id}
-                onClick={() => onSelect(inst)}
-                className="bevel-out bg-[var(--color-winxp-panel)] min-h-12 sm:min-h-0 px-1.5 sm:px-2 py-3 font-bold text-xs leading-tight hyphens-none hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white cursor-pointer text-center"
-              >
-                {rotulo(inst)}
-              </button>
-            ))}
+            {/* `items-stretch` deixa os botões de uma linha com a mesma altura mesmo quando
+                um deles quebra em duas linhas — sem isso, "Violão/Guitarra" ficaria mais alto
+                que os vizinhos na largura de telefone. `leading-tight` e `hyphens-none` mantêm
+                a quebra contida e sempre na barra, nunca no meio de "Guitarra".
+                `min-h-12` (48px) é o piso de alvo de toque; no desktop, onde se aponta com o
+                mouse, o botão volta a ter a altura do próprio conteúdo. */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 items-stretch">
+              {PRESET_INSTRUMENTS.map(inst => (
+                <button
+                  key={inst.id}
+                  onClick={() => onSelect(inst)}
+                  className="bevel-out bg-[var(--color-winxp-panel)] min-h-12 sm:min-h-0 px-1.5 sm:px-2 py-3 font-bold text-xs leading-tight hyphens-none hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white cursor-pointer text-center"
+                >
+                  {rotulo(inst)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* `pointer-events-none` é essencial: a dica cobre a última linha de botões, e
+              sem isso engoliria o toque de quem mira neles. O degradê faz o corte parecer
+              proposital, e a reticência diz o que ele significa. O véu é curto e fraco de
+              propósito: cobrindo a linha inteira com opacidade alta, os últimos botões
+              ficavam lavados e passavam a parecer desabilitados em vez de cortados. `aria-hidden` porque para
+              quem usa leitor de tela a lista nunca esteve escondida — ele já percorre os
+              catorze botões, e anunciar "mais opções abaixo" seria ruído. */}
+          <div
+            aria-hidden="true"
+            className={`pointer-events-none absolute inset-x-0 bottom-0 flex justify-center pt-5 pb-1.5 bg-gradient-to-t from-[#ece9d8] via-[#ece9d8]/60 to-transparent transition-opacity duration-150 ${temMais ? 'opacity-100' : 'opacity-0'}`}
+          >
+            <span className="text-base leading-none tracking-[0.25em] text-gray-500">•••</span>
           </div>
         </div>
 
