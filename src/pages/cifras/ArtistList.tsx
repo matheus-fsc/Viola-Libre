@@ -2,6 +2,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { InfiniteLoader } from '../../components/InfiniteLoader';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Flame, Heart, FileText, Mic2, Music, Guitar, TrendingUp } from 'lucide-react';
+import { useListScrollRestoration, useRestoredItemCount } from '../../hooks/useListScrollRestoration';
 import { useSeo } from '../../hooks/useSeo';
 
 // ─── Genre flag SVGs ──────────────────────────────────────────────────────────
@@ -157,6 +158,20 @@ const SEARCH_DEBOUNCE_MS = 300;
 const SMALL_PAGE = 200;   // tamanho normal (primeiros loads)
 const BULK_PAGE  = 2000;  // tamanho bulk (após BULK_AFTER loads)
 const BULK_AFTER = 5;     // a partir do N-ésimo load, usa bulk
+
+/**
+ * Teto de itens que a volta reabre de uma vez.
+ *
+ * O artista é um registro magro (~65 bytes), então a restauração normal é barata: medido
+ * contra a API, 200 itens dão 3 KB comprimidos e 800 dão 12 KB. O que envelhece mal é a
+ * rolagem patológica — depois de `BULK_AFTER` cargas o acervo vem de 2000 em 2000, e quem
+ * descer muito acumularia dezenas de milhares para reabrir num pedido só.
+ *
+ * 2000 é onde a conta ainda fecha (30 KB comprimidos). Passando disso a volta cai sozinha
+ * na reserva por pixel do `useListScrollRestoration`, que é o mesmo caminho já usado quando
+ * a âncora não aparece: aproxima em vez de acertar, em troca de não baixar meio mega.
+ */
+const MAX_RESTAURACAO = 2000;
 const BUFFER_TTL = 60 * 60 * 1000; // 1h — validade do cache no localStorage
 
 const bufferKey = (letra: string, q: string, fromOffset: number) =>
@@ -189,6 +204,15 @@ function parseSearchMode(raw: string | null): SearchMode {
 }
 
 export const ArtistList: React.FC = () => {
+  // Quem volta de uma cifra volta para o ponto exato da lista. Aqui a rolagem sozinha não
+  // basta: com scroll infinito, a posição salva só existe se as mesmas páginas voltarem a
+  // estar carregadas — por isso a contagem restaurada vira o tamanho da primeira busca.
+  const restoredCount = useRestoredItemCount();
+  // Consumido só quando a carga restaurada de fato chega, e não quando ela começa: em dev o
+  // StrictMode monta o efeito duas vezes e aborta a primeira, então zerar na largada fazia a
+  // segunda tentativa buscar o tamanho normal e engolir a restauração.
+  const restauraRef = useRef<number | null>(restoredCount);
+
   // ── Artistas (server-side infinite scroll) ───────────────────
   const [pagedArtists, setPagedArtists] = useState<Artist[]>([]);
   const [totalArtists, setTotalArtists] = useState(0);
@@ -236,8 +260,18 @@ export const ArtistList: React.FC = () => {
   // Os dois rankings são um modo só na interface ("Populares"), dois no estado.
   const isPopulares = searchMode === 'top_views' || searchMode === 'top_likes';
 
-  const [visibleCount, setVisibleCount] = useState(32);
-  const [selectedLetter, setSelectedLetter] = useState<string | null>(null);
+  const [visibleCount, setVisibleCount] = useState(restoredCount ?? 32);
+  // A letra é filtro como a busca e o modo, e pelo mesmo motivo mora na URL: sem isso,
+  // voltar de uma cifra devolvia o acervo inteiro no lugar da letra que estava aberta —
+  // e a posição restaurada apontava para uma lista que já não era a mesma.
+  const [selectedLetter, setSelectedLetter] = useState<string | null>(
+    () => searchParams.get('letra') || null,
+  );
+
+  // O que está de fato à mostra depende do modo: em 'artistas' quem pagina é o servidor,
+  // nos outros é o slice local.
+  const itensAMostra = searchMode === 'artistas' ? pagedArtists.length : visibleCount;
+  useListScrollRestoration(itensAMostra, itensAMostra > 0);
 
 
   // A busca vira URL (`?busca=`), e cada termo digitado seria uma página nova aos olhos
@@ -249,7 +283,7 @@ export const ArtistList: React.FC = () => {
     description:
       'Acervo livre de cifras para viola caipira, violão e cavaquinho. Busque por artista ou música e veja os acordes desenhados no braço do instrumento.',
     path: '/cifras',
-    noindex: Boolean(debouncedSearch) || searchMode !== 'artistas',
+    noindex: Boolean(debouncedSearch) || Boolean(selectedLetter) || searchMode !== 'artistas',
   });
 
   // Debounce da busca (evita requests a cada tecla). Roda em todos os modos, não só em
@@ -266,8 +300,9 @@ export const ArtistList: React.FC = () => {
     const next = new URLSearchParams();
     if (debouncedSearch) next.set('busca', debouncedSearch);
     if (searchMode !== 'artistas') next.set('modo', searchMode);
+    if (selectedLetter) next.set('letra', selectedLetter);
     setSearchParams(next, { replace: true });
-  }, [debouncedSearch, searchMode, setSearchParams]);
+  }, [debouncedSearch, searchMode, selectedLetter, setSearchParams]);
 
   // Carrega primeira página quando filtros mudam.
   // useLayoutEffect (e não useEffect) garante que setIsLoadingPage(true) commita
@@ -287,11 +322,17 @@ export const ArtistList: React.FC = () => {
     setIsLoadingPage(true);
     setSearchError(null);
 
+    // Ao voltar, a primeira busca já traz de uma vez todas as páginas que estavam abertas:
+    // repetir a paginação em N requests só para reencontrar a mesma posição seria lento e
+    // visível. Vale só na montagem — trocar de filtro depois recomeça do tamanho normal.
+    const tamanho = Math.min(MAX_RESTAURACAO, Math.max(SMALL_PAGE, restauraRef.current ?? 0));
+
     // Aborta a busca anterior ao digitar de novo. Sem isso duas respostas competiam e quem
     // escrevia o estado era a que chegava por último, não a que foi pedida por último.
     const ctrl = new AbortController();
-    getArtistsPaginated(0, SMALL_PAGE, selectedLetter ?? '', debouncedSearch, ctrl.signal)
+    getArtistsPaginated(0, tamanho, selectedLetter ?? '', debouncedSearch, ctrl.signal)
       .then(page => {
+        restauraRef.current = null;
         pageOffsetRef.current = page.artists.length;
         totalArtistsRef.current = page.total;
         setPagedArtists(page.artists);
@@ -616,9 +657,11 @@ export const ArtistList: React.FC = () => {
             ) : (
               <div className="flex flex-col gap-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                  {pagedArtists.map(artist => (
+                  {pagedArtists.map((artist, i) => (
                     <Link
                       key={artist.id}
+                      // Âncora da restauração de leitura (veja useListScrollRestoration).
+                      data-item-lista={i}
                       to={`/cifras/${artist.slug}`}
                       className="bevel-out bg-[var(--color-winxp-panel)] p-2 flex items-center cursor-pointer hover:bg-[#e0dfd6] active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white select-none text-inherit no-underline"
                       style={{ contentVisibility: 'auto', containIntrinsicSize: '0 52px' }}
@@ -661,9 +704,10 @@ export const ArtistList: React.FC = () => {
                 </div>
               ) : (
                 <div className="flex flex-col gap-2">
-                  {songResults.slice(0, visibleCount).map(song => (
+                  {songResults.slice(0, visibleCount).map((song, i) => (
                     <Link
                       key={song.id}
+                      data-item-lista={i}
                       to={`/cifras/${song.artist_slug}/${song.slug}`}
                       className="flex items-center p-2 hover:bg-[#316ac5] hover:text-white cursor-pointer select-none group border border-transparent hover:border-dotted hover:border-white transition-none text-inherit no-underline"
                     >
@@ -717,6 +761,7 @@ export const ArtistList: React.FC = () => {
                   {songResults.slice(0, visibleCount).map((song, index) => (
                     <Link
                       key={song.id}
+                      data-item-lista={index}
                       to={`/cifras/${song.artist_slug}/${song.slug}`}
                       className="flex items-center p-2 hover:bg-[#316ac5] hover:text-white cursor-pointer select-none group border border-transparent hover:border-dotted hover:border-white transition-none text-inherit no-underline"
                     >
@@ -805,9 +850,10 @@ export const ArtistList: React.FC = () => {
                   ) : (
                     <>
                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                        {generoArtists.slice(0, visibleCount).map(artist => (
+                        {generoArtists.slice(0, visibleCount).map((artist, i) => (
                           <Link
                             key={artist.id}
+                            data-item-lista={i}
                             to={`/cifras/${artist.slug}`}
                             className="bevel-out bg-[var(--color-winxp-panel)] p-2 flex items-center cursor-pointer hover:bg-[#e0dfd6] active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white select-none text-inherit no-underline"
                             style={{ contentVisibility: 'auto', containIntrinsicSize: '0 52px' }}

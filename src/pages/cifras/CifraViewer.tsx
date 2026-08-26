@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState, useMemo, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Ellipsis, Eye, FileText, Guitar, Heart, Music2, Pencil, Pin, Play, Printer, RotateCcw, Save, Video } from 'lucide-react';
+import { Link, useParams, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Ellipsis, Eye, FileText, FolderOpen, Guitar, Heart, Music2, Pencil, Pin, Play, Printer, RotateCcw, Save, Video } from 'lucide-react';
 import {
   getCifra, incrementView, type CifraDetail,
   saveSequencia, loadSequencia, updateSequencia, deleteSequencia,
@@ -83,6 +83,11 @@ interface SectionEntry {
 }
 
 // ── Transporte do rolamento ───────────────────────────────────────────────────
+/** Os dois botões da barra de título da cifra, iguais por serem irmãos na mesma barra. */
+const botaoBarra =
+  'bevel-out bg-[var(--color-winxp-panel)] text-black px-2 py-0 text-xs items-center gap-1 ' +
+  'active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white';
+
 // Fração da viewport onde o acorde "atual" é posicionado (linha de leitura).
 const READING_LINE = 0.30;
 // Divergência (px) entre o Y que escrevemos e o Y real da página a partir da qual
@@ -1399,7 +1404,15 @@ export const CifraViewer: React.FC = () => {
   // "Viola Libre", procura "cifra de tocando em frente". Ficam antes dos returns
   // adiantados porque hook não pode ser condicional.
   const artistName = artistSlug ? prettifySlug(artistSlug) : '';
-  const cifraPath = `/cifras/${artistSlug ?? ''}/${songSlug ?? ''}`;
+  const artistPath = `/cifras/${artistSlug ?? ''}`;
+  const cifraPath = `${artistPath}/${songSlug ?? ''}`;
+
+  // "De onde eu vim" é propriedade da visita, não da página — então quem guarda é o
+  // histórico do navegador, e não a URL: com `?from=` na URL um link compartilhado levaria
+  // junto o rastro de quem compartilhou, e a página da cifra (que precisa ser indexável)
+  // ganharia uma variante por origem. O React Router numera as entradas em
+  // `history.state.idx`; zero significa que esta é a primeira da aba, ou seja, link direto.
+  const temHistorico = (window.history.state?.idx ?? 0) > 0;
 
   // A folha de impressão nasce no mesmo ponto em que o músico está lendo: tom, instrumento,
   // afinação e posição da tab viajam pela URL, e não por store, para que o link continue
@@ -1424,11 +1437,11 @@ export const CifraViewer: React.FC = () => {
         cifra
           ? breadcrumbJsonLd([
               { name: 'Cifras', path: '/cifras' },
-              { name: artistName, path: `/cifras/${artistSlug ?? ''}` },
+              { name: artistName, path: artistPath },
               { name: cifra.title, path: cifraPath },
             ])
           : null,
-      [cifra, artistName, artistSlug, cifraPath],
+      [cifra, artistName, artistPath, cifraPath],
     ),
   );
 
@@ -1659,15 +1672,53 @@ export const CifraViewer: React.FC = () => {
         <div className="flex items-center gap-2 truncate">
           <FileText size={16} aria-hidden="true" />
           {/* O <h1> da página. Era um <span> com o slug cru ("tocando-em-frente"):
-              o nome legível serve igualmente a quem lê e a quem indexa. */}
-          <h1 className="truncate font-bold text-sm">{cifra.title} — {artistName}</h1>
+              o nome legível serve igualmente a quem lê e a quem indexa.
+              O nome do artista dentro dele é link: quem chega pelo Google numa música
+              solta espera clicar no nome para ver o resto do repertório, e até então
+              esse caminho só existia disfarçado de "Voltar". */}
+          {/* Quem encolhe é o título, não o nome do artista: com um `truncate` só na
+              linha inteira a barra cortava justamente no link ("… — J…"), deixando o
+              caminho para o artista ilegível na largura de telefone. */}
+          <h1 className="flex items-baseline gap-1 min-w-0 font-bold text-sm">
+            <span className="truncate min-w-0">{cifra.title}</span>
+            <span aria-hidden="true" className="shrink-0">—</span>
+            <Link
+              to={artistPath}
+              title={`Ver todas as cifras de ${artistName}`}
+              className="shrink-0 truncate max-w-[45%] underline decoration-dotted underline-offset-2 hover:decoration-solid"
+            >
+              {artistName}
+            </Link>
+          </h1>
         </div>
-        <button 
-          onClick={() => navigate(`/cifras/${artistSlug}`)}
-          className="bevel-out bg-[var(--color-winxp-panel)] text-black px-2 py-0 text-xs active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white shrink-0 ml-2"
-        >
-          Voltar
-        </button>
+        {/* Dois destinos diferentes, dois botões — antes havia um "Voltar" só, que ia
+            sempre para o artista e por isso mentia para quem tinha chegado de uma busca.
+            "Ver artista" é lugar fixo; "Voltar" é o passo anterior, seja ele qual for. */}
+        <div className="flex items-center gap-1 shrink-0 ml-2">
+          <Link
+            to={artistPath}
+            title={`Todas as músicas de ${artistName}`}
+            className={`flex ${botaoBarra}`}
+          >
+            <FolderOpen size={12} aria-hidden="true" />
+            Ver artista
+          </Link>
+          {/* Só existe quando existe passo anterior. Link direto, compartilhado ou aberto
+              em aba nova não tem para onde voltar, e um botão que nesse caso pulasse para
+              outro lugar seria a mesma promessa quebrada de antes — melhor não estar lá.
+              No telefone ele também some: a app bar já tem uma seta de voltar, e duas
+              setas com destinos diferentes na mesma tela é o que confunde. */}
+          {temHistorico && (
+            <button
+              onClick={() => navigate(-1)}
+              title="Voltar para a página anterior"
+              className={`hidden sm:flex ${botaoBarra}`}
+            >
+              <ArrowLeft size={12} aria-hidden="true" />
+              Voltar
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Preview timing banner */}

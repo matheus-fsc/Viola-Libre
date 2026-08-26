@@ -1,14 +1,20 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
-import { FolderOpen, FileText, Layers, Flame, Heart } from 'lucide-react';
+import { ArrowLeft, FolderOpen, FileText, Layers, Flame, Heart } from 'lucide-react';
 import { getSongs, getCifra, type Song } from '../../services/api';
 import { prettifySlug } from '../../services/cifraFavorites';
 import { useArtistSongFilter, type ArtistSongTab } from '../../hooks/useArtistSongFilter';
+import { useListScrollRestoration, useRestoredItemCount } from '../../hooks/useListScrollRestoration';
 import { useSeo } from '../../hooks/useSeo';
 import { useJsonLd, breadcrumbJsonLd } from '../../hooks/useJsonLd';
 import { TopSongsHighlight } from './TopSongsHighlight';
 
 const isPrincipal = (v?: string) => (v || '').toLowerCase().includes('principal');
+
+/** Os dois botões da barra de título, iguais por serem irmãos na mesma barra. */
+const botaoBarra =
+  'bevel-out bg-[var(--color-winxp-panel)] text-black px-2 py-0 text-xs items-center gap-1 ' +
+  'active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white';
 
 const TABS: { id: ArtistSongTab; label: string }[] = [
   { id: 'alfabetica', label: 'Ordem alfabética' },
@@ -39,12 +45,18 @@ export const SongList: React.FC = () => {
     return { dedupedSongs: Array.from(byTitle.values()), versionCount: count };
   }, [songs]);
 
+  // Quem volta de uma cifra volta para a lista como a deixou: mesma busca (que vem da URL),
+  // mesmas páginas abertas e mesma posição de rolagem.
+  const restoredCount = useRestoredItemCount();
+
   const {
     query, setQuery,
     activeTab, setActiveTab,
     visibleSongs, hasMore, loadMore,
     top20,
-  } = useArtistSongFilter(artistSlug ?? '', dedupedSongs);
+  } = useArtistSongFilter(artistSlug ?? '', dedupedSongs, restoredCount ?? undefined);
+
+  useListScrollRestoration(visibleSongs.length, !loading && visibleSongs.length > 0);
 
   useEffect(() => {
     if (artistSlug) {
@@ -76,6 +88,9 @@ export const SongList: React.FC = () => {
 
   const artistName = artistSlug ? prettifySlug(artistSlug) : 'Artista';
 
+  // Zero significa primeira entrada da aba — link direto, sem passo anterior para desfazer.
+  const temHistorico = (window.history.state?.idx ?? 0) > 0;
+
   // "Cifras de X" e não "Músicas de X": é assim que a busca é digitada. O contador de
   // músicas entra na descrição quando já chegou, porque número concreto rende mais
   // clique do que promessa genérica.
@@ -85,6 +100,10 @@ export const SongList: React.FC = () => {
       ? `${dedupedSongs.length} cifras de ${artistName} para viola caipira, violão e cavaquinho, com os acordes no braço do instrumento e troca de tom.`
       : `Cifras de ${artistName} para viola caipira, violão e cavaquinho, com os acordes no braço do instrumento e troca de tom.`,
     path: `/cifras/${artistSlug ?? ''}`,
+    // Mesma regra do explorador: com a busca na URL, cada termo digitado seria uma página
+    // nova aos olhos do Google. A canônica já aponta para a lista limpa; o noindex cobre
+    // quem chegar por um link filtrado compartilhado.
+    noindex: Boolean(query) || activeTab !== 'alfabetica',
   });
   useJsonLd(
     useMemo(
@@ -107,12 +126,27 @@ export const SongList: React.FC = () => {
               referência que a barra dá a quem enxerga. */}
           <h1 className="font-bold text-sm">Músicas de {artistName}</h1>
         </div>
-        <button
-          onClick={() => navigate('/cifras')}
-          className="bevel-out bg-[var(--color-winxp-panel)] text-black px-2 py-0 text-xs active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
-        >
-          Voltar
-        </button>
+        {/* Mesma separação da página da cifra: um destino fixo e um passo atrás.
+            O "Voltar" daqui fazia `navigate('/cifras')` na unha, e com os filtros do
+            explorador vivendo na URL isso deixou de ser só impreciso e passou a
+            destruir estado: quem vinha de `/cifras?letra=E` voltava para o acervo
+            inteiro, no topo. `navigate(-1)` devolve a letra, a busca e a posição. */}
+        <div className="flex items-center gap-1 shrink-0 ml-2">
+          <Link to="/cifras" title="Explorar todo o acervo" className={`flex ${botaoBarra}`}>
+            <FolderOpen size={12} aria-hidden="true" />
+            Explorar
+          </Link>
+          {temHistorico && (
+            <button
+              onClick={() => navigate(-1)}
+              title="Voltar para a página anterior"
+              className={`hidden sm:flex ${botaoBarra}`}
+            >
+              <ArrowLeft size={12} aria-hidden="true" />
+              Voltar
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 bevel-in bg-white p-4 overflow-y-auto flex flex-col retro-scrollbar">
@@ -157,11 +191,14 @@ export const SongList: React.FC = () => {
               </>
             )}
 
-            {visibleSongs.map(song => {
+            {visibleSongs.map((song, i) => {
               const nVersions = versionCount.get(song.title.trim().toLowerCase()) || 1;
               return (
                 <Link
                   key={song.id}
+                  // Âncora da restauração de leitura: é por este índice que a volta
+                  // reencontra a linha exata, e não pelo pixel (veja useListScrollRestoration).
+                  data-item-lista={i}
                   to={`/cifras/${artistSlug}/${song.slug}`}
                   className="flex items-center p-2 hover:bg-[#316ac5] hover:text-white cursor-pointer select-none group border border-transparent hover:border-dotted hover:border-white transition-none text-inherit no-underline"
                 >
