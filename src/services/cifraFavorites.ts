@@ -35,6 +35,26 @@ export interface FavoriteCategory {
   id: string;
   name: string;
   createdAt: string;
+  /**
+   * `'link'` quando a gaveta nasceu de uma lista compartilhada. Ausente nas feitas à mão.
+   *
+   * A diferença não é decorativa: uma lista que chegou de fora pode ser jogada fora
+   * inteira, com as músicas junto (ver `deleteImportedList`), e uma gaveta que o usuário
+   * montou não pode — apagá-la nunca leva favoritos embora.
+   */
+  source?: 'link';
+  /**
+   * Ordem manual das cifras nesta gaveta, por chave (`artista/musica`).
+   *
+   * Guardar a ordem por chave, e não uma posição em cada entrada, é o que permite que a
+   * mesma cifra fique em duas gavetas com ordens diferentes — que é o normal: numa ela é a
+   * terceira do show, na outra é a primeira do estudo.
+   *
+   * É uma DICA, não um índice: chave que sobrou de uma cifra removida é ignorada na
+   * leitura, e cifra que não está aqui vai para o fim. Assim a ordem nunca some por estar
+   * dessincronizada da lista.
+   */
+  order?: string[];
 }
 
 export interface FavoriteEntry {
@@ -46,6 +66,30 @@ export interface FavoriteEntry {
   versionName: string | null;
   categoryIds: string[];
   addedAt: string;
+  /**
+   * O tom em que ESTA pessoa toca a música, em semitons a partir do original. `0` é o
+   * original — que é também o que vale para toda entrada gravada antes deste campo existir.
+   *
+   * Fica na estante e não no servidor pelo mesmo motivo das categorias: é escolha pessoal.
+   * Duas pessoas favoritam a mesma cifra e cada uma a toca no tom da própria voz.
+   */
+  transpose: number;
+  /**
+   * Tom original da cifra, como o visualizador o detectou (o primeiro acorde).
+   *
+   * Guardado junto porque sem ele o `transpose` não vira nome de tom: "+2" não diz nada
+   * na lista, "Lá" diz. `null` quando a cifra não tinha acorde nenhum para deduzir.
+   */
+  originalKey: string | null;
+  /**
+   * `true` quando a cifra ENTROU na estante por uma lista compartilhada — quer dizer, não
+   * estava aqui antes. Ausente em tudo que o usuário favoritou por conta própria.
+   *
+   * É o que separa "cifra que veio no pacote" de "cifra que já era minha e por acaso
+   * também estava na lista do amigo". Sem essa marca, jogar a lista fora levaria junto um
+   * favorito que a pessoa escolheu sozinha, meses antes, e ela nunca saberia por quê.
+   */
+  fromLink?: true;
 }
 
 export interface FavoritesStore {
@@ -62,6 +106,34 @@ export interface FavoritesStore {
   pendingRemovals: string[];
 }
 
+// ---------------------------------------------------------------------------
+// Tetos
+// ---------------------------------------------------------------------------
+//
+// O arquivo importado é conteúdo hostil por definição: chega de fora, e a forma mais
+// provável de ele chegar é alguém mandando "toma minha lista" por WhatsApp. Não dá para
+// executar código a partir dele (é `JSON.parse`, e todo texto sai em nó de texto do JSX,
+// nunca em HTML), mas dá para travar a aba: o merge é feito por índice, e ainda assim um
+// arquivo de milhões de entradas custaria memória e uma serialização gigante no
+// localStorage. Os tetos abaixo cortam isso antes de qualquer trabalho.
+//
+// Os números são folgados para uso real — a maior lista plausível de um usuário tem
+// centenas de músicas, não milhares.
+
+export const MAX_ENTRIES = 5_000;
+export const MAX_CATEGORIES = 200;
+/** 4 MB cobre 5.000 entradas com sobra; acima disso o arquivo não é uma estante. */
+export const MAX_FILE_BYTES = 4 * 1024 * 1024;
+
+/**
+ * Duas oitavas de folga para o tom guardado.
+ *
+ * O que se grava passa por `shortestTranspose` e cabe em [-5, +6]; o teto existe para o
+ * que chega de fora. Fica aqui em cima, e não junto dos outros tetos lá embaixo, porque
+ * `entrySchema` o usa e é avaliado na carga do módulo.
+ */
+export const MAX_TRANSPOSE = 24;
+
 // Slugs seguem a mesma regra do `actionSchema` de api.ts — o que não casa aqui seria
 // recusado com 422 lá. Validar na entrada do arquivo importado evita gravar no
 // localStorage uma entrada que nunca conseguiria sincronizar.
@@ -71,6 +143,11 @@ const categorySchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1).max(60),
   createdAt: z.string(),
+  // `.catch(undefined)` em vez de `.optional()` puro: um `source: 42` num arquivo forjado
+  // não pode derrubar a categoria inteira, só o campo.
+  source: z.literal('link').optional().catch(undefined),
+  // Mesmo teto das entradas — a ordem não pode ser maior que a estante que ela ordena.
+  order: z.array(z.string()).max(MAX_ENTRIES).optional().catch(undefined),
 });
 
 const entrySchema = z.object({
@@ -81,6 +158,12 @@ const entrySchema = z.object({
   versionName: z.string().nullable().catch(null),
   categoryIds: z.array(z.string()).catch([]),
   addedAt: z.string().catch(() => new Date().toISOString()),
+  // Teto e piso porque `transposeChordString` soma o deslocamento a `+120` antes do módulo
+  // 12: um `-999` vindo de um arquivo forjado sairia do outro lado com nota errada em vez
+  // de erro. `.catch(0)` também é o que dá o valor às entradas gravadas antes do campo.
+  transpose: z.number().int().min(-MAX_TRANSPOSE).max(MAX_TRANSPOSE).catch(0),
+  originalKey: z.string().max(12).nullable().catch(null),
+  fromLink: z.literal(true).optional().catch(undefined),
 });
 
 /**
@@ -124,6 +207,14 @@ export const favoritesFileSchema = z.object({
   version: z.literal(1),
   exportedAt: z.string(),
   userHash: z.string().optional(),
+  /**
+   * Como quem montou a lista a chamou — "Roda de terça", "pro casamento da Bia".
+   *
+   * Só faz sentido no compartilhamento: um backup pessoal é a estante inteira e não tem
+   * nome. Do lado de quem recebe é o que diz o que aquilo é antes de importar, e vira a
+   * gaveta sugerida para guardar as músicas. Mesmo teto de nome de categoria.
+   */
+  listName: z.string().max(60).optional().catch(undefined),
   categories: resilientArray(categorySchema),
   entries: resilientArray(entrySchema),
 });
@@ -133,25 +224,6 @@ export type FavoritesFile = z.infer<typeof favoritesFileSchema>;
 // ---------------------------------------------------------------------------
 // Lógica pura
 // ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
-// Tetos
-// ---------------------------------------------------------------------------
-//
-// O arquivo importado é conteúdo hostil por definição: chega de fora, e a forma mais
-// provável de ele chegar é alguém mandando "toma minha lista" por WhatsApp. Não dá para
-// executar código a partir dele (é `JSON.parse`, e todo texto sai em nó de texto do JSX,
-// nunca em HTML), mas dá para travar a aba: o merge é feito por índice, e ainda assim um
-// arquivo de milhões de entradas custaria memória e uma serialização gigante no
-// localStorage. Os tetos abaixo cortam isso antes de qualquer trabalho.
-//
-// Os números são folgados para uso real — a maior lista plausível de um usuário tem
-// centenas de músicas, não milhares.
-
-export const MAX_ENTRIES = 5_000;
-export const MAX_CATEGORIES = 200;
-/** 4 MB cobre 5.000 entradas com sobra; acima disso o arquivo não é uma estante. */
-export const MAX_FILE_BYTES = 4 * 1024 * 1024;
 
 export const emptyStore = (): FavoritesStore =>
   ({ version: 1, categories: [], entries: [], pendingRemovals: [] });
@@ -206,13 +278,117 @@ export const addEntry = (store: FavoritesStore, entry: FavoriteEntry): Favorites
     // desfavoritado sem querer e clicado de novo.
     categoryIds: known ? known.categoryIds : entry.categoryIds,
     addedAt: known ? known.addedAt : entry.addedAt,
+    // `transpose` e `originalKey` NÃO são preservados: quem favorita está com a cifra
+    // aberta em algum tom agora, e é esse o tom que ele quer guardar. Se a música já
+    // estava na estante, o tom antigo já foi aplicado ao abrir — então "o de agora" e "o
+    // de antes" são o mesmo valor, a menos que ele tenha mudado de ideia no meio.
   };
   return { ...store, entries: [normalized, ...store.entries.filter(e => entryKey(e) !== key)] };
 };
 
+/**
+ * Tira a cifra da estante e **registra a remoção**.
+ *
+ * O registro não é detalhe: a rota do servidor é um toggle, não um delete, e o que sai só
+ * daqui continua lá. Sem a pendência, a próxima reconciliação (que roda a cada carga de
+ * página) puxaria a música de volta e o usuário veria o favorito ressuscitar sozinho —
+ * era exatamente o que acontecia ao remover pelo coração da lista de /favoritos.
+ *
+ * `toggleCifraFavorite` recalcula a pendência por cima disto, então continua mandando lá.
+ */
 export const removeEntry = (store: FavoritesStore, artistSlug: string, songSlug: string): FavoritesStore => {
   const key = favoriteKey(artistSlug, songSlug);
-  return { ...store, entries: store.entries.filter(e => entryKey(e) !== key) };
+  const existia = store.entries.some(e => entryKey(e) === key);
+  return {
+    ...store,
+    entries: store.entries.filter(e => entryKey(e) !== key),
+    pendingRemovals: existia
+      ? Array.from(new Set([...store.pendingRemovals, key]))
+      : store.pendingRemovals,
+  };
+};
+
+/** A gaveta nasceu de um link — pode ser jogada fora inteira. Ver `deleteImportedList`. */
+export const isImportedList = (cat: FavoriteCategory): boolean => cat.source === 'link';
+
+/**
+ * A cifra some junto com a lista?
+ *
+ * Só se as duas coisas valerem: ela CHEGOU por um link (não era favorito de antes) e esta
+ * é a última gaveta em que ela está. Qualquer outra etiqueta — inclusive de outra lista
+ * importada — significa que ela tem vida fora deste pacote.
+ */
+const soVeioDaLista = (e: FavoriteEntry, catId: string): boolean =>
+  e.fromLink === true && e.categoryIds.every(id => id === catId);
+
+export interface PlanoDeDescarte {
+  /** Cifras que saem da estante junto com a lista. */
+  removidas: number;
+  /** Cifras que ficam: já eram suas, ou estão em outra categoria. */
+  mantidas: number;
+}
+
+export const planoDeDescarteDaLista = (store: FavoritesStore, catId: string): PlanoDeDescarte => {
+  const naLista = store.entries.filter(e => e.categoryIds.includes(catId));
+  const removidas = naLista.filter(e => soVeioDaLista(e, catId)).length;
+  return { removidas, mantidas: naLista.length - removidas };
+};
+
+export const chavesDescartadasComLista = (store: FavoritesStore, catId: string): string[] =>
+  store.entries.filter(e => e.categoryIds.includes(catId) && soVeioDaLista(e, catId)).map(entryKey);
+
+/**
+ * Joga fora uma lista que chegou por link, com as músicas dela.
+ *
+ * Diferente de `deleteCategory`, que é organização e nunca descarta cifra. Aqui o gesto é
+ * "não quero esse pacote", e ele leva junto o que veio no pacote — mas nunca o que já era
+ * do usuário nem o que ele arquivou em outra gaveta.
+ */
+export const deleteImportedList = (store: FavoritesStore, catId: string): FavoritesStore => {
+  const removidas = new Set(chavesDescartadasComLista(store, catId));
+  return {
+    ...store,
+    categories: store.categories.filter(c => c.id !== catId),
+    entries: store.entries
+      .filter(e => !removidas.has(entryKey(e)))
+      .map(e => (e.categoryIds.includes(catId)
+        ? { ...e, categoryIds: e.categoryIds.filter(id => id !== catId) }
+        : e)),
+    pendingRemovals: Array.from(new Set([...store.pendingRemovals, ...removidas])),
+  };
+};
+
+// ── Ordem manual dentro de uma gaveta ──────────────────────────────────────
+
+export const setCategoryOrder = (store: FavoritesStore, catId: string, keys: string[]): FavoritesStore => ({
+  ...store,
+  categories: store.categories.map(c => (c.id === catId ? { ...c, order: keys } : c)),
+});
+
+/**
+ * Ordena pela ordem manual da gaveta. O que a ordem não menciona vai para o fim, na ordem
+ * em que chegou — cifra nova numa lista já organizada aparece no fim, não some nem
+ * embaralha o que já estava arrumado.
+ */
+export const sortByOrder = (entries: FavoriteEntry[], order: string[] | undefined): FavoriteEntry[] => {
+  if (!order || order.length === 0) return entries;
+  const pos = new Map(order.map((k, i) => [k, i]));
+  // `MAX_SAFE_INTEGER` e não `Infinity`: com dois ausentes, `Infinity - Infinity` é `NaN`,
+  // e um comparador que devolve `NaN` tem resultado indefinido.
+  const em = (e: FavoriteEntry) => pos.get(entryKey(e)) ?? Number.MAX_SAFE_INTEGER;
+  return [...entries].sort((a, b) => em(a) - em(b));
+};
+
+/** Move uma chave para a posição `destino` (base 0), empurrando o resto. */
+export const moveKey = (keys: string[], key: string, destino: number): string[] => {
+  const de = keys.indexOf(key);
+  if (de === -1) return keys;
+  const alvo = Math.max(0, Math.min(keys.length - 1, destino));
+  if (alvo === de) return keys;
+  const next = [...keys];
+  next.splice(de, 1);
+  next.splice(alvo, 0, key);
+  return next;
 };
 
 const makeId = (): string =>
@@ -265,6 +441,46 @@ export const setEntryCategories = (store: FavoritesStore, key: string, categoryI
   ...store,
   entries: store.entries.map(e => (entryKey(e) === key ? { ...e, categoryIds: Array.from(new Set(categoryIds)) } : e)),
 });
+
+/**
+ * Grava o tom em que o usuário toca esta música.
+ *
+ * `originalKey` viaja junto porque a estante não tem a cifra em mãos para deduzi-lo — e
+ * sem ele a lista mostraria "+2" onde deveria mostrar "Lá". Quando o visualizador não
+ * conseguiu detectar o tom, o que já estava guardado é preservado: um `null` de agora não
+ * pode apagar um nome que uma visita anterior conseguiu descobrir.
+ */
+export const setEntryTom = (
+  store: FavoritesStore,
+  key: string,
+  transpose: number,
+  originalKey: string | null
+): FavoritesStore => ({
+  ...store,
+  entries: store.entries.map(e =>
+    entryKey(e) === key ? { ...e, transpose, originalKey: originalKey ?? e.originalKey } : e
+  ),
+});
+
+/**
+ * Uma estante reduzida a um punhado de entradas, levando só as categorias que elas usam.
+ *
+ * É o que se compartilha: mandar a gaveta "Roda de viola" não deve entregar junto a lista
+ * completa de gavetas de quem mandou — a organização de alguém diz mais sobre a pessoa do
+ * que as músicas.
+ */
+export const subsetStore = (store: FavoritesStore, entries: FavoriteEntry[]): FavoritesStore => {
+  const usadas = new Set(entries.flatMap(e => e.categoryIds));
+  return {
+    ...store,
+    // `source` fica para trás: se a gaveta veio de um link para MIM, isso é fato da minha
+    // estante, não da lista. Quem receber decide o que ela é do lado de lá (é o `viaLink`
+    // do `mergeImported`). `order` vai junto — a sequência do show é parte do que se manda.
+    categories: store.categories.filter(c => usadas.has(c.id)).map(({ source: _ignora, ...c }) => c),
+    entries,
+    pendingRemovals: [],
+  };
+};
 
 export const toggleEntryCategory = (store: FavoritesStore, key: string, categoryId: string): FavoritesStore => ({
   ...store,
@@ -328,6 +544,10 @@ export const mergeServerList = (store: FavoritesStore, remote: FavoritedSong[]):
         artistName: song.artist_name ?? null,
         versionName: song.version_name ?? null,
         categoryIds: [],
+        // O servidor não guarda tom — ele espelha só a lista. Quem vem de lá chega no
+        // original, e o tom pessoal continua sendo coisa de cada navegador.
+        transpose: 0,
+        originalKey: null,
         // A data do servidor, quando existe. Carimbar `now()` amontoava tudo que veio de
         // lá no topo da ordem cronológica, como se tivesse sido favoritado no instante em
         // que a página abriu — a ordem real não sobrevivia à troca de aparelho.
@@ -350,7 +570,11 @@ export const mergeServerList = (store: FavoritesStore, remote: FavoritedSong[]):
  * Nunca remove nada — importar é somar acervos, e quem quiser começar do zero limpa a
  * lista antes.
  */
-export const mergeImported = (store: FavoritesStore, file: FavoritesFile): FavoritesStore => {
+export const mergeImported = (
+  store: FavoritesStore,
+  file: FavoritesFile,
+  opts: { viaLink?: boolean } = {}
+): FavoritesStore => {
   // Categorias: casa por nome via índice, e para de criar ao bater o teto — um arquivo com
   // 100.000 gavetas não pode inutilizar a barra lateral de quem importou.
   const categorias = [...store.categories];
@@ -362,7 +586,15 @@ export const mergeImported = (store: FavoritesStore, file: FavoritesFile): Favor
     let alvo = porNome.get(nome);
     if (!alvo) {
       if (categorias.length >= MAX_CATEGORIES) continue;
-      alvo = { id: makeId(), name: cat.name.trim(), createdAt: cat.createdAt };
+      // `source: 'link'` só nas gavetas CRIADAS por este import. Uma que já existia
+      // continua sendo do usuário — a lixeira dela não pode passar a levar músicas.
+      alvo = {
+        id: makeId(),
+        name: cat.name.trim(),
+        createdAt: cat.createdAt,
+        ...(opts.viaLink ? { source: 'link' as const } : {}),
+        ...(cat.order ? { order: cat.order } : {}),
+      };
       categorias.push(alvo);
       porNome.set(nome, alvo);
     }
@@ -384,9 +616,19 @@ export const mergeImported = (store: FavoritesStore, file: FavoritesFile): Favor
     const known = index.get(key);
 
     if (known) {
+      // O tom de quem importa não se mexe. A música já estava na estante, então já havia
+      // uma decisão sobre em que tom tocá-la — e a de outra pessoa não a substitui. Só uma
+      // música NOVA chega com o tom do arquivo, e aí não há nada para atropelar.
       index.set(key, { ...known, categoryIds: Array.from(new Set([...known.categoryIds, ...mapeados])) });
     } else if (index.size + novas.length < MAX_ENTRIES) {
-      novas.push({ ...entry, songSlug: normalizeSongSlug(entry.songSlug), categoryIds: mapeados });
+      // A marca vai só no que é NOVO. Se a cifra já estava na estante, ela continua sendo
+      // escolha do usuário — o `known` acima nem passa por aqui.
+      novas.push({
+        ...entry,
+        songSlug: normalizeSongSlug(entry.songSlug),
+        categoryIds: mapeados,
+        ...(opts.viaLink ? { fromLink: true as const } : {}),
+      });
     }
   }
 
@@ -410,12 +652,17 @@ export const mergeImported = (store: FavoritesStore, file: FavoritesFile): Favor
  * Sem essa separação, "manda tua lista de favoritos" entregaria a identidade junto, e o
  * gesto mais natural do mundo viraria um vazamento.
  */
-export const buildExportFile = (store: FavoritesStore, userHash?: string | null): FavoritesFile => ({
+export const buildExportFile = (
+  store: FavoritesStore,
+  userHash?: string | null,
+  listName?: string | null
+): FavoritesFile => ({
   app: 'viola-libre',
   kind: 'favoritos',
   version: 1,
   exportedAt: new Date().toISOString(),
   ...(userHash ? { userHash } : {}),
+  ...(listName?.trim() ? { listName: listName.trim().slice(0, 60) } : {}),
   categories: store.categories,
   entries: store.entries,
 });
@@ -636,7 +883,10 @@ export async function syncFavoritesFromServer(): Promise<FavoritesStore> {
   const aplicaveis = remote.filter(s => !pendentes.has(favoriteKey(s.artist_slug, s.slug)));
   return updateStore(st => ({
     ...mergeServerList(st, aplicaveis),
-    pendingRemovals: st.pendingRemovals.filter(k => !resolvidas.includes(k)),
+    // Sai da fila o que foi resolvido agora E o que o servidor nem tem — este pull provou
+    // que não há nada para remover lá. Sem essa segunda poda, desfavoritar algo que nunca
+    // subiu (feito offline, ou vindo de um backup) deixaria uma pendência para sempre.
+    pendingRemovals: st.pendingRemovals.filter(k => !resolvidas.includes(k) && remotas.has(k)),
   }));
 }
 
@@ -695,7 +945,7 @@ export function offersDifferentIdentity(file: FavoritesFile): boolean {
  */
 export async function importFavoritesBackup(
   raw: string,
-  options: { adoptIdentity?: boolean } = {}
+  options: { adoptIdentity?: boolean; viaLink?: boolean } = {}
 ): Promise<ImportOutcome> {
   const parsed = parseImportedFile(raw);
   if (!parsed.ok || !parsed.file) {
@@ -708,7 +958,7 @@ export async function importFavoritesBackup(
       ? setUserHash(parsed.file.userHash!)
       : false;
 
-  updateStore(store => mergeImported(store, parsed.file!));
+  updateStore(store => mergeImported(store, parsed.file!, { viaLink: options.viaLink }));
   if (identityRestored) await syncFavoritesFromServer();
 
   return { ok: true, added: getStore().entries.length - before, identityRestored };

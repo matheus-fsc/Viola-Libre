@@ -29,7 +29,8 @@ import { YouTubeScrollConsentModal } from '../../components/YouTubeScrollConsent
 import { getIsMobile, useIsMobile } from '../../hooks/useIsMobile';
 import { useImmersiveStore } from '../../stores/useImmersiveStore';
 import { MobileCifraBar, TransporteMobile, GrupoAjustes, LinhaAjuste, Stepper, BotaoFolha } from './MobileCifraBar';
-import { SeletorDeTom, GradeDeTons } from './SeletorDeTom';
+import { SeletorDeTom, GradeDeTons, SalvarTom } from './SeletorDeTom';
+import { estadoTomSalvo } from './tomSalvo';
 import { reflowCifraHtml } from '../../services/cifraUtils';
 import { getPreferredInstrumentId, setPreferredInstrumentId } from '../../utils/instrumentPreference';
 import {
@@ -52,7 +53,15 @@ import {
   readAllMyFavorites,
   toggleChordFavorite,
 } from '../../services/chordFavoritesApi';
-import { toggleCifraFavorite, isFavorited as isCifraFavorited } from '../../services/cifraFavorites';
+import {
+  favoriteKey,
+  findEntry,
+  setEntryTom,
+  toggleCifraFavorite,
+  updateStore,
+  isFavorited as isCifraFavorited,
+} from '../../services/cifraFavorites';
+import { shortestTranspose } from '../../engine/transposeKey';
 import { useCifraFavorites } from '../../hooks/useCifraFavorites';
 import {
   frontShapesFor,
@@ -179,6 +188,18 @@ export const CifraViewer: React.FC = () => {
   // para que favoritar aqui e abrir /favoritos concordem sem F5 — e vice-versa.
   const favoritesStore = useCifraFavorites();
   const isFavorited = Boolean(artistSlug && songSlug && isCifraFavorited(favoritesStore, artistSlug, songSlug));
+  /**
+   * O tom guardado na estante para esta cifra, em semitons. `0` quando não há nenhum.
+   *
+   * O `useMemo` não é otimização — é o que mantém o componente compilável. Buscar dentro
+   * da store solta no corpo do render faz o React Compiler desistir do arquivo inteiro
+   * ("existing memoization could not be preserved") e derrubar junto os quatro
+   * `useCallback` do transporte, que dependem de memoização para não recriar o rAF.
+   */
+  const tomSalvo = useMemo(
+    () => (artistSlug && songSlug ? findEntry(favoritesStore, artistSlug, songSlug)?.transpose ?? 0 : 0),
+    [favoritesStore, artistSlug, songSlug]
+  );
 
   // Transpose states
   const [transposeOffset, setTransposeOffset] = useState<number>(0);
@@ -386,6 +407,11 @@ export const CifraViewer: React.FC = () => {
         title: cifra.title,
         artistName: null,
         versionName: cifra.version_name ?? null,
+        // O tom em que a cifra está AGORA vai junto. Favoritar quase sempre acontece
+        // depois de achar o tom que serve à voz — guardar a música e jogar fora essa
+        // parte obrigaria a refazer o ajuste toda vez que ela fosse reaberta.
+        transpose: shortestTranspose(transposeOffset),
+        originalKey: songKey || null,
       });
       // O contador na tela é público; só faz sentido mexer nele quando o servidor confirmou.
       if (!result.offline) {
@@ -400,6 +426,40 @@ export const CifraViewer: React.FC = () => {
       setIsFavoriting(false);
     }
   };
+
+  /**
+   * A cifra abre no tom guardado na estante.
+   *
+   * Sem isto o tom favoritado seria enfeite de lista: o músico ajustaria de novo toda vez.
+   * O `useRef` guarda em QUE música o tom já foi aplicado, para que isto aconteça uma vez
+   * por cifra aberta — e não desfaça o ajuste seguinte, feito à mão pelo usuário.
+   *
+   * Roda depois do carregamento porque o efeito que busca a cifra zera a transposição ao
+   * trocar de rota; aplicar antes seria escrever num valor que ainda vai ser sobrescrito.
+   */
+  const tomAplicadoRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!cifra || !artistSlug || !songSlug) return;
+    const chave = favoriteKey(artistSlug, songSlug);
+    if (tomAplicadoRef.current === chave) return;
+    tomAplicadoRef.current = chave;
+    const salvo = findEntry(favoritesStore, artistSlug, songSlug)?.transpose ?? 0;
+    if (salvo !== 0) setTransposeOffset(salvo);
+    // `favoritesStore` de propósito FORA das dependências: ele muda a cada escrita na
+    // estante (salvar o tom, favoritar, sincronizar), e reagir a isso reaplicaria o tom
+    // por cima do que o músico acabou de escolher. O ref já garante a única passagem.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cifra, artistSlug, songSlug]);
+
+  /** Guarda na estante o tom que está na tela. Local, imediato, sem rede. */
+  const salvarTomAtual = () => {
+    if (!artistSlug || !songSlug) return;
+    updateStore(store =>
+      setEntryTom(store, favoriteKey(artistSlug, songSlug), shortestTranspose(transposeOffset), songKey || null)
+    );
+  };
+
+  const estadoTom = estadoTomSalvo(isFavorited, transposeOffset, tomSalvo);
 
   // Desabilita restauração de scroll do browser — após Ctrl+R o scroll voltaria
   // para a posição anterior, desincronizando o auto-scroll com o topo da cifra.
@@ -1772,6 +1832,9 @@ export const CifraViewer: React.FC = () => {
                 gatilho={tomAtual}
               />
             </div>
+            {/* Linha própria: o painel lateral tem 176px e o botão não caberia ao lado do
+                mostrador sem espremer os dois. */}
+            <SalvarTom estado={estadoTom} songKey={songKey} offsetAtual={transposeOffset} onSalvar={salvarTomAtual} className="self-start max-w-full" />
 
             <div className="flex flex-col gap-0.5">
               <label className="font-bold text-[10px] uppercase text-gray-500">Variações:</label>
@@ -1928,6 +1991,7 @@ export const CifraViewer: React.FC = () => {
                     onAbrir={setTomPickerOpen}
                     gatilho={tomAtual}
                   />
+                  <SalvarTom estado={estadoTom} songKey={songKey} offsetAtual={transposeOffset} onSalvar={salvarTomAtual} />
                 </div>
                 <div className="flex items-center gap-1">
                   <label className="hidden sm:inline font-bold text-[11px] uppercase tracking-wider text-gray-700">Variações:</label>
@@ -2597,6 +2661,21 @@ export const CifraViewer: React.FC = () => {
                     {transposeOffset !== 0 && (
                       <LinhaAjuste rotulo="Voltar ao original">
                         <BotaoFolha onClick={() => setTransposeOffset(0)}><RotateCcw size={13} /> Zerar</BotaoFolha>
+                      </LinhaAjuste>
+                    )}
+                    {/* Na folha do telefone o botão é `BotaoFolha`, e não o `SalvarTom` dos
+                        painéis do desktop: aqui todo controle tem a mesma altura de toque e
+                        o mesmo desenho, e um botãozinho de 10px destoaria da fila inteira. */}
+                    {estadoTom === 'salvar' && (
+                      <LinhaAjuste rotulo="Guardar este tom" dica="A cifra passa a abrir assim nos seus favoritos">
+                        <BotaoFolha onClick={salvarTomAtual}><Heart size={13} className="fill-red-500 text-red-500" /> Salvar</BotaoFolha>
+                      </LinhaAjuste>
+                    )}
+                    {estadoTom === 'guardado' && (
+                      <LinhaAjuste rotulo="Tom dos favoritos" dica="Foi por isto que a cifra abriu fora do original">
+                        <span className="inline-flex items-center gap-1 text-[11px] text-gray-600">
+                          <Heart size={12} className="fill-red-500 text-red-500" /> guardado
+                        </span>
                       </LinhaAjuste>
                     )}
                   </GrupoAjustes>

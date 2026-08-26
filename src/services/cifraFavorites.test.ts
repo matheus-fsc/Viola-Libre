@@ -6,10 +6,19 @@ import {
   createCategory,
   deleteCategory,
   emptyStore,
+  entryKey,
   favoriteKey,
   isFavorited,
   mergeImported,
   mergeServerList,
+  setEntryTom,
+  setCategoryOrder,
+  sortByOrder,
+  subsetStore,
+  deleteImportedList,
+  isImportedList,
+  moveKey,
+  planoDeDescarteDaLista,
   normalizeCategoryName,
   parseImportedFile,
   prettifySlug,
@@ -33,6 +42,8 @@ const entry = (artistSlug: string, songSlug: string, over: Partial<FavoriteEntry
   versionName: null,
   categoryIds: [],
   addedAt: '2026-01-01T00:00:00.000Z',
+  transpose: 0,
+  originalKey: null,
   ...over,
 });
 
@@ -268,6 +279,7 @@ describe('tetos do arquivo importado', () => {
     Array.from({ length: n }, (_, i) => ({
       artistSlug: 'a' + i, songSlug: 's' + i, title: 't' + i,
       artistName: null, versionName: null, categoryIds: [], addedAt: 'x',
+      transpose: 0, originalKey: null,
     }));
 
   it('recusa arquivo acima do limite de bytes sem nem chamar o parser', () => {
@@ -359,5 +371,263 @@ describe('prettifySlug', () => {
   it('vira nome legível', () => {
     expect(prettifySlug('joao-bosco')).toBe('Joao Bosco');
     expect(prettifySlug('almir-sater')).toBe('Almir Sater');
+  });
+});
+
+// ── Tom guardado ───────────────────────────────────────────────────────────
+//
+// O tom é escolha da PESSOA e não da cifra: o mesmo arquivo serve a quem canta em Sol e a
+// quem canta em Si. Por isso ele mora na estante local, e não no servidor.
+describe('setEntryTom', () => {
+  it('grava o tom e o tom original da entrada', () => {
+    const store = addEntry(emptyStore(), entry('joao-bosco', 'incelenca'));
+    const next = setEntryTom(store, 'joao-bosco/incelenca', 3, 'Am');
+    expect(next.entries[0]).toMatchObject({ transpose: 3, originalKey: 'Am' });
+  });
+
+  it('não apaga um tom original já conhecido quando a cifra não o detecta', () => {
+    const store = addEntry(emptyStore(), entry('joao-bosco', 'incelenca', { originalKey: 'Am' }));
+    const next = setEntryTom(store, 'joao-bosco/incelenca', 2, null);
+    expect(next.entries[0].originalKey).toBe('Am');
+  });
+
+  it('não mexe nas outras entradas', () => {
+    let store = addEntry(emptyStore(), entry('a', 'um'));
+    store = addEntry(store, entry('b', 'dois'));
+    const next = setEntryTom(store, 'a/um', 5, 'G');
+    expect(next.entries.find(e => e.artistSlug === 'b')?.transpose).toBe(0);
+  });
+});
+
+describe('tom na entrada', () => {
+  it('entrada gravada antes do campo existir vale como tom original', () => {
+    const antiga = {
+      version: 1, categories: [], entries: [
+        { artistSlug: 'a', songSlug: 'um', title: 'Um', artistName: null, versionName: null, categoryIds: [], addedAt: 'x' },
+      ],
+    };
+    const parsed = favoritesStoreSchema.safeParse(antiga);
+    expect(parsed.data?.entries[0]).toMatchObject({ transpose: 0, originalKey: null });
+  });
+
+  // `transposeChordString` soma o deslocamento a +120 antes do módulo 12; um valor absurdo
+  // vindo de arquivo forjado sairia do outro lado como nota errada em vez de erro.
+  it('descarta deslocamento fora da faixa em vez de propagá-lo', () => {
+    const parsed = favoritesStoreSchema.safeParse({
+      version: 1, categories: [], entries: [
+        { artistSlug: 'a', songSlug: 'um', title: 'Um', artistName: null, versionName: null, categoryIds: [], addedAt: 'x', transpose: -9999 },
+      ],
+    });
+    expect(parsed.data?.entries[0].transpose).toBe(0);
+  });
+
+  it('refavoritar guarda o tom de agora, mas preserva categorias e data', () => {
+    const store = addEntry(emptyStore(), entry('a', 'um', { transpose: 2, categoryIds: ['c1'], addedAt: '2020-01-01T00:00:00.000Z' }));
+    const next = addEntry(store, entry('a', 'um', { transpose: -3, originalKey: 'D', addedAt: '2026-01-01T00:00:00.000Z' }));
+    expect(next.entries[0]).toMatchObject({
+      transpose: -3, originalKey: 'D', categoryIds: ['c1'], addedAt: '2020-01-01T00:00:00.000Z',
+    });
+  });
+
+  it('importar não troca o tom de uma música que já estava na estante', () => {
+    const store = addEntry(emptyStore(), entry('a', 'um', { transpose: 2, originalKey: 'G' }));
+    const file = buildExportFile(addEntry(emptyStore(), entry('a', 'um', { transpose: -4, originalKey: 'G' })), null);
+    expect(mergeImported(store, file).entries[0].transpose).toBe(2);
+  });
+
+  it('importar traz o tom de uma música nova', () => {
+    const file = buildExportFile(addEntry(emptyStore(), entry('a', 'um', { transpose: -4, originalKey: 'G' })), null);
+    expect(mergeImported(emptyStore(), file).entries[0].transpose).toBe(-4);
+  });
+});
+
+// Compartilhar uma gaveta não pode entregar junto a lista completa de gavetas de quem
+// compartilhou: a organização de alguém diz mais sobre a pessoa do que o repertório.
+describe('subsetStore', () => {
+  it('leva só as categorias usadas pelas entradas escolhidas', () => {
+    const comRoda = createCategory(emptyStore(), 'Roda');
+    const comEstudo = createCategory(comRoda.store, 'Estudar');
+    let store = addEntry(comEstudo.store, entry('a', 'um', { categoryIds: [comRoda.category.id] }));
+    store = addEntry(store, entry('b', 'dois', { categoryIds: [comEstudo.category.id] }));
+
+    const so = store.entries.filter(e => e.artistSlug === 'a');
+    expect(subsetStore(store, so).categories.map(c => c.name)).toEqual(['Roda']);
+    expect(subsetStore(store, so).entries).toHaveLength(1);
+  });
+
+  it('não leva remoções pendentes de quem compartilha', () => {
+    const store = { ...addEntry(emptyStore(), entry('a', 'um')), pendingRemovals: ['x/y'] };
+    expect(subsetStore(store, store.entries).pendingRemovals).toEqual([]);
+  });
+});
+
+describe('nome da lista no arquivo', () => {
+  it('só aparece quando existe', () => {
+    expect(buildExportFile(emptyStore(), null).listName).toBeUndefined();
+    expect(buildExportFile(emptyStore(), null, '  ').listName).toBeUndefined();
+    expect(buildExportFile(emptyStore(), null, ' Roda de terça ').listName).toBe('Roda de terça');
+  });
+
+  it('corta no mesmo teto de nome de categoria', () => {
+    expect(buildExportFile(emptyStore(), null, 'x'.repeat(200)).listName).toHaveLength(60);
+  });
+});
+
+// ── Listas que chegaram por link ───────────────────────────────────────────
+//
+// A regra que importa: descartar um pacote que veio de fora nunca pode levar junto um
+// favorito que a pessoa escolheu sozinha. A marca `fromLink` é o que separa os dois.
+describe('lista importada', () => {
+  const arquivoCom = (...entradas: FavoriteEntry[]) => {
+    let s = emptyStore();
+    const cat = createCategory(s, 'Roda de terça');
+    s = cat.store;
+    for (const e of entradas) s = addEntry(s, { ...e, categoryIds: [cat.category.id] });
+    return buildExportFile(s, null, 'Roda de terça');
+  };
+
+  it('marca a gaveta e as cifras que ela trouxe', () => {
+    const store = mergeImported(emptyStore(), arquivoCom(entry('a', 'um')), { viaLink: true });
+    expect(isImportedList(store.categories[0])).toBe(true);
+    expect(store.entries[0].fromLink).toBe(true);
+  });
+
+  it('importar por ARQUIVO não marca nada — é backup, não pacote de outra pessoa', () => {
+    const store = mergeImported(emptyStore(), arquivoCom(entry('a', 'um')));
+    expect(isImportedList(store.categories[0])).toBe(false);
+    expect(store.entries[0].fromLink).toBeUndefined();
+  });
+
+  it('não marca uma gaveta que o usuário já tinha', () => {
+    const minha = createCategory(emptyStore(), 'Roda de terça');
+    const store = mergeImported(minha.store, arquivoCom(entry('a', 'um')), { viaLink: true });
+    expect(store.categories).toHaveLength(1);
+    expect(isImportedList(store.categories[0])).toBe(false);
+  });
+
+  it('descartar leva as cifras que só vieram no pacote', () => {
+    const store = mergeImported(emptyStore(), arquivoCom(entry('a', 'um'), entry('b', 'dois')), { viaLink: true });
+    const catId = store.categories[0].id;
+    expect(planoDeDescarteDaLista(store, catId)).toEqual({ removidas: 2, mantidas: 0 });
+
+    const depois = deleteImportedList(store, catId);
+    expect(depois.entries).toHaveLength(0);
+    expect(depois.categories).toHaveLength(0);
+  });
+
+  // O caso que o mantenedor pediu para proteger, nas duas formas em que ele aparece.
+  it('NÃO desfavorita o que já era do usuário antes do link', () => {
+    const minha = addEntry(emptyStore(), entry('a', 'um', { transpose: 4 }));
+    const store = mergeImported(minha, arquivoCom(entry('a', 'um'), entry('b', 'dois')), { viaLink: true });
+    const catId = store.categories[0].id;
+    expect(planoDeDescarteDaLista(store, catId)).toEqual({ removidas: 1, mantidas: 1 });
+
+    const depois = deleteImportedList(store, catId);
+    expect(depois.entries.map(e => e.artistSlug)).toEqual(['a']);
+    expect(depois.entries[0].categoryIds).toEqual([]);
+    expect(depois.entries[0].transpose).toBe(4);
+  });
+
+  it('NÃO desfavorita o que o usuário guardou numa categoria dele', () => {
+    let store = mergeImported(emptyStore(), arquivoCom(entry('a', 'um')), { viaLink: true });
+    const catId = store.categories[0].id;
+    const minha = createCategory(store, 'Estudar');
+    store = toggleEntryCategory(minha.store, 'a/um', minha.category.id);
+
+    expect(planoDeDescarteDaLista(store, catId)).toEqual({ removidas: 0, mantidas: 1 });
+    const depois = deleteImportedList(store, catId);
+    expect(depois.entries).toHaveLength(1);
+    expect(depois.entries[0].categoryIds).toEqual([minha.category.id]);
+  });
+
+  it('registra a pendência do que saiu, para o servidor não trazer de volta', () => {
+    const store = mergeImported(emptyStore(), arquivoCom(entry('a', 'um')), { viaLink: true });
+    expect(deleteImportedList(store, store.categories[0].id).pendingRemovals).toEqual(['a/um']);
+  });
+});
+
+// A rota do servidor é um toggle, não um delete: o que sai só do localStorage volta no
+// próximo sync. Era o que acontecia ao remover pelo coração da lista de /favoritos.
+describe('removeEntry registra a remoção', () => {
+  it('deixa a chave na fila de pendências', () => {
+    const store = addEntry(emptyStore(), entry('a', 'um'));
+    expect(removeEntry(store, 'a', 'um').pendingRemovals).toEqual(['a/um']);
+  });
+
+  it('não inventa pendência para o que não estava lá', () => {
+    expect(removeEntry(emptyStore(), 'a', 'um').pendingRemovals).toEqual([]);
+  });
+
+  it('não duplica ao remover duas vezes', () => {
+    let store = addEntry(emptyStore(), entry('a', 'um'));
+    store = removeEntry(store, 'a', 'um');
+    expect(removeEntry(store, 'a', 'um').pendingRemovals).toEqual(['a/um']);
+  });
+});
+
+// ── Ordem manual ───────────────────────────────────────────────────────────
+describe('ordem manual da gaveta', () => {
+  const tres = () => [entry('a', 'um'), entry('b', 'dois'), entry('c', 'tres')];
+
+  it('ordena pelas chaves guardadas', () => {
+    expect(sortByOrder(tres(), ['c/tres', 'a/um', 'b/dois']).map(entryKey))
+      .toEqual(['c/tres', 'a/um', 'b/dois']);
+  });
+
+  it('o que a ordem não menciona vai para o fim, sem embaralhar', () => {
+    expect(sortByOrder(tres(), ['c/tres']).map(entryKey)).toEqual(['c/tres', 'a/um', 'b/dois']);
+  });
+
+  it('chave de cifra que já saiu é ignorada', () => {
+    expect(sortByOrder(tres(), ['x/sumiu', 'b/dois']).map(entryKey))
+      .toEqual(['b/dois', 'a/um', 'c/tres']);
+  });
+
+  it('sem ordem guardada, devolve a lista como veio', () => {
+    const entradas = tres();
+    expect(sortByOrder(entradas, undefined)).toBe(entradas);
+  });
+
+  it('a ordem é da gaveta, não da estante', () => {
+    const cat = createCategory(emptyStore(), 'Show');
+    const store = setCategoryOrder(cat.store, cat.category.id, ['b/dois', 'a/um']);
+    expect(store.categories[0].order).toEqual(['b/dois', 'a/um']);
+    expect(setCategoryOrder(store, 'outra', ['x']).categories[0].order).toEqual(['b/dois', 'a/um']);
+  });
+});
+
+describe('moveKey', () => {
+  const k = ['a', 'b', 'c', 'd'];
+
+  it('move para cima e para baixo', () => {
+    expect(moveKey(k, 'd', 0)).toEqual(['d', 'a', 'b', 'c']);
+    expect(moveKey(k, 'a', 2)).toEqual(['b', 'c', 'a', 'd']);
+  });
+
+  it('prende o destino nas pontas', () => {
+    expect(moveKey(k, 'a', -5)).toEqual(k);
+    expect(moveKey(k, 'a', 99)).toEqual(['b', 'c', 'd', 'a']);
+  });
+
+  it('devolve a mesma lista quando não há o que fazer', () => {
+    expect(moveKey(k, 'a', 0)).toBe(k);
+    expect(moveKey(k, 'inexistente', 1)).toBe(k);
+  });
+});
+
+// A gaveta que veio de um link para MIM não é um link para quem eu mando: quem receber é
+// que decide o que ela é do lado de lá.
+describe('subsetStore e a marca de origem', () => {
+  it('não repassa `source` no que vai ser compartilhado', () => {
+    const store = mergeImported(
+      emptyStore(),
+      buildExportFile(addEntry(createCategory(emptyStore(), 'Roda').store, entry('a', 'um')), null),
+      { viaLink: true }
+    );
+    const comEtiqueta = {
+      ...store,
+      entries: store.entries.map(e => ({ ...e, categoryIds: [store.categories[0].id] })),
+    };
+    expect(subsetStore(comEtiqueta, comEtiqueta.entries).categories[0].source).toBeUndefined();
   });
 });

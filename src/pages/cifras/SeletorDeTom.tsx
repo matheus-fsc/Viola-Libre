@@ -9,8 +9,53 @@
  * são Em, Fm, F#m…, não E, F, F#. Tom maior e tom menor não são a mesma lista.
  */
 import { useEffect, type ReactNode } from 'react';
+import { Heart } from 'lucide-react';
 import { transposeChordString } from '../../engine/chordCalculator';
 import { shortestTranspose } from '../../engine/transposeKey';
+import type { EstadoTomSalvo } from './tomSalvo';
+
+/**
+ * O tom é da PESSOA, não da cifra: o mesmo arquivo serve a quem canta em Sol e a quem
+ * canta em Si. Guardar isso na estante é o que faz a música abrir no tom certo da próxima
+ * vez — e o botão só aparece quando há divergência entre a tela e o que está guardado,
+ * para não virar mais um controle permanente disputando espaço com os que se usa sempre.
+ *
+ * Salvar não pede confirmação nem espera rede: escreve no localStorage e a lista de
+ * /favoritos, que lê a mesma store, muda no mesmo instante.
+ */
+export function SalvarTom({ estado, songKey, offsetAtual, onSalvar, className = '' }: {
+  estado: EstadoTomSalvo;
+  songKey: string;
+  offsetAtual: number;
+  onSalvar(): void;
+  className?: string;
+}) {
+  if (estado === null) return null;
+
+  if (estado === 'guardado') {
+    return (
+      <span
+        className={`inline-flex items-center gap-1 text-[9px] text-gray-500 leading-none ${className}`}
+        title="Esta cifra abre neste tom porque é o que está guardado nos seus favoritos"
+      >
+        <Heart size={9} className="fill-red-500 text-red-500 shrink-0" />
+        seu tom
+      </span>
+    );
+  }
+
+  const alvo = transposeChordString(songKey, offsetAtual, false);
+  return (
+    <button
+      onClick={onSalvar}
+      className={`inline-flex items-center gap-1 bevel-out bg-[var(--color-winxp-panel)] px-1.5 py-0.5 text-[10px] font-bold text-black leading-tight hover:bg-white cursor-pointer active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${className}`}
+      title={`Guardar ${alvo || 'este tom'} nos favoritos — a cifra passa a abrir assim`}
+    >
+      <Heart size={10} className="fill-red-500 text-red-500 shrink-0" />
+      <span className="truncate">Salvar tom{alvo ? ` ${alvo}` : ''}</span>
+    </button>
+  );
+}
 
 /**
  * A fita vai de −5 a +6: abaixar à esquerda, original no meio, subir à direita.
