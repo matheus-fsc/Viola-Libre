@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { z } from 'zod';
+import { guardarCifra, lerCifra } from './cifraCache';
 
 /**
  * Um pedido abortado não é uma falha: é o resultado esperado de o usuário ter digitado mais
@@ -148,15 +149,62 @@ export const getArtistsByGenre = async (genre: string): Promise<Artist[]> => {
 };
 
 
+/**
+ * A cifra, do lugar mais rápido que a tiver.
+ *
+ * Três camadas, nesta ordem:
+ *
+ *   1. memória — a mesma aba, já visitada. Instantâneo.
+ *   2. disco (IndexedDB) — o que o músico mandou guardar. Devolve na hora e revalida por
+ *      trás: a cifra aparece imediatamente e, se o acervo tiver mudado, a versão nova
+ *      entra no cache para a próxima abertura. Nada pisca na tela.
+ *   3. rede.
+ *
+ * Se a rede falhar e houver cópia no disco, a cópia vale. É o que faz uma roda continuar
+ * quando o sinal do sítio some no meio da noite — e o que segurou este trabalho de pé
+ * quando a API saiu do ar.
+ */
 export const getCifra = async (artistSlug: string, songSlug: string): Promise<CifraDetail> => {
   const safeSongSlug = songSlug.startsWith('/') ? songSlug.slice(1) : songSlug;
   const cacheKey = `${artistSlug}/${safeSongSlug}`;
-  
+
   if (cache.cifras[cacheKey]) return cache.cifras[cacheKey];
-  
-  const { data } = await api.get<CifraDetail>(`/api/cifra/${artistSlug}/${safeSongSlug}`);
-  cache.cifras[cacheKey] = data;
-  return data;
+
+  const daRede = async (): Promise<CifraDetail> => {
+    const { data } = await api.get<CifraDetail>(`/api/cifra/${artistSlug}/${safeSongSlug}`);
+    cache.cifras[cacheKey] = data;
+    // Só REFRESCA o que já estava guardado. Visitar uma cifra não é pedir para guardá-la:
+    // o disco enche com o que o usuário escolheu salvar, não com o que passou por ele.
+    void lerCifra(cacheKey).then(reg => { if (reg) void guardarCifra(cacheKey, data); });
+    return data;
+  };
+
+  const guardada = await lerCifra(cacheKey);
+  if (guardada) {
+    cache.cifras[cacheKey] = guardada.dados;
+    // Revalidação silenciosa: erro aqui não é erro nenhum, a cifra já foi entregue.
+    void daRede().catch(() => {});
+    return guardada.dados;
+  }
+
+  return daRede();
+};
+
+/**
+ * Busca uma cifra para GUARDAR, sem passar pela memória da aba.
+ *
+ * Separada de `getCifra` porque as intenções são opostas: aquela quer a resposta mais
+ * rápida, esta quer a cópia no disco. Devolve `false` sem barulho para a música que a API
+ * não conhece — numa lista de quarenta, uma que falha não pode derrubar as outras 39.
+ */
+export const baixarCifraParaCache = async (artistSlug: string, songSlug: string): Promise<boolean> => {
+  const safeSongSlug = songSlug.startsWith('/') ? songSlug.slice(1) : songSlug;
+  try {
+    const { data } = await api.get<CifraDetail>(`/api/cifra/${artistSlug}/${safeSongSlug}`);
+    return await guardarCifra(`${artistSlug}/${safeSongSlug}`, data);
+  } catch {
+    return false;
+  }
 };
 
 export const incrementView = async (artistSlug: string, songSlug: string): Promise<void> => {

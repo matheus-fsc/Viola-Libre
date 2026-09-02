@@ -486,6 +486,33 @@ export const CifraViewer: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cifra, artistSlug, songSlug]);
 
+  /**
+   * Busca de antemão a cifra seguinte (e a anterior) da lista.
+   *
+   * É o que faz "Próxima" abrir sem espera mesmo para quem não mandou salvar nada: enquanto
+   * a pessoa toca, o navegador já trouxe o que vem depois. `getCifra` guarda o resultado na
+   * memória da aba, então o clique seguinte não toca a rede.
+   *
+   * Só os VIZINHOS, não a lista toda: puxar quarenta cifras porque alguém abriu uma seria
+   * gastar o dado de quem está no celular e martelar uma API pequena por causa de uma
+   * intenção que ainda não existe. Quem quer a lista inteira tem o botão em /favoritos.
+   *
+   * Silencioso e sem estado: falhar aqui não muda nada na tela — a busca de verdade
+   * acontece quando o músico clicar.
+   */
+  useEffect(() => {
+    if (!naLista) return;
+    const alvos = [naLista.proxima, naLista.anterior].filter((c): c is string => Boolean(c));
+    // Um quadro de folga para não competir com o carregamento da cifra que está sendo lida.
+    const t = setTimeout(() => {
+      for (const caminho of alvos) {
+        const [, , artista, ...resto] = caminho.split('/');
+        if (artista && resto.length) void getCifra(artista, resto.join('/')).catch(() => {});
+      }
+    }, 600);
+    return () => clearTimeout(t);
+  }, [naLista]);
+
   /** Guarda na estante o tom que está na tela. Local, imediato, sem rede. */
   const salvarTomAtual = () => {
     if (!artistSlug || !songSlug) return;

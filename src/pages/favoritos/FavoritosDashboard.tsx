@@ -8,7 +8,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Heart, Download, Upload, RefreshCw, Search, FolderPlus, Trash2, Pencil, X, ShieldAlert, Share2, Copy, Check, Link2 } from 'lucide-react';
+import { Heart, Download, Upload, RefreshCw, Search, FolderPlus, Trash2, Pencil, X, ShieldAlert, Share2, Copy, Check, Link2, HardDrive } from 'lucide-react';
 import { transposeChordString } from '../../engine/chordCalculator';
 import { useCifraFavorites } from '../../hooks/useCifraFavorites';
 import {
@@ -49,6 +49,7 @@ import {
   MAX_LINK_CHARS,
 } from '../../services/favoritesShare';
 import { abrirLista } from '../../services/listaAberta';
+import { PainelOffline } from './PainelOffline';
 
 /** Filtro da barra lateral. Strings livres seriam ambíguas com id de categoria. */
 type Selection = { kind: 'all' } | { kind: 'loose' } | { kind: 'category'; id: string };
@@ -142,6 +143,7 @@ export function FavoritosDashboard() {
   const [recebida, setRecebida] = useState<ListaRecebida | null>(null);
   /** Id da lista importada cujo descarte está à espera de confirmação. */
   const [descartando, setDescartando] = useState<string | null>(null);
+  const [offlineOpen, setOfflineOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // A reconciliação de abertura agora roda no App (useFavoritesBootSync), valendo para
@@ -335,6 +337,7 @@ export function FavoritosDashboard() {
   const abrirCompartilhar = () => {
     if (shareOpen) { setShareOpen(false); return; }
     setExportOpen(false);
+    setOfflineOpen(false);
     if (selection.kind === 'category') {
       setShareCats(new Set([selection.id]));
       setShareSoltas(false);
@@ -505,8 +508,14 @@ export function FavoritosDashboard() {
           <ToolbarButton onClick={handleSync} disabled={syncing} icon={<RefreshCw size={11} className={syncing ? 'animate-spin' : ''} />}>
             Sincronizar
           </ToolbarButton>
+          <ToolbarButton
+            onClick={() => { setOfflineOpen(v => !v); setShareOpen(false); setExportOpen(false); }}
+            icon={<HardDrive size={11} />}
+          >
+            No aparelho
+          </ToolbarButton>
           <ToolbarButton onClick={abrirCompartilhar} icon={<Share2 size={11} />}>Compartilhar</ToolbarButton>
-          <ToolbarButton onClick={() => { setExportOpen(v => !v); setShareOpen(false); }} icon={<Download size={11} />}>Exportar</ToolbarButton>
+          <ToolbarButton onClick={() => { setExportOpen(v => !v); setShareOpen(false); setOfflineOpen(false); }} icon={<Download size={11} />}>Exportar</ToolbarButton>
           <ToolbarButton onClick={() => fileInputRef.current?.click()} icon={<Upload size={11} />}>Importar</ToolbarButton>
         </div>
       </div>
@@ -560,6 +569,19 @@ export function FavoritosDashboard() {
             </button>
           </div>
         </div>
+      )}
+
+      {offlineOpen && (
+        <PainelOffline
+          escopo={{
+            nome: escopoAtual,
+            // O que está na tela AGORA, filtro e ordem incluídos — o mesmo recorte que
+            // vira lista ao abrir uma cifra, para o botão não guardar outra coisa.
+            chaves: visible.map(entryKey),
+            todas: store.entries.map(entryKey),
+          }}
+          onAviso={flash}
+        />
       )}
 
       {shareOpen && (
