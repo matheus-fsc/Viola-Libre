@@ -6,6 +6,7 @@ import {
   encodeLista,
   readShareToken,
   comCategoriaDeEntrada,
+  AVISO_LINK_CHARS,
   MAX_LINK_CHARS,
 } from './favoritesShare';
 import {
@@ -225,5 +226,143 @@ describe('comCategoriaDeEntrada', () => {
     const file = comCategoriaDeEntrada(buildSharedFile(store, store.entries), 'Do amigo');
 
     expect(file.entries[0].categoryIds).toHaveLength(2);
+  });
+});
+
+// ── Formato de fio ─────────────────────────────────────────────────────────
+//
+// O link carrega a lista inteira, então o comprimento é o recurso escasso. Estes testes
+// guardam as três propriedades que o formato em colunas precisa ter: ele encolhe, ele
+// sobrevive à ida e volta com dados reais, e ele não deixa de ler o formato anterior.
+describe('formato em colunas', () => {
+  const RS = '\u001e';
+  const US = '\u001f';
+
+  /** O mesmo empacotamento que a versão anterior fazia, para os testes de compatibilidade. */
+  const tokenDe = async (texto: string): Promise<string> => {
+    const bytes = new TextEncoder().encode(texto);
+    const gz = await new Response(
+      new Response(bytes as BufferSource).body!.pipeThrough(new CompressionStream('deflate-raw'))
+    ).arrayBuffer();
+    let bin = '';
+    for (const b of new Uint8Array(gz)) bin += String.fromCharCode(b);
+    return '1' + btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  };
+
+  const comRepeticao = (n: number): FavoritesStore => {
+    let store = emptyStore();
+    for (let i = 0; i < n; i++) {
+      store = addEntry(store, entry(`cancao-${i}`, {
+        // Artista repetido de propósito: é a repetição entre linhas que a coluna aproxima.
+        artistSlug: ['tiao-carreiro-pardinho', 'almir-sater', 'sergio-reis'][i % 3],
+        artistName: ['Tião Carreiro e Pardinho', 'Almir Sater', 'Sérgio Reis'][i % 3],
+        title: `Canção Número ${i}`,
+        transpose: (i % 11) - 5,
+      }));
+    }
+    return store;
+  };
+
+  it('preserva tudo que a tela precisa, campo a campo', async () => {
+    const store = addEntry(emptyStore(), entry('cio-da-terra', {
+      title: 'Cio da Terra',
+      artistName: 'Pena Branca e Xavantinho',
+      versionName: 'Simplificada',
+      transpose: -4,
+      originalKey: 'Em',
+    }));
+    const result = await decodeLista(await encodeLista(buildSharedFile(store, store.entries, 'Roda')));
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.file.entries[0]).toMatchObject({
+      artistSlug: 'joao-bosco',
+      songSlug: 'cio-da-terra',
+      title: 'Cio da Terra',
+      artistName: 'Pena Branca e Xavantinho',
+      versionName: 'Simplificada',
+      transpose: -4,
+      originalKey: 'Em',
+    });
+  });
+
+  it('mantém cada cifra na sua gaveta', async () => {
+    const a = createCategory(emptyStore(), 'Roda de terça');
+    const b = createCategory(a.store, 'Estudar');
+    let store = addEntry(b.store, entry('uma', { categoryIds: [a.category.id] }));
+    store = addEntry(store, entry('outra', { categoryIds: [b.category.id, a.category.id] }));
+
+    const result = await decodeLista(await encodeLista(buildSharedFile(store, store.entries)));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const nomesDe = (e: { categoryIds: string[] }) =>
+      e.categoryIds.map(id => result.file.categories.find(c => c.id === id)?.name).sort();
+    expect(nomesDe(result.file.entries.find(e => e.songSlug === 'uma')!)).toEqual(['Roda de terça']);
+    expect(nomesDe(result.file.entries.find(e => e.songSlug === 'outra')!)).toEqual(['Estudar', 'Roda de terça']);
+  });
+
+  // O ganho medido que justificou o formato. Se alguém voltar a mandar o JSON do backup,
+  // ou acrescentar um campo caro, é aqui que aparece — não na tela de quem tenta mandar.
+  it('cem músicas ainda cabem no limite dos mensageiros', async () => {
+    const store = comRepeticao(100);
+    const token = await encodeLista(buildSharedFile(store, store.entries, 'Roda de terça'));
+    expect(token.length + 45).toBeLessThan(AVISO_LINK_CHARS);
+  });
+
+  it('um repertório de show inteiro dá um link curto', async () => {
+    const store = comRepeticao(40);
+    const token = await encodeLista(buildSharedFile(store, store.entries, 'Show do sítio'));
+    expect(token.length + 45).toBeLessThan(1000);
+  });
+
+  // Um link já compartilhado não pode parar de abrir porque o formato melhorou depois.
+  it('ainda lê o formato JSON anterior', async () => {
+    const store = addEntry(emptyStore(), entry('incelenca', { transpose: 2, originalKey: 'G' }));
+    const token = await tokenDe(JSON.stringify(buildExportFile(store, null, 'Lista antiga')));
+
+    const result = await decodeLista(token);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.file.entries[0]).toMatchObject({ songSlug: 'incelenca', transpose: 2 });
+    expect(result.file.listName).toBe('Lista antiga');
+  });
+
+  /**
+   * Uma tira mais curta que as outras significa token cortado no caminho — o caso que o
+   * WhatsApp provoca. Sem a conferência de comprimento, o tom de uma música apareceria
+   * como título de outra e a lista chegaria embaralhada, em silêncio.
+   */
+  it('recusa um token com coluna truncada em vez de embaralhar', async () => {
+    const truncado = [
+      '2' + US + 'Roda',
+      '',
+      ['a', 'b', 'c', 'd'].join(US),
+      ['um', 'dois', 'tres', 'quatro'].join(US),
+      ['Um', 'Dois', 'Tres'].join(US), // uma a menos
+      '',
+      '',
+      ['0', '0', '0', '0'].join(US),
+      ['G', 'G', 'G', 'G'].join(US),
+      '',
+    ].join(RS);
+
+    expect(await decodeLista(await tokenDe(truncado))).toMatchObject({ ok: false });
+  });
+
+  // Os separadores são caracteres de controle e não ocorrem em título de verdade, mas o
+  // dado vem do servidor: um deles escapando deslocaria uma coluna inteira na volta.
+  it('não deixa um título com caractere de controle deslocar as colunas', async () => {
+    const store = addEntry(emptyStore(), entry('suspeita', {
+      title: `Titulo${US}com${RS}separador`,
+      transpose: 3,
+    }));
+    const result = await decodeLista(await encodeLista(buildSharedFile(store, store.entries)));
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.file.entries).toHaveLength(1);
+    expect(result.file.entries[0].transpose).toBe(3);
+    expect(result.file.entries[0].title).toBe('Titulo com separador');
   });
 });

@@ -21,12 +21,16 @@
  *    quanto uma senha (quem importa VIRA o usuário), e um link é a coisa mais reencaminhada
  *    do mundo. Aqui ele não é omitido por descuido possível: é removido na saída E na
  *    entrada, para que nem um link forjado à mão consiga oferecer identidade a quem clica.
+ *
+ * 4. O QUE VIAJA NÃO É O ARQUIVO DE BACKUP. O formato do link é próprio, em colunas, e
+ *    existe porque o comprimento é o único recurso escasso aqui — ver `serializar`.
  */
 
 import {
   buildExportFile,
   favoritesFileSchema,
   subsetStore,
+  MAX_ENTRIES,
   MAX_FILE_BYTES,
   type FavoriteEntry,
   type FavoritesFile,
@@ -143,8 +147,144 @@ async function descomprimir(bytes: Uint8Array, maxBytes: number): Promise<Uint8A
 }
 
 // ---------------------------------------------------------------------------
-// Token
+// O formato de fio
 // ---------------------------------------------------------------------------
+//
+// O link não tem servidor por trás, então a lista inteira viaja dentro dele e o
+// COMPRIMENTO é o único recurso escasso do recurso. Mandar o mesmo JSON do backup era o
+// caminho óbvio — e era caro: chaves repetidas em cada entrada, ids de categoria de 14
+// caracteres gerados por navegador, e uma data que ninguém lê na lista de outra pessoa.
+//
+// Três mudanças, medidas com repertório real (títulos acentuados, artistas repetidos),
+// contando quantas músicas cabem nos 2.000 caracteres em que os mensageiros começam a
+// cortar:
+//
+//   JSON do backup ......................  43 músicas
+//   + tirar `addedAt`, categoria por índice
+//     e delimitador em vez de JSON .......  96
+//   + agrupar por COLUNA .................. 144
+//
+// A última é a que surpreende, e é a razão de o formato ser em colunas. O deflate acha
+// repetição dentro de uma janela deslizante: com uma entrada por linha, dois "Tião
+// Carreiro e Pardinho" ficam a centenas de bytes de distância e cada um paga o preço
+// inteiro; empilhados na mesma tira, o segundo vira uma referência curta ao primeiro.
+//
+// O que NÃO foi adotado, e por quê: dá para chegar a 384 músicas mandando só
+// `artista/musica` e deduzindo o título do slug. Mas aí a tela que mostra a lista antes de
+// importar — a que torna seguro clicar num link de origem desconhecida — precisaria de uma
+// ida ao servidor por música só para escrever os nomes, e o pouco que ela conseguiria
+// offline seria "O Bebado E A Equilibrista", sem acento e com preposição maiúscula. O
+// título é a coisa que a pessoa lê para decidir; ele fica.
+//
+// Acima do que cabe num link, a saída continua sendo o arquivo — ver a mensagem de erro
+// em `encodeLista` e o botão "Exportar" na dashboard.
+
+/** Separa as tiras (uma por campo). Caractere de controle: não ocorre em texto de verdade. */
+const RS = '\u001e';
+/** Separa os valores dentro de uma tira. */
+const US = '\u001f';
+/** Separa os índices de categoria de uma mesma cifra. */
+const SUB = ',';
+
+/** Marca a versão do formato de fio. O `1` implícito é o JSON antigo (ver `desserializar`). */
+const FORMATO = '2';
+
+/**
+ * Texto que pode entrar numa tira sem quebrá-la.
+ *
+ * Os separadores são caracteres de controle e nenhum título de música os contém — mas o
+ * dado vem do servidor, e um deles escapando aqui deslocaria uma coluna inteira na volta,
+ * grudando o tom de uma música no título de outra.
+ */
+const limpar = (v: string | null | undefined): string =>
+  (v ?? '').split(RS).join(' ').split(US).join(' ');
+
+/**
+ * O arquivo vira texto, em colunas.
+ *
+ * A ordem das tiras é a do tipo, e a contagem de entradas sai da primeira: todas as tiras
+ * precisam ter o mesmo comprimento, e a volta recusa o token se não tiverem.
+ */
+function serializar(file: FavoritesFile): string {
+  const cats = file.categories;
+  const idParaIndice = new Map(cats.map((c, i) => [c.id, i]));
+  const es = file.entries;
+  const tira = (fn: (e: FavoriteEntry) => string) => es.map(fn).join(US);
+
+  return [
+    FORMATO + US + limpar(file.listName),
+    cats.map(c => limpar(c.name)).join(US),
+    tira(e => e.artistSlug),
+    tira(e => e.songSlug),
+    tira(e => limpar(e.title)),
+    tira(e => limpar(e.artistName)),
+    tira(e => limpar(e.versionName)),
+    tira(e => String(e.transpose)),
+    tira(e => limpar(e.originalKey)),
+    // Índices, não ids: um id de categoria tem 14 caracteres gerados por navegador, é
+    // ruído puro para o deflate, e do outro lado ele é remapeado por NOME de qualquer jeito.
+    tira(e => e.categoryIds.map(id => idParaIndice.get(id)).filter(i => i !== undefined).join(SUB)),
+  ].join(RS);
+}
+
+/**
+ * Reconstrói o arquivo a partir do texto — ou `null` se ele não for um.
+ *
+ * Devolve a forma CRUA, sem confiar em nada: quem valida é o `favoritesFileSchema` no
+ * `decodeLista`, o mesmo do import por arquivo. Aqui só se confere o que o schema não tem
+ * como ver, que é a coerência entre as tiras.
+ */
+function desserializar(texto: string, maxEntradas: number): unknown | null {
+  const linhas = texto.split(RS);
+  const [marca, nome] = (linhas[0] ?? '').split(US);
+  if (marca !== FORMATO) return null;
+
+  // Quantas cifras há sai da tira de artistas, e só dela. `''.split(US)` devolve `['']`,
+  // então uma tira vazia é ambígua: pode ser lista sem nada ou uma cifra de valor vazio.
+  // Aqui o slug nunca é vazio (o schema o recusaria), então tira vazia é lista vazia.
+  const artistas = linhas[2] ? linhas[2].split(US) : [];
+  if (artistas.length === 0 || artistas.length > maxEntradas) return null;
+
+  // As demais tiras já sabem quantos valores esperar, e aí a tira vazia tem o significado
+  // oposto: são N campos em branco, não zero campos. Ler `versionName` (quase sempre nulo
+  // em todas as cifras) pela regra da tira de artistas dava coluna de tamanho 0 e
+  // derrubava a lista inteira.
+  const coluna = (i: number): string[] => (linhas[i] ?? '').split(US);
+
+  const colunas = [3, 4, 5, 6, 7, 8, 9].map(coluna);
+  // Tira curta significa token truncado no caminho (ou forjado). Sem esta conferência, o
+  // tom de uma música apareceria no lugar do título de outra.
+  if (colunas.some(c => c.length !== artistas.length)) return null;
+  const [slugs, titulos, nomesArtista, versoes, tons, tonsOriginais, cats] = colunas;
+
+  const categorias = (linhas[1] ? linhas[1].split(US) : []).map((n, i) => ({
+    id: `l${i}`,
+    name: n,
+    createdAt: new Date().toISOString(),
+  }));
+
+  return {
+    app: 'viola-libre',
+    kind: 'favoritos',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    ...(nome ? { listName: nome } : {}),
+    categories: categorias,
+    entries: artistas.map((artistSlug, i) => ({
+      artistSlug,
+      songSlug: slugs[i],
+      title: titulos[i],
+      artistName: nomesArtista[i] || null,
+      versionName: versoes[i] || null,
+      // `addedAt` não viaja: a data em que OUTRA pessoa favoritou a música não diz nada na
+      // minha estante, e ordenar por "mais recentes" com a data dela seria mentira. O
+      // schema carimba a de agora, que é quando a cifra de fato entrou aqui.
+      transpose: Number(tons[i]),
+      originalKey: tonsOriginais[i] || null,
+      categoryIds: cats[i] ? cats[i].split(SUB).map(n => `l${n}`) : [],
+    })),
+  };
+}
 
 /**
  * Monta o arquivo que vai no link: as entradas escolhidas, só as categorias que elas usam,
@@ -179,13 +319,12 @@ export function comCategoriaDeEntrada(file: FavoritesFile, nome: string): Favori
   };
 }
 
-/** Serializa e comprime. O JSON vai sem indentação — no link, espaço em branco é peso. */
+/** Serializa em colunas (ver `serializar`) e comprime. */
 export async function encodeLista(file: FavoritesFile): Promise<string> {
-  const json = JSON.stringify({ ...file, userHash: undefined });
-  const bytes = new TextEncoder().encode(json);
+  const bytes = new TextEncoder().encode(serializar(file));
   const comprimido = await comprimir(bytes);
-  // O deflate quase sempre ganha (o JSON repete as mesmas chaves em cada entrada), mas
-  // numa lista de uma música só o cabeçalho do formato pode custar mais do que economiza.
+  // O deflate quase sempre ganha, mas numa lista de uma música só o cabeçalho do próprio
+  // formato pode custar mais do que ele economiza.
   return comprimido && comprimido.length < bytes.length
     ? FLAG_DEFLATE + toBase64Url(comprimido)
     : FLAG_PLANO + toBase64Url(bytes);
@@ -224,11 +363,17 @@ export async function decodeLista(token: string): Promise<DecodeResult> {
     if (!bytes) return { ok: false, error: 'O link parece incompleto ou foi cortado no caminho.' };
   }
 
-  let json: unknown;
-  try {
-    json = JSON.parse(new TextDecoder().decode(bytes));
-  } catch {
-    return { ok: false, error: 'O link parece incompleto ou foi cortado no caminho.' };
+  const texto = new TextDecoder().decode(bytes);
+
+  // Colunas primeiro; JSON é o formato anterior, mantido em leitura porque um link já
+  // compartilhado não deve parar de abrir só porque o formato melhorou depois.
+  let json = desserializar(texto, MAX_ENTRIES);
+  if (json === null) {
+    try {
+      json = JSON.parse(texto);
+    } catch {
+      return { ok: false, error: 'O link parece incompleto ou foi cortado no caminho.' };
+    }
   }
 
   // A identidade cai aqui, antes de qualquer validação. Um link forjado com `userHash`
