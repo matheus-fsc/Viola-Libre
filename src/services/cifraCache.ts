@@ -230,3 +230,49 @@ export async function espacoDoNavegador(): Promise<{ usado: number; total: numbe
     return null;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Preferência: guardar sozinho?
+// ---------------------------------------------------------------------------
+
+/**
+ * Três estados, e o terceiro é o que importa.
+ *
+ *   `'sim'` / `'nao'` — o usuário respondeu.
+ *   ausente           — ainda não foi perguntado.
+ *
+ * Sem distinguir "disse não" de "nunca perguntei", ou a pergunta reaparece para sempre
+ * (irritante) ou nunca aparece (o recurso não existe para quem não foi caçá-lo no menu).
+ */
+export type PreferenciaOffline = 'sim' | 'nao';
+
+const CHAVE_PREF = 'vl_offline_auto';
+
+export function lerPreferencia(): PreferenciaOffline | null {
+  try {
+    const v = localStorage.getItem(CHAVE_PREF);
+    return v === 'sim' || v === 'nao' ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+export function gravarPreferencia(v: PreferenciaOffline): void {
+  try {
+    localStorage.setItem(CHAVE_PREF, v);
+  } catch {
+    // Storage bloqueado: a preferência vale pela sessão e a pergunta volta depois. Melhor
+    // que impedir a escolha.
+  }
+}
+
+/**
+ * Vale perguntar agora?
+ *
+ * Só uma vez, e só quando há algo a guardar: a pergunta feita numa estante vazia não tem
+ * resposta boa — "sim, guarde zero cifras" não significa nada e queima a única chance de
+ * perguntar num momento em que o benefício ainda não existe.
+ */
+export function devePerguntar(pref: PreferenciaOffline | null, favoritos: number): boolean {
+  return pref === null && favoritos > 0 && temCache();
+}

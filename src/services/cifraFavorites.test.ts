@@ -33,6 +33,7 @@ import {
   type FavoritesStore,
 } from './cifraFavorites';
 import type { FavoritedSong } from './api';
+import { comCategoriaDeEntrada } from './favoritesShare';
 
 const entry = (artistSlug: string, songSlug: string, over: Partial<FavoriteEntry> = {}): FavoriteEntry => ({
   artistSlug,
@@ -629,5 +630,108 @@ describe('subsetStore e a marca de origem', () => {
       entries: store.entries.map(e => ({ ...e, categoryIds: [store.categories[0].id] })),
     };
     expect(subsetStore(comEtiqueta, comEtiqueta.entries).categories[0].source).toBeUndefined();
+  });
+});
+
+// ── Etiqueta repetida ──────────────────────────────────────────────────────
+//
+// Defeito relatado: uma lista importada mostrava 27 na barra lateral tendo 14 cifras, e a
+// etiqueta aparecia duas vezes em cada linha. A conta denuncia a causa — 13 entradas
+// contadas em dobro mais 1 contada certo. A que estava certa era a única que já existia na
+// estante, e passava pelo ramo `known` do merge, que deduplicava; as novas, não.
+//
+// A montante, quem criava a duplicata era a gaveta de destino sugerida: o nome sugerido é
+// o da própria lista, então `comCategoriaDeEntrada` acrescentava uma SEGUNDA "Ariela" ao
+// lado da que a lista já trazia, e as duas convergiam para o mesmo id local.
+describe('categoria não se repete numa entrada', () => {
+  const arquivoDaLista = (nomeDaGaveta: string, n: number) => {
+    let s = emptyStore();
+    const cat = createCategory(s, nomeDaGaveta);
+    s = cat.store;
+    for (let i = 0; i < n; i++) {
+      s = addEntry(s, entry(`artista-${i}`, `musica-${i}`, { categoryIds: [cat.category.id] }));
+    }
+    return buildExportFile(s, null, nomeDaGaveta);
+  };
+
+  it('importar com gaveta de destino de mesmo nome não duplica a etiqueta', () => {
+    const file = comCategoriaDeEntrada(arquivoDaLista('Ariela', 3), 'Ariela');
+    const store = mergeImported(emptyStore(), file, { viaLink: true });
+
+    expect(store.categories).toHaveLength(1);
+    for (const e of store.entries) expect(e.categoryIds).toHaveLength(1);
+    expect(countByCategory(store)[store.categories[0].id]).toBe(3);
+  });
+
+  // O número exato do relato: 14 cifras, uma delas já na estante.
+  it('a contagem bate com o número de cifras, não com o dobro', () => {
+    const file = comCategoriaDeEntrada(arquivoDaLista('Ariela', 14), 'Ariela');
+    const jaTinha = addEntry(emptyStore(), entry('artista-0', 'musica-0'));
+    const store = mergeImported(jaTinha, file, { viaLink: true });
+
+    expect(store.entries).toHaveLength(14);
+    expect(countByCategory(store)[store.categories[0].id]).toBe(14);
+  });
+
+  it('uma gaveta de destino com nome NOVO continua sendo criada', () => {
+    const file = comCategoriaDeEntrada(arquivoDaLista('Ariela', 2), 'Show do sítio');
+    expect(file.categories.map(c => c.name).sort()).toEqual(['Ariela', 'Show do sítio']);
+    const store = mergeImported(emptyStore(), file, { viaLink: true });
+    for (const e of store.entries) expect(e.categoryIds).toHaveLength(2);
+  });
+
+  it('nome que só difere em acento e caixa conta como a mesma gaveta', () => {
+    const file = comCategoriaDeEntrada(arquivoDaLista('Roda de terça', 2), 'RODA DE TERCA');
+    expect(file.categories).toHaveLength(1);
+  });
+
+  // Duas categorias de mesmo nome dentro do arquivo (possível num arquivo editado à mão)
+  // convergem para o mesmo id local; sem deduplicar no merge, a etiqueta entra em dobro.
+  it('duas gavetas de mesmo nome no arquivo viram uma etiqueta só', () => {
+    const bruto = arquivoDaLista('Ariela', 2);
+    const forjado: typeof bruto = {
+      ...bruto,
+      categories: [...bruto.categories, { id: 'outra', name: 'ariela', createdAt: 'x' }],
+      entries: bruto.entries.map(e => ({ ...e, categoryIds: [...e.categoryIds, 'outra'] })),
+    };
+    const store = mergeImported(emptyStore(), forjado);
+
+    expect(store.categories).toHaveLength(1);
+    for (const e of store.entries) expect(e.categoryIds).toHaveLength(1);
+  });
+});
+
+/**
+ * Reparo do que já está gravado.
+ *
+ * Quem importou antes da correção tem a estante com ids repetidos no localStorage. Como o
+ * conserto é na LEITURA do schema, ela se corrige sozinha na próxima abertura da página —
+ * sem exigir que a pessoa reimporte ou apague nada.
+ */
+describe('estante já danificada se conserta na leitura', () => {
+  it('descarta o id repetido ao carregar', () => {
+    const danificada = {
+      version: 1, pendingRemovals: [],
+      categories: [{ id: 'c1', name: 'Ariela', createdAt: 'x' }],
+      entries: [{
+        artistSlug: 'a', songSlug: 'um', title: 'Um', artistName: null, versionName: null,
+        categoryIds: ['c1', 'c1'], addedAt: 'x', transpose: 0, originalKey: null,
+      }],
+    };
+    const parsed = favoritesStoreSchema.safeParse(danificada);
+    expect(parsed.success).toBe(true);
+    expect(parsed.data?.entries[0].categoryIds).toEqual(['c1']);
+    expect(countByCategory(parsed.data!)[('c1')]).toBe(1);
+  });
+
+  it('não mexe na ordem das etiquetas que estão certas', () => {
+    const parsed = favoritesStoreSchema.safeParse({
+      version: 1, pendingRemovals: [], categories: [],
+      entries: [{
+        artistSlug: 'a', songSlug: 'um', title: 'Um', artistName: null, versionName: null,
+        categoryIds: ['c2', 'c1', 'c3'], addedAt: 'x', transpose: 0, originalKey: null,
+      }],
+    });
+    expect(parsed.data?.entries[0].categoryIds).toEqual(['c2', 'c1', 'c3']);
   });
 });

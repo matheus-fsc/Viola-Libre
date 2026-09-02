@@ -1,10 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   faltaBaixar,
   formatarBytes,
   tamanhoEmBytes,
   vaiParaOCache,
   BYTES_POR_CIFRA_ESTIMADO,
+  devePerguntar,
 } from './cifraCache';
 import type { CifraDetail } from './api';
 
@@ -87,5 +88,37 @@ describe('tamanhoEmBytes', () => {
     const real = tamanhoEmBytes(cifra({ content_html: '<pre>' + 'linha da letra\n'.repeat(600) + '</pre>' }));
     expect(real).toBeGreaterThan(BYTES_POR_CIFRA_ESTIMADO / 4);
     expect(real).toBeLessThan(BYTES_POR_CIFRA_ESTIMADO * 4);
+  });
+});
+
+/**
+ * A pergunta da primeira visita.
+ *
+ * Perguntar numa estante vazia queima a única chance de perguntar num momento em que o
+ * benefício ainda não existe — "sim, guarde zero cifras" não quer dizer nada.
+ */
+describe('devePerguntar', () => {
+  // O ambiente dos testes é Node puro: sem este stub, `temCache()` é falso e a função
+  // recusaria perguntar — que é, aliás, o comportamento correto num navegador que não
+  // guarda nada. Prometer offline onde não dá para gravar seria promessa vazia.
+  vi.stubGlobal('indexedDB', {});
+
+  it('pergunta uma vez, com a estante já tendo algo', () => {
+    expect(devePerguntar(null, 5)).toBe(true);
+  });
+
+  it('não pergunta com a estante vazia', () => {
+    expect(devePerguntar(null, 0)).toBe(false);
+  });
+
+  it('não pergunta onde o navegador não guarda nada', () => {
+    vi.stubGlobal('indexedDB', undefined);
+    expect(devePerguntar(null, 5)).toBe(false);
+    vi.stubGlobal('indexedDB', {});
+  });
+
+  it('não repergunta depois de respondido — nem o "não"', () => {
+    expect(devePerguntar('sim', 5)).toBe(false);
+    expect(devePerguntar('nao', 5)).toBe(false);
   });
 });

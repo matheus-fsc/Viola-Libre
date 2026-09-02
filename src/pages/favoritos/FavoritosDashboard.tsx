@@ -49,7 +49,9 @@ import {
   MAX_LINK_CHARS,
 } from '../../services/favoritesShare';
 import { abrirLista } from '../../services/listaAberta';
-import { PainelOffline } from './PainelOffline';
+import { ConviteOffline, PainelOffline } from './PainelOffline';
+import { estimarTamanho, useCacheDeCifras } from './useCacheDeCifras';
+import { devePerguntar, gravarPreferencia, lerPreferencia } from '../../services/cifraCache';
 
 /** Filtro da barra lateral. Strings livres seriam ambíguas com id de categoria. */
 type Selection = { kind: 'all' } | { kind: 'loose' } | { kind: 'category'; id: string };
@@ -144,6 +146,8 @@ export function FavoritosDashboard() {
   /** Id da lista importada cujo descarte está à espera de confirmação. */
   const [descartando, setDescartando] = useState<string | null>(null);
   const [offlineOpen, setOfflineOpen] = useState(false);
+  /** `null` enquanto ninguém respondeu; ver `devePerguntar`. */
+  const [prefOffline, setPrefOffline] = useState(lerPreferencia);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // A reconciliação de abertura agora roda no App (useFavoritesBootSync), valendo para
@@ -192,6 +196,37 @@ export function FavoritosDashboard() {
     else ordered.sort((a, b) => b.addedAt.localeCompare(a.addedAt));
     return ordered;
   }, [store, selection, query, sort, ordemManual, categoriaAtiva?.order]);
+
+  /**
+   * O cache do aparelho, e as chaves da estante INTEIRA.
+   *
+   * Inteira, e não a seleção: a cifra pesa ~10 KB e cem músicas dão ~1 MB contra os GB que
+   * o navegador oferece, então escolher gaveta por gaveta era complexidade sem troco. A
+   * pergunta que sobra é uma só — guarda ou não guarda.
+   */
+  const todasAsChaves = useMemo(() => store.entries.map(entryKey), [store]);
+  const cache = useCacheDeCifras(todasAsChaves);
+
+  /**
+   * Guardar sozinho o que entrou depois do "sim".
+   *
+   * Roda ao abrir /favoritos, que é por onde a estante cresce em lote (importar uma lista,
+   * sincronizar com o servidor). Silencioso de propósito: é conveniência, e um aviso a cada
+   * visita por uma cifra nova seria ruído.
+   */
+  useEffect(() => {
+    if (prefOffline !== 'sim' || cache.faltam === 0 || cache.progresso) return;
+    void cache.baixarTudo();
+    // Só o número de pendentes governa: incluir o objeto `cache` inteiro reagiria a cada
+    // medição e o download se reiniciaria sozinho.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefOffline, cache.faltam]);
+
+  const responderConvite = (v: 'sim' | 'nao') => {
+    gravarPreferencia(v);
+    setPrefOffline(v);
+    if (v === 'sim') void cache.baixarTudo();
+  };
 
   // ── Ordem manual ─────────────────────────────────────────────────────────
   //
@@ -571,17 +606,18 @@ export function FavoritosDashboard() {
         </div>
       )}
 
-      {offlineOpen && (
-        <PainelOffline
-          escopo={{
-            nome: escopoAtual,
-            // O que está na tela AGORA, filtro e ordem incluídos — o mesmo recorte que
-            // vira lista ao abrir uma cifra, para o botão não guardar outra coisa.
-            chaves: visible.map(entryKey),
-            todas: store.entries.map(entryKey),
-          }}
-          onAviso={flash}
+      {/* Uma vez só, e num momento em que já há o que guardar. */}
+      {devePerguntar(prefOffline, store.entries.length) && (
+        <ConviteOffline
+          quantas={store.entries.length}
+          ocupara={estimarTamanho(store.entries.length)}
+          onResponder={responderConvite}
+          ocupado={Boolean(cache.progresso)}
         />
+      )}
+
+      {offlineOpen && (
+        <PainelOffline cache={cache} total={store.entries.length} onAviso={flash} />
       )}
 
       {shareOpen && (

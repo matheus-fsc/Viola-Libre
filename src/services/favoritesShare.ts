@@ -29,6 +29,7 @@
 import {
   buildExportFile,
   favoritesFileSchema,
+  normalizeCategoryName,
   subsetStore,
   MAX_ENTRIES,
   MAX_FILE_BYTES,
@@ -311,11 +312,23 @@ export function buildSharedFile(
 export function comCategoriaDeEntrada(file: FavoritesFile, nome: string): FavoritesFile {
   const limpo = nome.trim().slice(0, 60);
   if (!limpo) return file;
-  const id = `link_${Date.now().toString(36)}`;
+
+  // Se a lista JÁ traz uma gaveta com esse nome — o caso comum, porque o nome sugerido é o
+  // da própria lista —, usa a que existe em vez de criar uma segunda. Duas gavetas de mesmo
+  // nome convergem para o mesmo id local no `mergeImported`, e a cifra chegava etiquetada
+  // duas vezes: contagem dobrada na barra lateral e etiqueta repetida na linha.
+  const existente = file.categories.find(c => normalizeCategoryName(c.name) === normalizeCategoryName(limpo));
+  const id = existente?.id ?? `link_${Date.now().toString(36)}`;
+
   return {
     ...file,
-    categories: [...file.categories, { id, name: limpo, createdAt: new Date().toISOString() }],
-    entries: file.entries.map(e => ({ ...e, categoryIds: [...e.categoryIds, id] })),
+    categories: existente
+      ? file.categories
+      : [...file.categories, { id, name: limpo, createdAt: new Date().toISOString() }],
+    entries: file.entries.map(e => ({
+      ...e,
+      categoryIds: e.categoryIds.includes(id) ? e.categoryIds : [...e.categoryIds, id],
+    })),
   };
 }
 

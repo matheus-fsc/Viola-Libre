@@ -1,59 +1,90 @@
 /*
- * "Levar a lista no bolso" — baixar cifras para o aparelho.
+ * "Levar os favoritos no bolso" — guardar as cifras no aparelho.
  *
  * A promessa aqui é modesta de propósito, e o texto da tela diz isso: guardar as cifras
  * faz elas abrirem na hora e continuarem legíveis se a rede cair NO MEIO do uso. Não
  * transforma o site num aplicativo que abre do zero sem internet — para isso seria preciso
  * um service worker, que este projeto não tem. Prometer "offline" inteiro e entregar tela
  * branca no sítio sem sinal seria pior do que não oferecer nada.
+ *
+ * É TUDO OU NADA, E DE PROPÓSITO
+ *
+ * A primeira versão deixava escolher gaveta por gaveta. Medida a estante real, isso era
+ * complexidade sem troco: a cifra pesa ~10 KB e uma estante inteira de cem músicas dá
+ * ~1 MB, contra os GB que o navegador oferece. Escolher o que cabe só faz sentido quando
+ * algo não cabe — aqui cabe tudo, então a pergunta certa é uma só: guarda ou não guarda.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { HardDrive, Download, Trash2, Check, Loader } from 'lucide-react';
 import {
-  espacoDoNavegador,
-  formatarBytes,
-  resumoDoCache,
   apagarCifras,
+  formatarBytes,
+  gravarPreferencia,
+  lerPreferencia,
   temCache,
-  BYTES_POR_CIFRA_ESTIMADO,
+  type PreferenciaOffline,
 } from '../../services/cifraCache';
-import { baixarLista, type ProgressoDownload } from '../../services/baixarLista';
-
-export interface EscopoOffline {
-  /** Rótulo do que está selecionado: "Roda de terça", "Todos os favoritos". */
-  nome: string;
-  /** As chaves `artista/musica` da seleção atual. */
-  chaves: string[];
-  /** Todas as chaves da estante, para o "salvar tudo". */
-  todas: string[];
-}
+import { estimarTamanho, type CacheDeCifras } from './useCacheDeCifras';
 
 const botao =
   'bevel-out bg-[#ece9d8] px-3 py-2 sm:py-1.5 text-xs font-bold text-black hover:bg-white cursor-pointer ' +
   'flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed ' +
   'active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white';
 
-export function PainelOffline({ escopo, onAviso }: {
-  escopo: EscopoOffline;
+// ---------------------------------------------------------------------------
+
+/**
+ * O convite da primeira visita.
+ *
+ * Aparece uma vez, e responder "agora não" é resposta definitiva — a pergunta não volta.
+ * O caminho para mudar de ideia fica dito na própria frase, senão "não" viraria uma porta
+ * trancada para um recurso que a pessoa talvez quisesse depois.
+ */
+export function ConviteOffline({ quantas, ocupara, onResponder, ocupado }: {
+  quantas: number;
+  ocupara: string;
+  onResponder: (v: PreferenciaOffline) => void;
+  ocupado: boolean;
+}) {
+  return (
+    <div className="bg-[#e8f0fe] border-2 border-[#0058e6] p-3 flex flex-col gap-2">
+      <div className="text-xs font-bold text-[#002fa7] flex items-center gap-1.5">
+        <HardDrive size={13} /> Guardar seus favoritos no aparelho?
+      </div>
+      <p className="text-[11px] text-gray-800 leading-relaxed">
+        Suas <strong>{quantas} cifra{quantas === 1 ? '' : 's'}</strong> ficam guardadas aqui
+        (~{ocupara}) e passam a abrir <strong>na hora</strong>, inclusive o "Próxima" de
+        dentro da música — e continuam legíveis se a internet cair no meio do uso. Os
+        favoritos novos são guardados sozinhos daí em diante.
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <button onClick={() => onResponder('sim')} disabled={ocupado} className={botao}>
+          {ocupado ? <Loader size={12} className="animate-spin" /> : <Download size={12} />}
+          Sim, guardar
+        </button>
+        <button
+          onClick={() => onResponder('nao')}
+          disabled={ocupado}
+          className="px-3 py-2 sm:py-1.5 text-xs text-gray-600 hover:text-black cursor-pointer disabled:opacity-50"
+        >
+          Agora não
+        </button>
+        <span className="text-[10px] text-gray-500">dá para mudar em "No aparelho"</span>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+export function PainelOffline({ cache, total, onAviso }: {
+  cache: CacheDeCifras;
+  /** Quantas cifras há na estante inteira. */
+  total: number;
   onAviso: (tom: 'ok' | 'erro', texto: string) => void;
 }) {
-  const [resumo, setResumo] = useState<{ chaves: Set<string>; itens: number; bytes: number } | null>(null);
-  const [espaco, setEspaco] = useState<{ usado: number; total: number } | null>(null);
-  const [progresso, setProgresso] = useState<ProgressoDownload | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
-
-  const medir = () => {
-    void resumoDoCache().then(setResumo);
-    void espacoDoNavegador().then(setEspaco);
-  };
-
-  useEffect(() => {
-    // O ResizeObserver não serve aqui: o que muda é o disco, não o layout. A medição
-    // acontece na montagem e depois de cada download ou limpeza.
-    void resumoDoCache().then(setResumo);
-    void espacoDoNavegador().then(setEspaco);
-    return () => abortRef.current?.abort();
-  }, []);
+  const [pref, setPref] = useState<PreferenciaOffline | null>(lerPreferencia);
+  const { resumo, espaco, progresso, faltam } = cache;
 
   if (!temCache()) {
     return (
@@ -64,44 +95,35 @@ export function PainelOffline({ escopo, onAviso }: {
     );
   }
 
-  const guardadas = resumo?.chaves ?? new Set<string>();
-  const naSelecao = escopo.chaves.filter(c => guardadas.has(c)).length;
-  const faltamSelecao = escopo.chaves.length - naSelecao;
-  const faltamTodas = escopo.todas.filter(c => !guardadas.has(c)).length;
-
-  const baixar = async (chaves: string[], rotulo: string) => {
-    if (chaves.length === 0) return;
-    const ctrl = new AbortController();
-    abortRef.current = ctrl;
-    setProgresso({ feitas: 0, total: chaves.length, falhas: 0 });
-
-    const r = await baixarLista(chaves, setProgresso, ctrl.signal);
-    setProgresso(null);
-    abortRef.current = null;
-    medir();
-
+  const baixar = async () => {
+    const r = await cache.baixarTudo();
+    if (!r) return;
     if (r.cancelado) {
-      onAviso('ok', `Download interrompido — ${r.baixadas} cifra(s) já ficaram guardadas.`);
+      onAviso('ok', `Interrompido — ${r.baixadas} cifra(s) já ficaram guardadas.`);
       return;
     }
-    // A falha é informada, não escondida: numa lista de quarenta, saber que duas não vieram
-    // é a diferença entre confiar no que está no bolso e descobrir no sítio, sem sinal.
+    // A falha é informada, não escondida: numa estante de quarenta, saber que duas não
+    // vieram é a diferença entre confiar no que está no bolso e descobrir no sítio, sem sinal.
     onAviso(
       r.falhas > 0 ? 'erro' : 'ok',
       r.falhas > 0
-        ? `${rotulo}: ${r.baixadas} guardada(s), ${r.falhas} não encontrada(s) no acervo.`
-        : `${rotulo}: ${r.baixadas} cifra(s) guardadas — ${formatarBytes(r.bytes)} no aparelho.`
+        ? `${r.baixadas} guardada(s), ${r.falhas} não encontrada(s) no acervo.`
+        : `${r.baixadas} cifra(s) guardadas — ${formatarBytes(r.bytes)} no aparelho.`
     );
   };
 
   const limpar = async () => {
-    const chaves = [...guardadas];
+    const chaves = [...cache.guardadas];
     await apagarCifras(chaves);
-    medir();
+    cache.medir();
     onAviso('ok', `${chaves.length} cifra(s) apagadas do aparelho.`);
   };
 
-  const estimativa = (n: number) => formatarBytes(n * BYTES_POR_CIFRA_ESTIMADO);
+  const trocarPreferencia = (v: PreferenciaOffline) => {
+    gravarPreferencia(v);
+    setPref(v);
+    if (v === 'sim' && faltam > 0) void baixar();
+  };
 
   return (
     <div className="bg-[#ece9d8] border-2 border-white border-r-[#808080] border-b-[#808080] p-3 flex flex-col gap-2">
@@ -118,7 +140,7 @@ export function PainelOffline({ escopo, onAviso }: {
 
       <div className="bevel-in bg-white px-2 py-1.5 text-[11px] flex flex-wrap items-center gap-x-4 gap-y-1">
         <span>
-          <strong>{resumo?.itens ?? 0}</strong> cifra{resumo?.itens === 1 ? '' : 's'} ·{' '}
+          <strong>{resumo?.itens ?? 0}</strong> de {total} cifra{total === 1 ? '' : 's'} ·{' '}
           <strong>{formatarBytes(resumo?.bytes ?? 0)}</strong>
         </span>
         {espaco && (
@@ -128,11 +150,21 @@ export function PainelOffline({ escopo, onAviso }: {
         )}
       </div>
 
+      <label className="flex items-center gap-2 text-[11px] cursor-pointer">
+        <input
+          type="checkbox"
+          checked={pref === 'sim'}
+          onChange={e => trocarPreferencia(e.target.checked ? 'sim' : 'nao')}
+          className="cursor-pointer"
+        />
+        Guardar meus favoritos automaticamente
+      </label>
+
       {progresso ? (
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center gap-2 text-[11px]">
             <Loader size={12} className="animate-spin shrink-0" />
-            <span>Baixando {progresso.feitas} de {progresso.total}…</span>
+            <span>Guardando {progresso.feitas} de {progresso.total}…</span>
             {progresso.falhas > 0 && <span className="text-[#992200]">({progresso.falhas} falhou)</span>}
           </div>
           {/* Barra em `div`, não `<progress>`: o elemento nativo ignora a moldura do tema
@@ -143,38 +175,19 @@ export function PainelOffline({ escopo, onAviso }: {
               style={{ width: `${Math.round((progresso.feitas / Math.max(1, progresso.total)) * 100)}%` }}
             />
           </div>
-          <button onClick={() => abortRef.current?.abort()} className={`${botao} self-start`}>
-            Parar
-          </button>
+          <button onClick={cache.parar} className={`${botao} self-start`}>Parar</button>
         </div>
       ) : (
         <div className="flex flex-wrap gap-2">
           <button
-            onClick={() => void baixar(escopo.chaves, escopo.nome)}
-            disabled={faltamSelecao === 0}
+            onClick={() => void baixar()}
+            disabled={faltam === 0}
             className={botao}
-            title={faltamSelecao === 0
-              ? `Todas as ${escopo.chaves.length} cifras de "${escopo.nome}" já estão guardadas`
-              : `Guardar as cifras de "${escopo.nome}" no aparelho`}
+            title={faltam === 0 ? 'Toda a sua estante já está guardada' : 'Guardar todos os favoritos no aparelho'}
           >
-            {/* Guardado, o nome da seleção sai do rótulo: ele já está na barra lateral e no
-                título do painel, e repetido aqui só servia para truncar no meio da palavra.
-                Na hora de BAIXAR ele fica, porque aí é o que diz o que se está baixando. */}
-            {faltamSelecao === 0 ? <Check size={12} className="text-green-700" /> : <Download size={12} />}
-            <span className="truncate max-w-[18rem]">
-              {faltamSelecao === 0
-                ? 'Já está no aparelho'
-                : `Salvar ${escopo.nome} (${faltamSelecao}, ~${estimativa(faltamSelecao)})`}
-            </span>
+            {faltam === 0 ? <Check size={12} className="text-green-700" /> : <Download size={12} />}
+            {faltam === 0 ? 'Tudo já está no aparelho' : `Guardar todos (${faltam}, ~${estimarTamanho(faltam)})`}
           </button>
-
-          {/* Só aparece quando "salvar tudo" significa mais do que o botão ao lado já faz. */}
-          {faltamTodas > faltamSelecao && (
-            <button onClick={() => void baixar(escopo.todas, 'Todos os favoritos')} className={botao}>
-              <Download size={12} />
-              Salvar tudo ({faltamTodas}, ~{estimativa(faltamTodas)})
-            </button>
-          )}
 
           {(resumo?.itens ?? 0) > 0 && (
             <button onClick={() => void limpar()} className={`${botao} text-[#992200]`}>

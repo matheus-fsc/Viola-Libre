@@ -156,7 +156,11 @@ const entrySchema = z.object({
   title: z.string().min(1),
   artistName: z.string().nullable().catch(null),
   versionName: z.string().nullable().catch(null),
-  categoryIds: z.array(z.string()).catch([]),
+  // Deduplicado na LEITURA, e não só na escrita: uma estante gravada por uma versão que
+  // deixou passar id repetido contaria a cifra duas vezes na barra lateral e desenharia a
+  // etiqueta em dobro na linha. Consertar aqui repara sozinho o que já está no navegador
+  // de quem importou, sem exigir que a pessoa refaça nada.
+  categoryIds: z.array(z.string()).catch([]).transform(ids => Array.from(new Set(ids))),
   addedAt: z.string().catch(() => new Date().toISOString()),
   // Teto e piso porque `transposeChordString` soma o deslocamento a `+120` antes do módulo
   // 12: um `-999` vindo de um arquivo forjado sairia do outro lado com nota errada em vez
@@ -608,9 +612,15 @@ export const mergeImported = (
   for (const entry of file.entries) {
     // Só ids que existem de fato depois do remapeamento: um `categoryIds` forjado
     // apontando para gaveta inexistente viraria etiqueta fantasma na contagem.
-    const mapeados = entry.categoryIds
-      .map(id => idMap.get(id))
-      .filter((id): id is string => Boolean(id) && idsValidos.has(id!));
+    // `Set` porque o remapeamento CONVERGE: duas categorias do arquivo com o mesmo nome
+    // (uma da lista original, outra criada por `comCategoriaDeEntrada`) viram o mesmo id
+    // local, e sem isto a cifra entrava com a etiqueta repetida — a contagem da gaveta
+    // dobrava e a etiqueta aparecia duas vezes na linha.
+    const mapeados = Array.from(new Set(
+      entry.categoryIds
+        .map(id => idMap.get(id))
+        .filter((id): id is string => Boolean(id) && idsValidos.has(id!))
+    ));
 
     const key = favoriteKey(entry.artistSlug, entry.songSlug);
     const known = index.get(key);
