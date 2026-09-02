@@ -48,6 +48,7 @@ import {
   AVISO_LINK_CHARS,
   MAX_LINK_CHARS,
 } from '../../services/favoritesShare';
+import { abrirLista } from '../../services/listaAberta';
 
 /** Filtro da barra lateral. Strings livres seriam ambíguas com id de categoria. */
 type Selection = { kind: 'all' } | { kind: 'loose' } | { kind: 'category'; id: string };
@@ -149,10 +150,24 @@ export function FavoritosDashboard() {
   const counts = useMemo(() => countByCategory(store), [store]);
   const looseCount = useMemo(() => uncategorizedCount(store), [store]);
 
-  /** A gaveta aberta, quando há uma. */
-  const categoriaAtiva = selection.kind === 'category'
-    ? store.categories.find(c => c.id === selection.id) ?? null
-    : null;
+  /**
+   * A gaveta aberta, quando há uma.
+   *
+   * O `useMemo` não é otimização: buscar dentro da store solta no corpo do render faz o
+   * React Compiler desistir do componente inteiro ("existing memoization could not be
+   * preserved"), porque uma referência para dentro de um estado externo passa a circular
+   * pelo render. O mesmo cuidado vale no `CifraViewer` (ver `tomSalvo` lá).
+   */
+  const categoriaAtiva = useMemo(
+    () => (selection.kind === 'category' ? store.categories.find(c => c.id === selection.id) ?? null : null),
+    [store, selection]
+  );
+
+  /** Como a seleção atual se chama — serve de rótulo à barra de navegação da cifra. */
+  const escopoAtual =
+    selection.kind === 'all' ? 'Todos os favoritos'
+      : selection.kind === 'loose' ? 'Sem categoria'
+        : categoriaAtiva?.name ?? 'Categoria';
 
   // "Minha ordem" fica pendurada no `sort` mesmo depois de sair da gaveta que a tinha; aqui
   // ela só VALE dentro de uma categoria, e fora dela o critério volta a ser o padrão.
@@ -222,6 +237,24 @@ export function FavoritosDashboard() {
     setSelection(sel => (sel.kind === 'category' && sel.id === listaADescartar.id ? { kind: 'all' } : sel));
     setDescartando(null);
     flash('ok', `Lista “${nome}” descartada — ${plano.removidas} cifra(s) fora dos favoritos, ${plano.mantidas} mantida(s).`);
+  };
+
+  /**
+   * Abre a cifra levando a lista junto.
+   *
+   * O que vai é `visible` — a ordem EXATA que a pessoa está vendo, com o filtro, o critério
+   * de ordenação e a ordem manual já aplicados. Guardar só o id da categoria daria uma
+   * "próxima" que não é a próxima da tela, que é a única que faz sentido para quem está
+   * olhando. A busca entra na conta de propósito: quem filtrou por "Almir" e clicou na
+   * primeira quer percorrer aquelas, não a gaveta inteira.
+   */
+  const abrirEsta = (entry: FavoriteEntry) => {
+    abrirLista({
+      nome: query.trim() ? `${escopoAtual} · "${query.trim()}"` : escopoAtual,
+      voltarPara: '/favoritos',
+      chaves: visible.map(entryKey),
+    });
+    navigate(`/cifras/${entry.artistSlug}/${entry.songSlug}`);
   };
 
   const flash = (tone: 'ok' | 'erro', text: string) => {
@@ -940,7 +973,7 @@ export function FavoritosDashboard() {
                         />
                       )}
                       <button
-                        onClick={() => navigate(`/cifras/${entry.artistSlug}/${entry.songSlug}`)}
+                        onClick={() => abrirEsta(entry)}
                         className="flex-1 min-w-0 text-left cursor-pointer"
                         title="Abrir cifra"
                       >

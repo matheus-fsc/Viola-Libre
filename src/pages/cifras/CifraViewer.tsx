@@ -31,6 +31,8 @@ import { useImmersiveStore } from '../../stores/useImmersiveStore';
 import { MobileCifraBar, TransporteMobile, GrupoAjustes, LinhaAjuste, Stepper, BotaoFolha } from './MobileCifraBar';
 import { SeletorDeTom, GradeDeTons, SalvarTom } from './SeletorDeTom';
 import { estadoTomSalvo } from './tomSalvo';
+import { BarraDaLista } from './BarraDaLista';
+import { lerLista, posicaoNaLista } from '../../services/listaAberta';
 import { reflowCifraHtml } from '../../services/cifraUtils';
 import { getPreferredInstrumentId, setPreferredInstrumentId } from '../../utils/instrumentPreference';
 import {
@@ -188,6 +190,39 @@ export const CifraViewer: React.FC = () => {
   // para que favoritar aqui e abrir /favoritos concordem sem F5 — e vice-versa.
   const favoritesStore = useCifraFavorites();
   const isFavorited = Boolean(artistSlug && songSlug && isCifraFavorited(favoritesStore, artistSlug, songSlug));
+  /**
+   * A lista que o músico está percorrendo, se houver (ver `listaAberta.ts`).
+   *
+   * Lida UMA vez, na montagem: trocar de música pelos botões da barra mantém este
+   * componente montado, e a lista guardada não muda no meio do caminho. Reler a cada troca
+   * seria varrer o `sessionStorage` e refazer o `JSON.parse` de uma lista que pode ter
+   * centenas de chaves, a cada clique em "próxima".
+   */
+  const [listaDaSessao] = useState(lerLista);
+
+  /**
+   * Títulos para o `title` dos botões — "Próxima: Romaria" diz mais que "Próxima".
+   *
+   * Sai da estante, que é quem os tem. Se a cifra seguinte tiver saído dos favoritos no
+   * meio do caminho, o botão continua funcionando, só sem a dica.
+   */
+  const titulosDaEstante = useMemo(
+    () => new Map(favoritesStore.entries.map(e => [favoriteKey(e.artistSlug, e.songSlug), e.title])),
+    [favoritesStore]
+  );
+
+  /**
+   * Onde esta cifra cai na lista — `null` quando ela não está nela.
+   *
+   * É o que faz a barra sumir sozinha quando o músico sai da lista pelo "Ver artista" ou
+   * pela busca, em vez de continuar afirmando "3 de 12" numa música que não é a terceira
+   * de nada.
+   */
+  const naLista = useMemo(
+    () => posicaoNaLista(listaDaSessao, artistSlug, songSlug, titulosDaEstante),
+    [listaDaSessao, artistSlug, songSlug, titulosDaEstante]
+  );
+
   /**
    * O tom guardado na estante para esta cifra, em semitons. `0` quando não há nenhum.
    *
@@ -1781,6 +1816,10 @@ export const CifraViewer: React.FC = () => {
         </div>
       </div>
 
+      {/* Percorrer a lista: em cima, para quem chegou e já quer pular. A gêmea fica no fim
+          da cifra, que é onde a mão está quando a música acaba. */}
+      {naLista && <BarraDaLista pos={naLista} posicao="topo" />}
+
       {/* Preview timing banner */}
       {previewTiming && (
         <div className="bevel-out bg-[#d4edda] border border-green-500 px-3 py-1 text-xs flex items-center justify-between gap-2 shrink-0">
@@ -2455,6 +2494,11 @@ export const CifraViewer: React.FC = () => {
                 />
               )
             )}
+
+            {/* Dentro do container do conteúdo, e não depois dele: é aqui que a cifra
+                termina de verdade, role a página ou role este painel. Quem acabou de tocar
+                não deveria ter que voltar ao topo para achar a próxima. */}
+            {naLista && <BarraDaLista pos={naLista} posicao="fim" />}
           </div>
         </div>
 
