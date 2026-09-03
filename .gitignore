@@ -55,3 +55,8 @@ cifras_data_backup.zip
 # O guia de agentes que vale para todo mundo é o AGENTS.md, esse sim versionado.
 CLAUDE.md
 .claude/
+
+# Material de referência (livros de harmonia em PDF). Fora do versionamento por dois
+# motivos independentes: são centenas de MB, e são obras de terceiros com direitos
+# reservados — este repositório é público e AGPL, e não pode carregar conteúdo alheio.
+referencia/
