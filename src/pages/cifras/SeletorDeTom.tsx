@@ -12,6 +12,8 @@ import { useEffect, type ReactNode } from 'react';
 import { Heart } from 'lucide-react';
 import { transposeChordString } from '../../engine/chordCalculator';
 import { shortestTranspose } from '../../engine/transposeKey';
+import type { DeteccaoTom } from '../../engine/detectKey';
+import { TonsPossiveis } from './TonsPossiveis';
 import type { EstadoTomSalvo } from './tomSalvo';
 
 /**
@@ -67,15 +69,19 @@ export function SalvarTom({ estado, songKey, offsetAtual, onSalvar, className = 
 const OFFSETS = Array.from({ length: 12 }, (_, i) => i - 5);
 
 interface GradeProps {
-  /** Tom original da música (primeiro acorde), com sufixo. */
+  /** Tom original da música, sempre tríade — vem do `detectKey`. */
   songKey: string;
   /** Deslocamento atual, em semitons. */
   offset: number;
   onSelect(offset: number): void;
+  /** Frase do `descricaoDoTom`. Aparece sob a fita quando há ressalva a fazer. */
+  descricao?: string;
+  /** A leitura completa. Quando vem, a fita ganha o painel de confiança e campo harmônico. */
+  deteccao?: DeteccaoTom | null;
 }
 
 /** A grade em si, sem posicionamento — serve solta numa folha ou dentro de um popover. */
-export function GradeDeTons({ songKey, offset, onSelect }: GradeProps) {
+export function GradeDeTons({ songKey, offset, onSelect, descricao, deteccao }: GradeProps) {
   const atual = shortestTranspose(offset);
 
   return (
@@ -116,6 +122,16 @@ export function GradeDeTons({ songKey, offset, onSelect }: GradeProps) {
         <span className="text-[#002fa7]">● original</span>
         <span>subir</span>
       </div>
+      {/* A ressalva vem DEPOIS da fita, não antes: quem abriu isto quer trocar o tom, e
+          esse é o controle. O aviso informa quem for ler, sem atrasar quem só quer clicar. */}
+      {descricao && !deteccao && (
+        <p className="px-0.5 pt-1.5 text-[9px] leading-snug text-gray-600 border-t border-[#d4d0c8] mt-1">
+          {descricao}
+        </p>
+      )}
+      {/* Havendo a leitura completa, ela substitui a frase: o painel diz a mesma coisa e
+          ainda mostra em cima de que a leitura se apoia. */}
+      {deteccao && <TonsPossiveis deteccao={deteccao} />}
     </div>
   );
 }
@@ -133,9 +149,9 @@ interface SeletorProps extends GradeProps {
  *
  * O diálogo é centralizado na viewport em vez de ancorado no botão porque o painel lateral
  * tem `overflow-y-auto` — e no CSS isso faz o eixo horizontal deixar de ser `visible`, o
- * que recortaria uma fita de 360px pendurada num painel de 176px.
+ * que recortaria uma fita de 420px pendurada num painel de 176px.
  */
-export function SeletorDeTom({ songKey, offset, onSelect, aberto, onAbrir, gatilho }: SeletorProps) {
+export function SeletorDeTom({ songKey, offset, onSelect, aberto, onAbrir, gatilho, descricao, deteccao }: SeletorProps) {
   useEffect(() => {
     if (!aberto) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onAbrir(false); };
@@ -153,7 +169,7 @@ export function SeletorDeTom({ songKey, offset, onSelect, aberto, onAbrir, gatil
         aria-expanded={aberto}
         aria-haspopup="dialog"
         className="font-bold text-xs bg-white border border-gray-400 px-1 text-[#002fa7] min-w-[20px] text-center cursor-pointer hover:bg-[#c2d7f2] disabled:cursor-default disabled:hover:bg-white"
-        title={desabilitado ? 'Tom desconhecido' : 'Escolher o tom'}
+        title={desabilitado ? 'Tom desconhecido' : descricao ?? 'Escolher o tom'}
       >
         {gatilho}
       </button>
@@ -165,9 +181,14 @@ export function SeletorDeTom({ songKey, offset, onSelect, aberto, onAbrir, gatil
             role="dialog"
             aria-modal="true"
             aria-label="Escolher o tom"
-            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-40 w-[360px] max-w-[92vw] bg-[#ece9d8] bevel-out shadow-xl select-none"
+            /* Altura limitada + rolagem interna: o painel "avançado" cresce bastante, e sem
+               teto o diálogo passava do alto e do pé da tela — com a barra de título fora de
+               alcance, já que ele é posicionado pelo CENTRO. A folha do telefone sempre teve
+               isso (`max-h-[75vh]` + `overflow-y-auto`); aqui faltava. A barra de título fica
+               `shrink-0` para o × continuar sempre visível enquanto se rola o conteúdo. */
+            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-40 w-[420px] max-w-[94vw] max-h-[85vh] flex flex-col bg-[#ece9d8] bevel-out shadow-xl select-none"
           >
-            <div className="winxp-gradient-blue text-white px-2 py-0.5 flex items-center justify-between font-bold text-xs">
+            <div className="shrink-0 winxp-gradient-blue text-white px-2 py-0.5 flex items-center justify-between font-bold text-xs">
               <span>Tom</span>
               <button
                 onClick={() => onAbrir(false)}
@@ -177,7 +198,9 @@ export function SeletorDeTom({ songKey, offset, onSelect, aberto, onAbrir, gatil
                 ×
               </button>
             </div>
-            <GradeDeTons songKey={songKey} offset={offset} onSelect={o => { onSelect(o); onAbrir(false); }} />
+            <div className="overflow-y-auto retro-scrollbar">
+              <GradeDeTons songKey={songKey} offset={offset} descricao={descricao} deteccao={deteccao} onSelect={o => { onSelect(o); onAbrir(false); }} />
+            </div>
           </div>
         </>
       )}
