@@ -33,7 +33,8 @@ import {
 import { getPreferredInstrumentId, setPreferredInstrumentId } from './utils/instrumentPreference';
 import { preloadSoundfont } from './engine/AudioEngine';
 import { ArrowLeft } from 'lucide-react';
-import { useTabNavigation, TAB_LABEL } from './hooks/useTabNavigation';
+import { useTabNavigation, TAB_LABEL, tabFromPathname } from './hooks/useTabNavigation';
+import { minimizarJanela, lerJanelaMinimizada, limparJanelaMinimizada } from './services/janelaMinimizada';
 import { useSeo } from './hooks/useSeo';
 import { useDialog } from './hooks/useDialog';
 import { useJsonLd, websiteJsonLd } from './hooks/useJsonLd';
@@ -213,9 +214,47 @@ function App() {
 
   // Tab switcher — aba derivada da URL, com memória do ponto em que o usuário
   // parou em cada aba (goToTab volta pra lá em vez da raiz).
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   const { activeTab, goToTab } = useTabNavigation();
   const navigate = useNavigate();
+
+  // A janela minimizada (ver `services/janelaMinimizada`), lida no corpo do componente pelo
+  // mesmo motivo do `temPassoAnterior` acima: ele re-renderiza a cada navegação, então o
+  // valor acompanha sem precisar de um espelho em estado que possa ficar velho — e um
+  // espelho velho aqui é o botão da barra de tarefas prometendo voltar pra lugar nenhum.
+  //
+  // Só na área de trabalho, e não só por economia de leitura: uma janela minimizada existe
+  // ENQUANTO se vê o desktop. Com qualquer aba aberta, não há janela minimizada nenhuma.
+  const rotaMinimizada = activeTab === 'desktop' ? lerJanelaMinimizada() : null;
+
+  // E o registro some junto. Se a pessoa abriu uma aba pela barra de tarefas ou por um
+  // ícone do desktop, a janela voltou por outro caminho; deixar a rota guardada a faria
+  // reaparecer como "Restaurar janela" na próxima visita ao desktop.
+  useEffect(() => {
+    if (activeTab !== 'desktop') limparJanelaMinimizada();
+  }, [activeTab]);
+
+  /** `_` — guarda onde a pessoa estava e mostra a área de trabalho. */
+  const minimizarParaDesktop = React.useCallback(() => {
+    minimizarJanela(pathname + search);
+    navigate('/');
+  }, [pathname, search, navigate]);
+
+  /** `✕` — fecha de verdade: volta ao início e descarta o que estava aberto. */
+  const fecharJanela = React.useCallback(() => {
+    limparJanelaMinimizada();
+    navigate('/');
+  }, [navigate]);
+
+  const restaurarJanela = React.useCallback((rota: string) => {
+    limparJanelaMinimizada();
+    navigate(rota);
+  }, [navigate]);
+
+  // Qual seção está lá dentro, para o botão da barra de tarefas dizer o que vai restaurar.
+  const secaoMinimizada = rotaMinimizada
+    ? TAB_LABEL[tabFromPathname(rotaMinimizada.split('?')[0])]
+    : null;
 
   // A seta da app bar do celular é a ÚNICA afordância de voltar naquela largura — a barra
   // de título da cifra e da lista escondem a delas justamente para não haver duas setas
@@ -709,12 +748,23 @@ function App() {
             
             {/* Windows Window Buttons */}
             <div className="flex gap-1">
-              {/* Minimizar = voltar pra área de trabalho. Era um botão decorativo; agora
-                  cumpre o que promete e é o caminho de volta pra home. */}
+              {/* O Sobre perdeu o ✕ como porta e ganhou a sua própria, igual à da app bar
+                  do celular. Sem isto ele ficaria sem nenhum caminho no desktop. */}
               <button
-                onClick={() => goToTab('desktop')}
+                onClick={() => setShowAboutModal(true)}
+                className="w-[21px] h-[21px] rounded bg-[#0058e6] border border-white flex items-center justify-center focus:outline-none cursor-pointer hover:bg-[#3a8bfb]"
+                aria-label="Sobre o Viola Libre"
+                title="Sobre"
+              >
+                <IconInfo className="w-3 h-3" />
+              </button>
+              {/* Minimizar GUARDA a janela: a rota exata volta pelo botão "Restaurar
+                  janela" na barra de tarefas. É o que o separa do ✕ ao lado. */}
+              <button
+                onClick={minimizarParaDesktop}
                 className="w-[21px] h-[21px] rounded bg-[#0058e6] border border-white flex items-center justify-center font-bold text-xs hover:bg-[#3a8bfb] focus:outline-none cursor-pointer"
-                title="Minimizar (área de trabalho)"
+                aria-label={`Minimizar ${TAB_LABEL[activeTab]} para a área de trabalho`}
+                title="Minimizar (fica na barra de tarefas)"
               >
               <span aria-hidden="true">_</span>
               </button>
@@ -725,10 +775,13 @@ function App() {
               >
                 <StarIcon className="w-3.5 h-3.5" fill={activeTab === 'favorites' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" />
               </button>
-              <button 
-                onClick={() => setShowAboutModal(true)}
+              {/* Fechar descarta: volta pro início SEM deixar nada para restaurar. Quem
+                  clica num ✕ está pedindo pra sair de onde está, não pra ler um "Sobre". */}
+              <button
+                onClick={fecharJanela}
                 className="w-[21px] h-[21px] rounded bg-[#cc3300] border border-white flex items-center justify-center font-bold text-xs hover:bg-red-500 focus:outline-none cursor-pointer"
-                title="Sobre"
+                aria-label="Fechar e voltar ao início"
+                title="Fechar (voltar ao início)"
               >
                 <span aria-hidden="true">✕</span>
               </button>
@@ -1412,16 +1465,22 @@ function App() {
               ◀
             </button>
 
+            {/* Com uma janela minimizada, este botão vira o caminho de volta pra ela — é o
+                gesto do XP, onde "mostrar área de trabalho" é uma chave que vai e volta.
+                O rótulo muda junto, e não só a dica: uma janela que some sem deixar
+                nenhum sinal visível de onde foi parar não está minimizada, está perdida.
+                Fica levantado (e não afundado como as outras abas ativas) porque, embora a
+                aba atual seja a área de trabalho, o que ele oferece é sair dela. */}
             <button
-              onClick={() => goToTab('desktop')}
+              onClick={() => (rotaMinimizada ? restaurarJanela(rotaMinimizada) : goToTab('desktop'))}
               className={`h-[28px] px-3 border text-xs font-mono font-bold rounded flex items-center gap-1.5 select-none cursor-pointer ${
-                activeTab === 'desktop'
+                activeTab === 'desktop' && !rotaMinimizada
                   ? 'bg-[#3a8bfb] text-white border-[#002fa7] border-t-white border-l-white shadow-[inset_1px_1px_0_#ffffff50]'
                   : 'bg-[#ece9d8] text-black border-white border-r-[#808080] border-bottom-[#808080] hover:bg-white'
               }`}
-              title="Mostrar área de trabalho"
+              title={secaoMinimizada ? `Restaurar ${secaoMinimizada}` : 'Mostrar área de trabalho'}
             >
-              <span>Área de Trabalho</span>
+              <span>{rotaMinimizada ? 'Restaurar janela' : 'Área de Trabalho'}</span>
             </button>
 
             <button
