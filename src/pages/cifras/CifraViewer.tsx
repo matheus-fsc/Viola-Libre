@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState, useMemo, useRef } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Ellipsis, Eye, FileText, FolderOpen, Guitar, Heart, Music2, Pencil, Pin, Play, Printer, RotateCcw, Save, Video } from 'lucide-react';
+import { ArrowLeft, Ellipsis, Eye, FileText, FolderOpen, Guitar, Heart, Music2, Pencil, Pin, Play, Printer, RotateCcw, Save, Share2, Video } from 'lucide-react';
 import {
   getCifra, incrementView, type CifraDetail,
   saveSequencia, loadSequencia, updateSequencia, deleteSequencia,
@@ -9,7 +9,8 @@ import {
   type SequenciaData, type RecentSequencia,
 } from '../../services/api';
 import type { Voicing } from '../../engine/types';
-import { buildChord, buildVoicingFromFrets, calculateVoicings, noteNameToPitchClass, parseChordString, transposeChordString } from '../../engine/chordCalculator';
+import { buildChord, buildVoicingFromFrets, calculateVoicings, parseChordString, transposeChordString } from '../../engine/chordCalculator';
+import { detectKey, isChordDiatonic, type DeteccaoTom } from '../../engine/detectKey';
 import { PRESET_INSTRUMENTS } from '../../engine/tunings';
 import { AudioEngine } from '../../engine/AudioEngine';
 import { FretboardDiagram } from '../../components/FretboardDiagram';
@@ -30,10 +31,12 @@ import { getIsMobile, useIsMobile } from '../../hooks/useIsMobile';
 import { useImmersiveStore } from '../../stores/useImmersiveStore';
 import { MobileCifraBar, TransporteMobile, GrupoAjustes, LinhaAjuste, Stepper, BotaoFolha } from './MobileCifraBar';
 import { SeletorDeTom, GradeDeTons, SalvarTom } from './SeletorDeTom';
+import { descricaoDoTom } from './descricaoDoTom';
 import { estadoTomSalvo } from './tomSalvo';
 import { BarraDaLista } from './BarraDaLista';
 import { lerLista, posicaoNaLista } from '../../services/listaAberta';
 import { reflowCifraHtml } from '../../services/cifraUtils';
+import { acordesDaCifra, acordesDistintos } from '../../services/cifraChords';
 import { getPreferredInstrumentId, setPreferredInstrumentId } from '../../utils/instrumentPreference';
 import {
   useEditorSession,
@@ -149,35 +152,10 @@ function fmtTime(sec: number): string {
   return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 }
 
-function isChordDiatonic(chordName: string, songKey: string): boolean {
-  if (!songKey || !chordName) return false;
-  try {
-    const { root: chordRoot, suffix: chordSuffix } = parseChordString(chordName);
-    const isMinorKey = songKey.endsWith('m') || songKey.endsWith('m7');
-    const songKeyRoot = isMinorKey ? songKey.replace(/m7?$/, '') : songKey;
-    
-    const songKeyRootPc = noteNameToPitchClass(songKeyRoot);
-    const chordRootPc = noteNameToPitchClass(chordRoot);
-    if (songKeyRootPc === -1 || chordRootPc === -1) return false;
-    
-    const diff = (chordRootPc - songKeyRootPc + 12) % 12;
-    const majorIntervals = [0, 2, 4, 5, 7, 9, 11];
-    const minorIntervals = [0, 2, 3, 5, 7, 8, 10];
-    const intervals = isMinorKey ? minorIntervals : majorIntervals;
-    
-    const intervalIdx = intervals.indexOf(diff);
-    if (intervalIdx === -1) return false;
-    
-    const expectedSuffixIsMinor = isMinorKey 
-      ? [true, false, false, true, false, false, false][intervalIdx]
-      : [false, true, true, false, false, true, false][intervalIdx];
-      
-    const chordIsMinor = chordSuffix.includes('m') && !chordSuffix.includes('maj');
-    return chordIsMinor === expectedSuffixIsMinor;
-  } catch {
-    return false;
-  }
-}
+/* `isChordDiatonic` mudou de casa para `engine/detectKey.ts`: é teoria musical pura, não
+   tinha o que fazer solta neste arquivo, e lá ficou testável. Dois defeitos foram
+   corrigidos na mudança — a leitura da terça por `suffix.includes('m')` e o tom menor
+   reconhecido só por `endsWith('m')`. Ver os testes em `detectKey.test.ts`. */
 
 export const CifraViewer: React.FC = () => {
   const { artistSlug, '*': songSlug } = useParams<{ artistSlug: string; '*': string }>();
@@ -253,7 +231,11 @@ export const CifraViewer: React.FC = () => {
   const [songVersions, setSongVersions] = useState<Song[]>([]);
   
   // New features
-  const [songKey, setSongKey] = useState<string>('');
+  /* A detecção inteira fica no estado, não só o rótulo: a confiança e os candidatos são o
+     que permite ao painel oferecer alternativas em vez de afirmar um tom que pode não ser
+     o certo. `songKey` continua existindo, derivado, porque é o que todo o resto consome. */
+  const [deteccao, setDeteccao] = useState<DeteccaoTom | null>(null);
+  const songKey = deteccao?.key ?? '';
   const [variationIndices, setVariationIndices] = useState<Record<string, number>>({});
   const [infoPopupChord, setInfoPopupChord] = useState<string | null>(null);
   const [voicingFilter, setVoicingFilter] = useState<VoicingFilter>(DEFAULT_FILTER);
@@ -383,25 +365,11 @@ export const CifraViewer: React.FC = () => {
       getCifra(artistSlug, songSlug).then((data) => {
         setCifra(data);
         
-        // Varrer acordes do HTML usando a tag <b>
-        const regex = /<b>(.*?)<\/b>/g;
-        const matches: string[] = [];
-        let match;
-        while ((match = regex.exec(data.content_html)) !== null) {
-          // Um único <b> pode conter vários acordes separados por espaço
-          // (ex.: "<b>G#m7(5-)  A#7</b>"). Separa cada acorde para não grudar dois num só.
-          const raw = match[1].replace(/&nbsp;/g, ' ').replace(/<[^>]*>/g, ' ').trim();
-          if (!raw) continue;
-          for (const chord of raw.split(/\s+/)) {
-            if (chord && !matches.includes(chord)) {
-              matches.push(chord);
-            }
-          }
-        }
-        setOriginalChords(matches);
-        if (matches.length > 0) {
-          setSongKey(matches[0]); // Guess key from first chord
-        }
+        // A sequência completa (com repetições, na ordem) alimenta a detecção de tom, que
+        // decide por frequência e repouso; a lista sem repetição alimenta os diagramas.
+        const todosOsAcordes = acordesDaCifra(data.content_html);
+        setOriginalChords(acordesDistintos(todosOsAcordes));
+        setDeteccao(detectKey(todosOsAcordes));
 
         setLoading(false);
         incrementView(artistSlug, songSlug).catch(console.error);
@@ -1539,6 +1507,10 @@ export const CifraViewer: React.FC = () => {
   // A folha de impressão nasce no mesmo ponto em que o músico está lendo: tom, instrumento,
   // afinação e posição da tab viajam pela URL, e não por store, para que o link continue
   // valendo se ele mandar para outra pessoa ou abrir numa aba nova.
+  /* O grafo não recebe o deslocamento de tom: ele desenha as RELAÇÕES entre os acordes, e
+     transpor a música inteira não muda relação nenhuma — o desenho sairia idêntico com
+     outros rótulos. Melhor não sugerir um parâmetro que não faz diferença. */
+  const grafoPath = `${cifraPath}/grafo`;
   const printPath = `${cifraPath}/print?tom=${transposeOffset}&inst=${encodeURIComponent(selectedInstId)}&afin=${encodeURIComponent(selectedTuningId)}&pos=${tabPosIdx}`;
 
   useSeo(
@@ -1891,6 +1863,8 @@ export const CifraViewer: React.FC = () => {
               <span className="font-bold text-[10px] uppercase text-gray-500 shrink-0">Tom:</span>
               <SeletorDeTom
                 songKey={songKey}
+                descricao={descricaoDoTom(deteccao)}
+                deteccao={deteccao}
                 offset={transposeOffset}
                 onSelect={setTransposeOffset}
                 aberto={tomPickerOpen}
@@ -1980,6 +1954,9 @@ export const CifraViewer: React.FC = () => {
               <button onClick={() => navigate(printPath)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-[9px] w-full border border-gray-400 font-bold hover:bg-white text-black flex items-center justify-center gap-1" title="Abrir a folha de impressão">
                 <Printer size={11} /> Imprimir
               </button>
+              <button onClick={() => navigate(grafoPath)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-[9px] w-full border border-gray-400 font-bold hover:bg-white text-black flex items-center justify-center gap-1" title="Ver as passagens de acorde desenhadas como rede, sobre o ciclo de quintas">
+                <Share2 size={11} /> Ver grafo
+              </button>
             </div>
 
             {/* Auto-scroll */}
@@ -2051,6 +2028,8 @@ export const CifraViewer: React.FC = () => {
                   <label className="hidden sm:inline font-bold text-[11px] uppercase tracking-wider text-gray-700">Tom:</label>
                   <SeletorDeTom
                     songKey={songKey}
+                    descricao={descricaoDoTom(deteccao)}
+                    deteccao={deteccao}
                     offset={transposeOffset}
                     onSelect={setTransposeOffset}
                     aberto={tomPickerOpen}
@@ -2160,6 +2139,9 @@ export const CifraViewer: React.FC = () => {
                 </button>
                 <button onClick={() => navigate(`/cifras/${artistSlug}/${songSlug}/timing`)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-1 sm:px-3 text-xs font-bold border border-gray-400 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white text-black hover:bg-white" title="Contribuir timing">
                   ✏️ <span className="hidden sm:inline">Contribuir timing</span>
+                </button>
+                <button onClick={() => navigate(grafoPath)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-1 sm:px-3 text-xs font-bold border border-gray-400 flex items-center gap-1 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white text-black hover:bg-white" title="Ver as passagens de acorde desenhadas como rede, sobre o ciclo de quintas">
+                  <Share2 size={14} /> <span className="hidden sm:inline">Grafo</span>
                 </button>
                 <button onClick={() => navigate(printPath)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-1 sm:px-3 text-xs font-bold border border-gray-400 flex items-center gap-1 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white text-black hover:bg-white" title="Abrir a folha de impressão">
                   <Printer size={13} className="text-gray-600" /> <span className="hidden sm:inline">Imprimir</span>
@@ -2716,7 +2698,7 @@ export const CifraViewer: React.FC = () => {
               conteudo: (
                 <>
                   <GrupoAjustes>
-                    <LinhaAjuste rotulo="Tom da música" dica={songKey ? `Original: ${songKey}` : undefined}>
+                    <LinhaAjuste rotulo="Tom da música" dica={descricaoDoTom(deteccao)}>
                       <span className="font-bold text-xs bg-white border border-gray-400 px-2 py-1 text-[#002fa7]">{tomAtual}</span>
                     </LinhaAjuste>
                     <LinhaAjuste rotulo="Ajuste fino" dica="Meio tom por vez">
@@ -2753,7 +2735,7 @@ export const CifraViewer: React.FC = () => {
 
                   {songKey && (
                     <GrupoAjustes titulo="Escolher o tom">
-                      <GradeDeTons songKey={songKey} offset={transposeOffset} onSelect={setTransposeOffset} />
+                      <GradeDeTons songKey={songKey} offset={transposeOffset} onSelect={setTransposeOffset} deteccao={deteccao} />
                     </GrupoAjustes>
                   )}
                 </>
@@ -2833,6 +2815,9 @@ export const CifraViewer: React.FC = () => {
                       </BotaoFolha>
                       <BotaoFolha onClick={() => navigate(`/cifras/${artistSlug}/${songSlug}/timing`)}>
                         <Pencil size={13} /> Timing
+                      </BotaoFolha>
+                      <BotaoFolha onClick={() => { setFolhaAberta(null); navigate(grafoPath); }}>
+                        <Share2 size={13} /> Grafo
                       </BotaoFolha>
                       <BotaoFolha onClick={() => { setFolhaAberta(null); navigate(printPath); }}>
                         <Printer size={13} /> Imprimir

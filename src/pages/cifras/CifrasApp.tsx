@@ -4,6 +4,7 @@ import { ArtistList } from './ArtistList';
 import { SongList } from './SongList';
 import { CifraViewer } from './CifraViewer';
 import { TimingEditorPage } from './TimingEditorPage';
+import { GrafoPage } from './GrafoPage';
 
 export const CifrasApp: React.FC = () => {
   return (
@@ -12,6 +13,8 @@ export const CifrasApp: React.FC = () => {
         <Route path="/cifras" element={<ArtistList />} />
         <Route path="/cifras/:artistSlug" element={<SongList />} />
         <Route path="/cifras/:artistSlug/:songSlug/timing" element={<TimingEditorPage />} />
+        {/* Antes do curinga `:artistSlug/*`, senão o CifraViewer engoliria a rota. */}
+        <Route path="/cifras/:artistSlug/:songSlug/grafo" element={<GrafoPage />} />
         <Route path="/cifras/:artistSlug/*" element={<CifraViewer />} />
         {/* Rota desconhecida: tabFromPathname já a trouxe pra aba de cifras, mas nenhuma
             rota daqui casava e a janela abria vazia. Manda pro explorador.
