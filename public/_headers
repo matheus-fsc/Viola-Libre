@@ -9,3 +9,11 @@
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=()
+
+# O service worker é o único arquivo capaz de servir código velho a quem já visitou: uma
+# vez registrado, ele fica. `no-cache` faz o navegador CONFERIR a versão a cada carga —
+# é o que mantém reversível tanto uma correção quanto o desligamento do worker inteiro
+# (um sw.js que só chama unregister). Sem esta linha, uma versão defeituosa poderia ficar
+# presa no CDN e nas máquinas por até 24h, e o conserto não chegaria.
+/sw.js
+  Cache-Control: no-cache

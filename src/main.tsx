@@ -10,6 +10,7 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import './index.css'
 import App from './App.tsx'
 import { CifraPrintPage } from './pages/cifras/CifraPrintPage.tsx'
+import { registrarServiceWorker } from './registrarSW.ts'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -28,3 +29,5 @@ createRoot(document.getElementById('root')!).render(
     </BrowserRouter>
   </StrictMode>,
 )
+
+registrarServiceWorker()
