@@ -146,7 +146,13 @@ export interface SinalDeRepouso {
 }
 
 /** O papel que um acorde da música cumpre num tom candidato. */
-export type PapelDeAcorde = 'campo' | 'dominante' | 'preparacao' | 'emprestado' | 'estranho';
+export type PapelDeAcorde =
+  | 'campo'
+  | 'dominante'
+  | 'preparacao'
+  | 'emprestado'
+  | 'tonicizacao'
+  | 'estranho';
 
 export interface AcordeAnalisado {
   /** Como está escrito na cifra. */
@@ -297,8 +303,19 @@ interface Esqueleto {
   pcs: PitchClass[];
   /** true = terça menor. null = sem terça (sus / power chord). */
   minor: boolean | null;
-  /** Sétima dominante com terça maior — o acorde que aponta uma tônica uma quinta abaixo. */
+  /**
+   * Tem função dominante: aponta uma tônica uma quinta abaixo.
+   *
+   * Vale para a sétima com terça maior (`G7`) e também para a de quarta suspensa (`G7sus4`,
+   * escrito `G4(7/9)` no padrão brasileiro). A suspensa não tem terça — logo não tem
+   * sensível — mas tem o trítono... não: tem a sétima e a quarta, e o que ela faz na música
+   * é exatamente o trabalho do V, quase sempre resolvendo na terça do próprio acorde. Exigir
+   * terça maior deixava de fora um acorde que a MPB usa como dominante o tempo todo, e os
+   * `C4(7/9)` e `Ab7(4/9)` do acervo caíam como "sem explicação" por um detalhe de grafia.
+   */
   dominant: boolean;
+  /** Sétima diminuta ([0,3,6,9]) — o `B°` da grafia brasileira. */
+  diminuto: boolean;
 }
 
 /**
@@ -344,12 +361,20 @@ function esqueletoDe(acorde: string): Esqueleto | null {
 
       const temTercaMenor = intervalos.includes(3);
       const temTercaMaior = intervalos.includes(4);
+      // A sétima conta mesmo quando vem do BAIXO, e por isso se lê `pcs` (que já recebeu a
+      // nota da barra) e não a fórmula. `B/A` é um B7 com a sétima no grave — a MPB escreve
+      // assim o tempo todo — e lendo só a fórmula ele saía como tríade maior sem função.
+      const temSetimaMenor = pcs.includes(((chord.root + 10) % 12) as PitchClass);
       resultado = {
         texto: acorde,
         root: chord.root,
         pcs,
         minor: temTercaMenor ? true : temTercaMaior ? false : null,
-        dominant: temTercaMaior && intervalos.includes(10),
+        // Sem terça (suspenso) conta como dominante; com terça MENOR, nunca — um `m7` é o
+        // ii, não o V, e confundir os dois faria metade do cancioneiro virar dominante.
+        dominant: !temTercaMenor && temSetimaMenor,
+        diminuto:
+          intervalos.includes(3) && intervalos.includes(6) && intervalos.includes(9),
       };
     }
   } catch {
@@ -359,6 +384,16 @@ function esqueletoDe(acorde: string): Esqueleto | null {
 
   cacheEsqueleto.set(acorde, resultado);
   return resultado;
+}
+
+/**
+ * Identidade de um acorde para a análise: raiz + notas definidoras.
+ *
+ * Não é o texto da cifra. `Gm7` e `Gm7(11)` têm o mesmo esqueleto e contam uma vez só —
+ * a tensão é decoração, e duplicá-los faria o "X de Y acordes" mentir para mais.
+ */
+function chaveDoEsqueleto(e: Esqueleto): string {
+  return `${e.root}:${[...e.pcs].sort((a, b) => a - b).join(',')}`;
 }
 
 /** As sete pitch classes da coleção cuja tônica maior é `tonicaMaior`. */
@@ -406,6 +441,44 @@ function alvosDiatonicos(
 }
 
 /**
+ * Um dominante explicado também é alvo — é a CADEIA DE DOMINANTES, a quinta da quinta.
+ *
+ * `B7 → E7 → Am` em Lá menor: o `E7` é o V, e o `B7` existe só para anunciá-lo. Mas a regra
+ * do dominante secundário exige que o alvo apareça como acorde DIATÔNICO, e `E7` não é
+ * diatônico a Lá menor (traz o Sol# da menor harmônica). Resultado: o `B7` ficava "sem
+ * explicação" a menos que a cifra também trouxesse um `Em` em algum lugar — quer dizer,
+ * acertava por acaso. É o caso de «Regra Três», e é comum o bastante para ter regra própria.
+ *
+ * A relaxação é estreita de propósito. Não se admite qualquer NOTA da coleção como alvo — a
+ * exigência original existe para não engolir modulação: numa peça que vai de Dó para Mi, o
+ * `B7` aponta para Mi, e Mi é nota de Dó, então pela regra frouxa a modulação sumiria do
+ * radar. Aqui só entra a raiz de um acorde que a própria análise JÁ explicou como dominante.
+ * A cadeia se sustenta pela ponta: se o último elo não resolve no tom, nenhum elo entra.
+ *
+ * O ponto fixo para quando ninguém mais entra. Na prática converge em duas ou três passadas
+ * — uma cadeia de quintas mais longa que isso já é a música inteira andando pelo ciclo.
+ */
+function alvosComCadeia(
+  esqueletos: (Esqueleto | null)[],
+  colecao: Set<PitchClass>,
+): Set<PitchClass> {
+  const alvos = alvosDiatonicos(esqueletos, colecao);
+  const dominantes = esqueletos.filter((e): e is Esqueleto => e !== null && e.dominant);
+  for (;;) {
+    let mudou = false;
+    for (const e of dominantes) {
+      if (alvos.has(e.root)) continue;
+      if (alvoDoDominante(e, alvos)) {
+        alvos.add(e.root);
+        mudou = true;
+      }
+    }
+    if (!mudou) break;
+  }
+  return alvos;
+}
+
+/**
  * Para onde um acorde dominante aponta, se é que aponta para dentro do tom.
  *
  * Um dominante resolve de duas maneiras, e as duas são função dominante:
@@ -434,6 +507,69 @@ function alvoDoDominante(
   const porSemitom = ((esq.root + 11) % 12) as PitchClass;
   if (alvos.has(porSemitom)) return { pc: porSemitom, sub: true };
   return null;
+}
+
+/**
+ * Para onde um diminuto aponta.
+ *
+ * A sétima diminuta é simétrica — quatro notas de três em três semitons — e essa simetria é
+ * a razão de ela ser tão útil e tão difícil de nomear: o mesmo acorde serve de quatro
+ * lugares diferentes. Duas leituras dão conta de quase todo o uso real, e as duas são
+ * clássicas:
+ *
+ *   • DOMINANTE SEM FUNDAMENTAL. `C#°` é um `A7(9-)` do qual se omitiu o Lá — as quatro
+ *     notas restantes são as mesmas. Por isso ele resolve subindo meio tom, e por isso
+ *     `C#° → Dm` é o V-i de Ré menor escrito de outro jeito. Cada uma das quatro notas pode
+ *     fazer esse papel; a que vale é a que encontra um acorde do tom meio tom acima.
+ *   • NOTA COMUM. `D°7 → D6`: o diminuto não vai a lugar nenhum, gira em torno do acorde que
+ *     já está soando e volta. Aqui a raiz não sobe — ela fica.
+ *
+ * Tentar as duas leituras E os dois sentidos de meio tom seria fraude: subir ou descer meio
+ * tom a partir de quatro notas simétricas alcança as doze notas, e uma regra que explica
+ * qualquer coisa não explica nada. Fica só o que a teoria sustenta.
+ *
+ * `seguintes`, quando dado, são as raízes que de fato vêm DEPOIS deste acorde na cifra.
+ * Não muda quem é explicado — muda o rótulo, que passa a nomear o alvo que a música toca em
+ * vez do primeiro que a busca encontrar.
+ */
+function alvoDoDiminuto(
+  esq: Esqueleto,
+  alvos: Set<PitchClass>,
+  seguintes?: Set<PitchClass>,
+): { pc: PitchClass; notaComum: boolean } | null {
+  if (!esq.diminuto) return null;
+  const sensiveis = [0, 3, 6, 9]
+    .map(iv => ((esq.root + iv + 1) % 12) as PitchClass)
+    .filter(pc => alvos.has(pc));
+  const tocado = sensiveis.find(pc => seguintes?.has(pc));
+  if (tocado !== undefined) return { pc: tocado, notaComum: false };
+  if (alvos.has(esq.root) && seguintes?.has(esq.root)) {
+    return { pc: esq.root, notaComum: true };
+  }
+  if (sensiveis.length > 0) return { pc: sensiveis[0], notaComum: false };
+  if (alvos.has(esq.root)) return { pc: esq.root, notaComum: true };
+  return null;
+}
+
+/**
+ * Para cada raiz, as raízes que aparecem logo depois dela na cifra.
+ *
+ * Só o acorde repetido idêntico é ignorado. A repetição de RAIZ, essa conta: `D°7 → D6` é
+ * exatamente o diminuto de nota comum, e descartá-la por "não mudou de raiz" apagaria o
+ * único sinal que distingue esse caso do diminuto de aproximação.
+ */
+function sucessoras(esqueletos: (Esqueleto | null)[]): Map<PitchClass, Set<PitchClass>> {
+  const mapa = new Map<PitchClass, Set<PitchClass>>();
+  const validos = esqueletos.filter((e): e is Esqueleto => e !== null);
+  for (let i = 0; i < validos.length - 1; i++) {
+    const de = validos[i].root;
+    const para = validos[i + 1].root;
+    if (chaveDoEsqueleto(validos[i]) === chaveDoEsqueleto(validos[i + 1])) continue;
+    const set = mapa.get(de);
+    if (set) set.add(para);
+    else mapa.set(de, new Set([para]));
+  }
+  return mapa;
 }
 
 /**
@@ -471,6 +607,174 @@ function preparacoesDeIIV(
   return porRaiz;
 }
 
+/**
+ * O IV com sétima menor — a subdominante que a música brasileira usa sem pedir licença.
+ *
+ * `Bb7` em Fá, `B7` em Fá sustenido, `F7` em Dó. Não é dominante: não resolve descendo uma
+ * quinta, vai para a tônica de volta, subindo uma quarta. A sétima que ele carrega é a
+ * TERÇA MENOR do tom — o Láb de `Bb7` é o menor de Fá — e é daí que vem a cor: é o mesmo
+ * empréstimo do modo menor, só que numa nota que a coleção paralela não contém (o `Bb7`
+ * traz também o Ré maior do modo maior, e por isso não cabe inteiro em nenhum dos dois).
+ *
+ * Fica DEPOIS da regra do dominante de propósito. Um acorde que de fato resolve descendo
+ * uma quinta para um grau do tom é um dominante secundário, e continua sendo lido assim; só
+ * quem não resolve em lugar nenhum é candidato a IV7.
+ */
+function ehIV7(esq: Esqueleto, tonic: PitchClass): boolean {
+  return esq.dominant && esq.root === (tonic + 5) % 12;
+}
+
+/**
+ * Quantos acordes seguidos "sem explicação" bastam para se falar em outra tônica.
+ *
+ * Três. Menos que isso é acidente: dois acordes estranhos em sequência acontecem por
+ * cromatismo, por engano de quem digitou a cifra, por um baixo mal lido. Três já é uma
+ * FRASE, e uma frase que não cabe no tom de casa e cabe inteira em outro é a definição
+ * prática de tonicização.
+ */
+const MIN_TONICIZACAO = 3;
+
+/** Como dizer, em português de músico, que distância separa duas tônicas. */
+function descreveDistancia(local: PitchClass, casa: PitchClass): string {
+  let d = (local - casa + 12) % 12;
+  if (d > 6) d -= 12;
+  if (d === 0) return 'mesma tônica';
+  const nomes = [
+    '',
+    'meio tom',
+    'um tom',
+    'uma terça menor',
+    'uma terça maior',
+    'uma quarta',
+    'um trítono',
+  ];
+  return `${nomes[Math.abs(d)]} ${d > 0 ? 'acima' : 'abaixo'}`;
+}
+
+/**
+ * O trecho inteiro cabe numa tônica local? Devolve a explicação de cada acorde, ou `null`.
+ *
+ * Exigir que caiba INTEIRO é o que impede a regra de virar carimbo. Com liberdade para
+ * explicar "quase tudo", qualquer punhado de acordes acha alguma tônica que sirva para a
+ * maioria deles, e a resposta deixaria de significar coisa alguma. Um acorde de fora derruba
+ * a leitura toda — ou a frase está noutro tom, ou não está.
+ *
+ * As regras usadas aqui são as MESMAS de casa: campo, dominante, IV7, empréstimo. Não é
+ * economia de código, é a garantia de que "tonicizou para Fá sustenido" queira dizer
+ * exatamente o que "está em Fá sustenido" queria dizer no painel principal.
+ */
+function lerTrechoEm(
+  trecho: Esqueleto[],
+  tonica: PitchClass,
+  minor: boolean,
+  casa: PitchClass,
+): Map<string, string> | null {
+  const colecao = colecaoDe((minor ? (tonica + 3) % 12 : tonica) as PitchClass);
+  // Os alvos são locais: o que o próprio trecho toca. Um dominante de passagem dentro da
+  // frase resolve dentro da frase.
+  const alvos = new Set(trecho.map(e => e.root));
+  const fontes = fontesDeEmprestimo(tonica, minor);
+  const comBemol = COLECOES_COM_BEMOL.has(
+    (minor ? (tonica + 3) % 12 : tonica) as PitchClass,
+  );
+  const campo = campoHarmonico(tonica, minor ? MODOS[5] : MODOS[0], comBemol);
+  const grauPorRaiz = new Map(
+    campo.map(g => [noteNameToPitchClass(g.chord.replace(/m\(b5\)$|m$/, '')), g.grau]),
+  );
+  const nome = nomeDoTom(tonica, minor, comBemol);
+  const distancia = descreveDistancia(tonica, casa);
+
+  const saida = new Map<string, string>();
+  for (const e of trecho) {
+    let como: string | null = null;
+    if (ehDiatonico(e, colecao)) {
+      como = grauPorRaiz.get(e.root) ?? null;
+    } else {
+      const dominante = alvoDoDominante(e, alvos);
+      if (dominante) {
+        const grau = grauPorRaiz.get(dominante.pc);
+        como = grau ? `V de ${grau}` : 'dominante';
+      } else if (ehIV7(e, tonica)) {
+        como = 'IV7';
+      } else if (emprestimoDe(e, fontes)) {
+        // Na própria tônica o empréstimo TEM nome: é o primeiro grau do paralelo. Dizer
+        // "i" em vez de "emprestado" é o que faz o painel explicar em vez de rotular.
+        como = e.root === tonica ? (minor ? 'I' : 'i') : 'emprestado';
+      }
+    }
+    if (!como) return null;
+    saida.set(chaveDoEsqueleto(e), `${como} de ${nome} — ${distancia}`);
+  }
+  return saida;
+}
+
+/**
+ * Trechos que só fazem sentido noutra tônica — a modulação passageira.
+ *
+ * A detecção de regiões (`detectarRegioes`) olha a COLEÇÃO numa janela de doze acordes, e
+ * por isso enxerga a música mudar de tom, não a frase. Na ponte de «Garota de Ipanema» o
+ * trecho novo tem TRÊS acordes — `F#7M B7 F#m7` — e nenhuma janela de doze jamais seria
+ * dominada por eles. Pior: os três nem compartilham uma coleção. O que os une é uma
+ * TÔNICA: Fá sustenido, meio tom acima de casa, com o `B7` fazendo de IV7 e o `F#m7` de
+ * primeiro grau do paralelo. É a leitura que qualquer músico faz da ponte, e a que o
+ * algoritmo não sabia fazer — os três saíam como "sem explicação".
+ *
+ * Daí procurar por TÔNICA e não por coleção, e em corridas de acordes consecutivos que o
+ * tom de casa não explicou. Onde a janela pergunta "em que sete notas a música está
+ * flutuando", esta pergunta "esta frase tem um centro próprio".
+ *
+ * O resultado NÃO entra na pontuação nem na cobertura. Um trecho tonicizado não é evidência
+ * a favor do tom de casa — é justamente o contrário — e contá-lo como acerto inflaria o
+ * "X de Y acordes" de todo candidato ao mesmo tempo, que é como não medir nada. O painel
+ * ganha o nome do acorde; o número continua dizendo a verdade sobre o tom de casa.
+ */
+function tonicizacoesPassageiras(
+  esqueletos: (Esqueleto | null)[],
+  ehEstranho: (chave: string) => boolean,
+  casa: PitchClass,
+): Map<string, string> {
+  const resultado = new Map<string, string>();
+  const validos = esqueletos.filter((e): e is Esqueleto => e !== null);
+
+  let i = 0;
+  while (i < validos.length) {
+    if (!ehEstranho(chaveDoEsqueleto(validos[i]))) {
+      i++;
+      continue;
+    }
+    let fim = i;
+    while (fim < validos.length && ehEstranho(chaveDoEsqueleto(validos[fim]))) fim++;
+    const trecho = validos.slice(i, fim);
+    i = fim;
+
+    const distintos = new Set(trecho.map(chaveDoEsqueleto));
+    // Um acorde repetido três vezes não é frase, é um acorde. Exigir duas harmonias
+    // distintas separa "a música foi para outro lugar" de "a cifra insiste no mesmo erro".
+    if (trecho.length < MIN_TONICIZACAO || distintos.size < 2) continue;
+
+    // A tônica candidata sai das raízes que o trecho TOCA — uma tonicização sem a tônica
+    // soando é especulação. Tenta-se primeiro a raiz que abre a frase, depois as mais
+    // repetidas: é onde o ouvido põe o centro.
+    const frequencia = new Map<PitchClass, number>();
+    for (const e of trecho) frequencia.set(e.root, (frequencia.get(e.root) ?? 0) + 1);
+    const raizes = [...frequencia.keys()].sort(
+      (a, b) =>
+        Number(b === trecho[0].root) - Number(a === trecho[0].root) ||
+        frequencia.get(b)! - frequencia.get(a)!,
+    );
+
+    for (const tonica of raizes) {
+      const leitura =
+        lerTrechoEm(trecho, tonica, false, casa) ?? lerTrechoEm(trecho, tonica, true, casa);
+      if (leitura) {
+        for (const [chave, detalhe] of leitura) resultado.set(chave, detalhe);
+        break;
+      }
+    }
+  }
+  return resultado;
+}
+
 function papelNaColecao(
   esq: Esqueleto,
   colecao: Set<PitchClass>,
@@ -479,6 +783,9 @@ function papelNaColecao(
 ): PapelNoTom {
   if (ehDiatonico(esq, colecao)) return 'diatonico';
   if (alvoDoDominante(esq, alvos)) return 'dominante';
+  // O diminuto vem antes do ii-V porque a leitura dele é mais específica: ambos aceitam um
+  // acorde de terça menor, mas só um explica POR QUE aquelas quatro notas estão ali.
+  if (alvoDoDiminuto(esq, alvos)) return 'dominante';
   if (esq.minor === true && preparacoes?.has(esq.root)) return 'preparacao';
   return 'estranho';
 }
@@ -506,11 +813,45 @@ function papelNaColecao(
  * explicar quase tudo, e a análise perderia justamente o poder de discriminar.
  */
 
-/** A coleção do tom paralelo: mesma tônica, qualidade trocada. */
-function colecaoParalela(tonic: PitchClass, minor: boolean): Set<PitchClass> {
+/**
+ * De onde um acorde pode ter vindo emprestado, na ordem em que se deve tentar.
+ *
+ * O paralelo de sempre (mesma tônica, qualidade trocada) não dá conta de uma cor que a
+ * bossa usa em toda esquina: o acorde MENOR COM SEXTA MAIOR. `Am6` em Lá menor, `Fm6` em
+ * Fá, `Cm6` e `Bbm6` em «Chega de Saudade» — todos caíam como "sem explicação", e por um
+ * motivo específico: a sexta maior sobre a terça menor não existe no menor NATURAL. Ela vem
+ * do menor melódico ascendente, cuja coleção é a do modo dórico sobre a mesma tônica.
+ *
+ * Não é licença nova, é a mesma ideia levada até onde a música vai: o empréstimo modal
+ * troca a qualidade da tônica sem trocar a tônica, e o menor tem mais de uma forma. Ficar
+ * só no natural era escolher uma delas por comodidade.
+ *
+ * Continua fora da PONTUAÇÃO, como o empréstimo sempre esteve — as três coleções somam onze
+ * das doze notas, e dar-lhes voto faria qualquer candidato explicar quase tudo.
+ */
+function fontesDeEmprestimo(
+  tonic: PitchClass,
+  minor: boolean,
+): { nome: string; colecao: Set<PitchClass> }[] {
   // Paralelo de um tom maior é o menor de mesma tônica, cuja coleção nasce uma terça menor
   // acima (Dó menor usa a coleção de Mib). E vice-versa.
-  return colecaoDe((minor ? tonic : (tonic + 3) % 12) as PitchClass);
+  const paralela = colecaoDe((minor ? tonic : (tonic + 3) % 12) as PitchClass);
+  // O dórico sobre a tônica: a coleção que nasce um tom ABAIXO dela (Lá dórico usa a de
+  // Sol). É o menor com sexta maior.
+  const dorica = colecaoDe(((tonic + 10) % 12) as PitchClass);
+  return [
+    { nome: minor ? 'vem do paralelo maior' : 'vem do paralelo menor', colecao: paralela },
+    { nome: 'vem do menor com sexta maior', colecao: dorica },
+  ];
+}
+
+/** O acorde cabe em alguma das fontes de empréstimo? Devolve o nome da que explicou. */
+function emprestimoDe(
+  esq: Esqueleto,
+  fontes: { nome: string; colecao: Set<PitchClass> }[],
+): string | null {
+  for (const f of fontes) if (ehDiatonico(esq, f.colecao)) return f.nome;
+  return null;
 }
 
 /**
@@ -738,7 +1079,7 @@ export function detectKey(chords: string[]): DeteccaoTom | null {
   const variantes = new Map<string, string[]>();
   for (const e of esqueletos) {
     if (!e) continue;
-    const chave = `${e.root}:${[...e.pcs].sort((a, b) => a - b).join(',')}`;
+    const chave = chaveDoEsqueleto(e);
     if (!distintos.has(chave)) distintos.set(chave, e);
     const lista = variantes.get(chave);
     if (lista) {
@@ -752,7 +1093,7 @@ export function detectKey(chords: string[]): DeteccaoTom | null {
     const encaixe = maxColecao > 0 ? notasColecao[tonicaMaior] / maxColecao : 0;
     const comBemol = COLECOES_COM_BEMOL.has(tonicaMaior as PitchClass);
     const colecao = colecaoDe(tonicaMaior as PitchClass);
-    const alvos = alvosDiatonicos(esqueletos, colecao);
+    const alvos = alvosComCadeia(esqueletos, colecao);
     const preparacoes = preparacoesDeIIV(esqueletos, alvos);
 
     // Acordes que cabem inteiros na coleção, e as raízes deles — que são os graus a marcar
@@ -791,8 +1132,10 @@ export function detectKey(chords: string[]): DeteccaoTom | null {
 
       // Empréstimo modal: dos acordes que a coleção não explicou, quantos são do tom
       // paralelo? Como o paralelo depende da tônica, isto só pode ser contado aqui.
-      const paralela = colecaoParalela(tonic, minor);
-      const emprestados = estranhos.filter(e => ehDiatonico(e, paralela)).length;
+      const fontes = fontesDeEmprestimo(tonic, minor);
+      const emprestados = estranhos.filter(
+        e => emprestimoDe(e, fontes) !== null || ehIV7(e, tonic),
+      ).length;
 
       const tabela = comBemol ? NOTE_NAMES_FLAT : NOTE_NAMES_SHARP;
       const key = tabela[tonic] + (minor ? 'm' : '');
@@ -842,7 +1185,14 @@ export function detectKey(chords: string[]): DeteccaoTom | null {
   const rivalDeOutroTom = candidates.find(c => c.key !== melhor.key) ?? segundo;
   const margem =
     melhor.score > 0 ? (melhor.score - rivalDeOutroTom.score) / melhor.score : 0;
-  const { instavel, regions } = detectarRegioes(esqueletos, chords.length);
+  const porColecao = detectarRegioes(esqueletos, chords.length);
+  // A troca de modo só é consultada quando a busca por coleção não achou fronteira. As duas
+  // respondem à mesma pergunta com evidências diferentes, e a da coleção é a mais forte:
+  // quando ela delimita um trecho, a música mudou mesmo de conjunto de notas. A do modo
+  // entra onde a outra é cega por construção — a tônica que fica e a terça que troca.
+  const porModo = porColecao.regions.length > 0 ? [] : regioesPorModo(esqueletos, melhor.tonic, chords.length);
+  const regions = porColecao.regions.length > 0 ? porColecao.regions : porModo;
+  const instavel = porColecao.instavel || porModo.length > 0;
   const modulates = instavel;
   for (const r of regions) {
     const bruto = ((r.tonic - melhor.tonic) % 12 + 12) % 12;
@@ -911,18 +1261,21 @@ export function detectKey(chords: string[]): DeteccaoTom | null {
   for (const c of escolhidos) {
     if (!c.analise) continue;
     const colecao = colecaoDe(((c.tonic - ESCALA_MAIOR[c.modo.grau] + 24) % 12) as PitchClass);
-    const alvos = alvosDiatonicos(esqueletos, colecao);
+    const alvos = alvosComCadeia(esqueletos, colecao);
     const preparacoes = preparacoesDeIIV(esqueletos, alvos);
-    const paralela = colecaoParalela(c.tonic, c.minor);
+    const seguintes = sucessoras(esqueletos);
+    const fontes = fontesDeEmprestimo(c.tonic, c.minor);
     const grauPorRaiz = new Map(
       c.campo.map(g => [noteNameToPitchClass(g.chord.replace(/m\(b5\)$|m$/, '')), g.grau]),
     );
 
-    const chaveDe = (e: Esqueleto) =>
-      `${e.root}:${[...e.pcs].sort((a, b) => a - b).join(',')}`;
-
-    c.analise.acordes = [...distintos.values()].map(esq => {
-      const grafias = variantes.get(chaveDe(esq)) ?? [esq.texto];
+    const reconhecidos = [...distintos.values()];
+    // Como cada raiz aparece escrita na cifra — para nomear o alvo de um dominante que
+    // aponta outro dominante, e não um grau.
+    const textoPorRaiz = new Map<PitchClass, string>();
+    for (const e of reconhecidos) if (!textoPorRaiz.has(e.root)) textoPorRaiz.set(e.root, e.texto);
+    c.analise.acordes = reconhecidos.map(esq => {
+      const grafias = variantes.get(chaveDoEsqueleto(esq)) ?? [esq.texto];
       const papel = papelNaColecao(esq, colecao, alvos, preparacoes);
       if (papel === 'diatonico') {
         return {
@@ -933,13 +1286,33 @@ export function detectKey(chords: string[]): DeteccaoTom | null {
         };
       }
       if (papel === 'dominante') {
-        const alvo = alvoDoDominante(esq, alvos)!;
-        const grau = grauPorRaiz.get(alvo.pc) ?? 'um grau do tom';
+        const porQuinta = alvoDoDominante(esq, alvos);
+        if (porQuinta) {
+          const grau = grauPorRaiz.get(porQuinta.pc);
+          // Sem grau, o alvo é outro DOMINANTE que a cadeia já explicou — a quinta da
+          // quinta. Dizer "toniciza um grau do tom" ali era confessar que não se sabia
+          // dizer qual; nomear o acorde de destino conta a história inteira.
+          const alvo = grau ?? `o ${textoPorRaiz.get(porQuinta.pc) ?? 'dominante seguinte'}`;
+          return {
+            chord: esq.texto,
+            variantes: grafias,
+            papel: 'dominante' as const,
+            detalhe: porQuinta.sub
+              ? `subV, resolve em ${alvo}`
+              : grau
+                ? `toniciza ${grau}`
+                : `dominante do dominante, aponta ${alvo}`,
+          };
+        }
+        const dim = alvoDoDiminuto(esq, alvos, seguintes.get(esq.root))!;
+        const grau = grauPorRaiz.get(dim.pc) ?? 'um grau do tom';
         return {
           chord: esq.texto,
           variantes: grafias,
           papel: 'dominante' as const,
-          detalhe: alvo.sub ? `subV, resolve em ${grau}` : `toniciza ${grau}`,
+          detalhe: dim.notaComum
+            ? `diminuto de nota comum, gira em torno de ${grau}`
+            : `diminuto, sobe meio tom para ${grau}`,
         };
       }
       if (papel === 'preparacao') {
@@ -951,16 +1324,51 @@ export function detectKey(chords: string[]): DeteccaoTom | null {
           detalhe: `ii de um ii-V para ${grauPorRaiz.get(alvo) ?? 'o tom'}`,
         };
       }
-      if (ehDiatonico(esq, paralela)) {
+      if (ehIV7(esq, c.tonic)) {
         return {
           chord: esq.texto,
           variantes: grafias,
           papel: 'emprestado' as const,
-          detalhe: c.minor ? 'vem do paralelo maior' : 'vem do paralelo menor',
+          detalhe: 'IV com sétima, a subdominante de blues',
+        };
+      }
+      const emprestimo = emprestimoDe(esq, fontes);
+      if (emprestimo) {
+        return {
+          chord: esq.texto,
+          variantes: grafias,
+          papel: 'emprestado' as const,
+          detalhe: emprestimo,
         };
       }
       return { chord: esq.texto, variantes: grafias, papel: 'estranho' as const };
     });
+
+    // Última chance para os que sobraram: eles formam uma frase com centro próprio? Roda
+    // por último de propósito — só se pergunta "isto está noutro tom" depois de esgotado
+    // tudo que o tom de casa tinha a dizer.
+    const semExplicacao = new Set(
+      reconhecidos
+        .filter((_, i) => c.analise!.acordes[i].papel === 'estranho')
+        .map(chaveDoEsqueleto),
+    );
+    if (semExplicacao.size > 0) {
+      const local = tonicizacoesPassageiras(
+        esqueletos,
+        chave => semExplicacao.has(chave),
+        c.tonic,
+      );
+      for (let i = 0; i < reconhecidos.length; i++) {
+        const detalhe = local.get(chaveDoEsqueleto(reconhecidos[i]));
+        if (detalhe) {
+          c.analise.acordes[i] = {
+            ...c.analise.acordes[i],
+            papel: 'tonicizacao',
+            detalhe,
+          };
+        }
+      }
+    }
   }
 
   return {
@@ -1038,6 +1446,82 @@ function agrupar(janelas: { inicio: number; fim: number; colecao: number }[]): G
  * não existem — daí `instavel: true` com a lista de trechos vazia.
  */
 const MAX_REGIOES = 4;
+
+/**
+ * Trechos onde a TÔNICA troca de qualidade — o menor que vira maior sem sair do lugar.
+ *
+ * «Tarde em Itapuã» é o caso: a primeira parte é Sol menor (`Gm7`, `Cm7`, `D7`), e na
+ * virada o `G7M` abre uma parte inteira de campo maior (`Am7`, `Bm7`, `D7`). Mesma tônica,
+ * outro modo — e a busca por coleção não vê nada, porque a parte maior toma emprestado do
+ * menor o `Bb7M` e o `Eb7`. Medido na janela da virada: a coleção de Sol maior e a de Sib
+ * maior deixam de fora OITO notas cada uma. Empate exato. Não há o que a janela decida.
+ *
+ * O que muda ali não é o conjunto de notas, é a TERÇA DA TÔNICA. Então é ela que se olha:
+ * onde a música toca um acorde com a raiz do tom, ele é menor ou maior? Trocar de resposta
+ * no meio da música, e ficar na resposta nova por um trecho inteiro, é modulação para o
+ * paralelo — a mais comum do cancioneiro depois da subida de meio tom.
+ *
+ * A fronteira cai exatamente no primeiro acorde da cor nova, e não no meio do caminho entre
+ * as duas: é ele que a música usa para anunciar a virada, e quem for tocar quer ver o
+ * limite no compasso certo.
+ */
+const MIN_OCORRENCIAS_DO_MODO = 2;
+const MIN_TRECHO_DE_MODO = 8;
+
+function regioesPorModo(
+  esqueletos: (Esqueleto | null)[],
+  tonic: PitchClass,
+  total: number,
+): RegiaoTonal[] {
+  // Onde a tônica soa, e de que cor. Duas exclusões, e as duas mudam o resultado:
+  //
+  //   • acorde sem terça (suspenso, power chord) não vota — é exatamente o que não responde
+  //     à pergunta;
+  //   • acorde com SÉTIMA MENOR também não. `G7` numa música em Sol menor tem a raiz do tom
+  //     e a terça maior, mas não está dizendo "agora é Sol maior": está apontando o Dó
+  //     menor, é o dominante do iv. Em «Tarde em Itapuã» são quatro `G7(13)` no meio da
+  //     parte menor, e contá-los partia a música em trechos de seis acordes que não existem.
+  const marcas: { i: number; minor: boolean }[] = [];
+  for (let i = 0; i < esqueletos.length; i++) {
+    const e = esqueletos[i];
+    if (e && e.root === tonic && e.minor !== null && !e.dominant) {
+      marcas.push({ i, minor: e.minor });
+    }
+  }
+  if (marcas.length === 0) return [];
+
+  // Corridas de mesma cor. Uma aparição solitária não conta: a terça de Picardia — o
+  // acorde maior no fim de uma peça menor — é um efeito de cadência, não uma modulação, e
+  // promovê-la a trecho próprio faria metade do repertório menor "mudar de tom" no último
+  // compasso.
+  const corridas: { inicio: number; minor: boolean; n: number }[] = [];
+  for (const m of marcas) {
+    const ultima = corridas[corridas.length - 1];
+    if (ultima && ultima.minor === m.minor) ultima.n++;
+    else corridas.push({ inicio: m.i, minor: m.minor, n: 1 });
+  }
+  const firmes = corridas.filter(c => c.n >= MIN_OCORRENCIAS_DO_MODO);
+  if (firmes.length < 2) return [];
+  if (!firmes.some(c => c.minor) || !firmes.some(c => !c.minor)) return [];
+
+  const regioes: RegiaoTonal[] = firmes.map((c, k) => {
+    const comBemol = COLECOES_COM_BEMOL.has(
+      (c.minor ? (tonic + 3) % 12 : tonic) as PitchClass,
+    );
+    return {
+      from: k === 0 ? 0 : c.inicio,
+      to: k === firmes.length - 1 ? total - 1 : firmes[k + 1].inicio - 1,
+      key: nomeDoTom(tonic, c.minor, comBemol),
+      tonic,
+      semitons: 0,
+    };
+  });
+
+  // Trecho curto demais não é parte da música, é uma passagem. Sem este piso, uma cifra
+  // que alterna `Am` e `A7` de dois em dois compassos viraria uma escada de "modulações".
+  if (regioes.some(r => r.to - r.from + 1 < MIN_TRECHO_DE_MODO)) return [];
+  return regioes;
+}
 
 function detectarRegioes(
   esqueletos: (Esqueleto | null)[],

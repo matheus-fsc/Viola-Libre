@@ -21,17 +21,26 @@ import type { DeteccaoTom, CandidatoTom, PapelDeAcorde } from '../../engine/dete
 /**
  * Como cada papel se apresenta. A cor codifica FORÇA DE EVIDÊNCIA, não categoria solta:
  * azul é compromisso pleno (o acorde é do tom), verde e âmbar são explicações mais frouxas,
- * cinza é o que o tom não dá conta. Lendo só as cores já se sabe a qualidade da leitura.
+ * roxo é o acorde que a música explica FORA daqui — num tom de passagem — e cinza é o que
+ * ninguém dá conta. Lendo só as cores já se sabe a qualidade da leitura.
  */
 const PAPEL: Record<PapelDeAcorde, { rotulo: string; cor: string; fundo: string }> = {
   campo: { rotulo: 'do campo harmônico', cor: '#002fa7', fundo: '#dce6f7' },
   dominante: { rotulo: 'dominante de passagem', cor: '#157a3d', fundo: '#dcefe2' },
   preparacao: { rotulo: 'ii de um ii-V', cor: '#0e6f74', fundo: '#d9eff0' },
-  emprestado: { rotulo: 'emprestado do paralelo', cor: '#8a5a00', fundo: '#f5ead2' },
+  emprestado: { rotulo: 'emprestado de outro modo', cor: '#8a5a00', fundo: '#f5ead2' },
+  tonicizacao: { rotulo: 'passa por outro tom', cor: '#6b21a8', fundo: '#ece0f5' },
   estranho: { rotulo: 'sem explicação neste tom', cor: '#6b7280', fundo: '#eceaea' },
 };
 
-const ORDEM_PAPEL: PapelDeAcorde[] = ['campo', 'dominante', 'preparacao', 'emprestado', 'estranho'];
+const ORDEM_PAPEL: PapelDeAcorde[] = [
+  'campo',
+  'dominante',
+  'preparacao',
+  'emprestado',
+  'tonicizacao',
+  'estranho',
+];
 
 function num(n: number): string {
   return n.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
@@ -271,9 +280,14 @@ function detalhe(c: CandidatoTom): string {
   const partes = [`${doCampo} do campo harmônico`];
   if (c.dominantes > 0) partes.push(`${c.dominantes} dominante(s) de passagem`);
   if (c.preparacoes > 0) partes.push(`${c.preparacoes} preparando um ii-V`);
-  if (c.emprestados > 0) partes.push(`${c.emprestados} emprestado(s) do tom paralelo`);
-  const fora = c.total - c.fits;
-  if (fora > 0) partes.push(`${fora} sem explicação neste tom`);
+  if (c.emprestados > 0) partes.push(`${c.emprestados} emprestado(s) de outro modo`);
+  // Os que ficaram de fora se dividem em dois: os que têm explicação NOUTRO tom — um trecho
+  // que a música tonicizou — e os que não têm nenhuma. Somá-los cobraria do tom de casa uma
+  // falha que não é dele, e apagaria justamente a informação mais interessante da leitura.
+  const tonicizados = c.analise?.acordes.filter(a => a.papel === 'tonicizacao').length ?? 0;
+  if (tonicizados > 0) partes.push(`${tonicizados} num trecho que passa por outro tom`);
+  const semNome = c.total - c.fits - tonicizados;
+  if (semNome > 0) partes.push(`${semNome} sem explicação neste tom`);
   return partes.join(' · ');
 }
 
@@ -399,8 +413,9 @@ export function TonsPossiveis({ deteccao }: { deteccao: DeteccaoTom | null }) {
       </div>
 
       <p className="px-1.5 pt-1 text-[9px] leading-snug text-gray-500">
-        Em azul, os graus que aparecem na cifra. Dominante de passagem e acorde emprestado do
-        tom paralelo contam na conta acima, mas não marcam grau — não são do campo.
+        Em azul, os graus que aparecem na cifra. Dominante de passagem e acorde emprestado de
+        outro modo contam na conta acima, mas não marcam grau — não são do campo. Trecho que
+        passa por outro tom não conta: ele tem nome, mas não é deste tom.
       </p>
 
       {avancado && (

@@ -401,10 +401,15 @@ describe('detectKey — baixo da barra (inversões)', () => {
     // Descartar o baixo apagaria essa nota da análise, e o acorde passaria por diatônico
     // sem ser. É o mesmo mecanismo do "Ab/Bb" da bossa, onde o grave é harmonia de verdade.
     const sem = detectKey(['C', 'C', 'F', 'G', 'C', 'F', 'G', 'C'])!;
-    expect(sem.candidates[0].fits).toBe(sem.candidates[0].total);
+    expect(sem.candidates[0].analise!.acordes.find(a => a.chord === 'C')!.papel).toBe('campo');
 
+    // Com o Sib no grave o mesmo Dó deixa de ser o I e passa a ser o dominante que aponta
+    // o IV — que é precisamente o que o Sib faz com ele. Se o baixo fosse descartado, os
+    // dois acordes teriam o MESMO papel, e é isso que este teste existe para impedir.
     const com = detectKey(['C/Bb', 'C/Bb', 'F', 'G', 'C', 'F', 'G', 'C'])!;
-    expect(com.candidates[0].fits).toBeLessThan(com.candidates[0].total);
+    const doComSetima = com.candidates[0].analise!.acordes.find(a => a.chord === 'C/Bb')!;
+    expect(doComSetima.papel).toBe('dominante');
+    expect(doComSetima.detalhe).toContain('IV');
   });
 
   it('baixo ilegível não derruba a análise', () => {
@@ -503,7 +508,10 @@ describe('detectKey — a conta aberta (auditoria)', () => {
       expect(conta('dominante')).toBe(c.dominantes);
       expect(conta('emprestado')).toBe(c.emprestados);
       expect(conta('campo') + c.dominantes + c.emprestados).toBe(c.fits);
-      expect(conta('estranho')).toBe(c.total - c.fits);
+      // O que sobra de `fits` são os acordes que o tom não explica — em duas categorias.
+      // A tonicização passageira dá NOME ao acorde sem contá-lo como acerto do tom de casa,
+      // então ela sai de "estranho" sem entrar em `fits`, e a conta só fecha com as duas.
+      expect(conta('estranho') + conta('tonicizacao')).toBe(c.total - c.fits);
     }
   });
 
@@ -692,6 +700,204 @@ describe('isChordDiatonic', () => {
   });
 });
 
+describe('detectKey — dominante de quarta suspensa', () => {
+  it('o 7sus4 é dominante mesmo sem terça', () => {
+    // `G4(7/9)` é a grafia brasileira do G7sus4: Sol, Dó, Ré, Fá. Não tem terça, logo não
+    // tem sensível — e a regra antiga, que exigia terça MAIOR, o deixava de fora. Mas ele
+    // faz o trabalho do V, e a MPB o usa assim o tempo todo.
+    const r = detectKey(['Em', 'Am', 'Em', 'C', 'G4(7/9)', 'C', 'Em', 'Am', 'Em', 'Em'])!;
+    const sus = r.candidates[0].analise!.acordes.find(a => a.chord === 'G4(7/9)')!;
+    expect(sus.papel).toBe('dominante');
+  });
+
+  it('a sétima MENOR não vira dominante por não ter terça maior', () => {
+    // O limite da regra: sem terça, sim; com terça menor, nunca. Um `m7` é o ii, não o V.
+    const r = detectKey(['C', 'Am7', 'Dm7', 'G7', 'C', 'Am7', 'Dm7', 'G7', 'C', 'C'])!;
+    const ii = r.candidates[0].analise!.acordes.find(a => a.chord === 'Dm7')!;
+    expect(ii.papel).toBe('campo');
+  });
+});
+
+describe('detectKey — cadeia de dominantes (a quinta da quinta)', () => {
+  it('B7 → E7 → Am: o B7 se explica pelo E7, que não é diatônico', () => {
+    // Em Lá menor o `E7` traz o Sol# da menor harmônica, então não é acorde diatônico e não
+    // podia servir de alvo. O `B7` que o anuncia ficava sem explicação — a menos que a
+    // cifra trouxesse um `Em` por acaso em outro lugar. É o caso de «Regra Três».
+    const r = detectKey(['Am', 'Dm', 'Am', 'B7', 'E7', 'Am', 'Dm', 'B7', 'E7', 'Am'])!;
+    const a = r.candidates[0].analise!;
+    expect(a.acordes.find(x => x.chord === 'E7')!.papel).toBe('dominante');
+    expect(a.acordes.find(x => x.chord === 'B7')!.papel).toBe('dominante');
+  });
+
+  it('o painel nomeia o acorde de destino quando ele não é um grau', () => {
+    // A linha de «Garota de Ipanema»: `Eb7 → Ab7 → Gm7`. O `Ab7` é subV do ii, e o `Eb7`
+    // é o dominante DELE. Láb não é grau nenhum de Fá, então não há algarismo romano a
+    // exibir — e "toniciza um grau do tom" seria confessar que não se sabe qual.
+    const r = detectKey(['F7M', 'Gm7', 'C7', 'F7M', 'Eb7', 'Ab7', 'Gm7', 'C7', 'F7M', 'F7M'])!;
+    const eb = r.candidates[0].analise!.acordes.find(x => x.chord === 'Eb7')!;
+    expect(eb.papel).toBe('dominante');
+    expect(eb.detalhe).toContain('dominante do dominante');
+    expect(eb.detalhe).toContain('Ab7');
+  });
+
+  it('a cadeia não credita nada quando a ponta não resolve no tom', () => {
+    // A relaxação se sustenta pela PONTA: se o último elo não cai num grau do tom, elo
+    // nenhum entra. Sem isso a regra explicaria qualquer sequência de dominantes, que é
+    // precisamente como se apaga uma modulação do radar. `A7` não acha alvo em Dó nem
+    // descendo uma quinta (Ré) nem descendo um semitom (Sol#), e por isso o `E7` que o
+    // prepara também fica de fora.
+    const r = detectKey(['C', 'F', 'G7', 'C', 'E7', 'A7', 'C', 'F', 'G7', 'C'])!;
+    const a = r.candidates[0].analise!;
+    expect(a.acordes.find(x => x.chord === 'A7')!.papel).toBe('estranho');
+    expect(a.acordes.find(x => x.chord === 'E7')!.papel).toBe('estranho');
+  });
+});
+
+describe('detectKey — o diminuto', () => {
+  it('C#° antes de Dm é um A7(9-) sem fundamental', () => {
+    // As quatro notas de `C#°` são as quatro de `A7(9-)` menos o Lá. Por isso ele resolve
+    // subindo meio tom, e por isso é o V de Ré menor escrito de outro jeito.
+    const r = detectKey(['Dm', 'Gm', 'A7', 'Dm', 'Gm7', 'C#°', 'Dm', 'A7', 'Dm', 'Dm'])!;
+    const dim = r.candidates[0].analise!.acordes.find(a => a.chord === 'C#°')!;
+    expect(dim.papel).toBe('dominante');
+    expect(dim.detalhe).toContain('meio tom');
+  });
+
+  it('o diminuto de nota comum não vai a lugar nenhum — gira e volta', () => {
+    const r = detectKey(['D', 'G', 'A7', 'D', 'D°', 'D6', 'G', 'A7', 'D', 'D'])!;
+    const dim = r.candidates[0].analise!.acordes.find(a => a.chord === 'D°')!;
+    expect(dim.papel).toBe('dominante');
+    expect(dim.detalhe).toContain('nota comum');
+  });
+});
+
+describe('detectKey — IV7, a subdominante com sétima', () => {
+  it('F7 em Dó é o IV com sétima, não um acorde sem explicação', () => {
+    // A sétima do `F7` é o Mib — a terça MENOR de Dó. Vem do mesmo empréstimo modal de
+    // sempre, só que numa nota que a coleção paralela sozinha não contém.
+    const r = detectKey(['C', 'C', 'F7', 'C', 'G', 'C', 'F7', 'C', 'C', 'C'])!;
+    const iv7 = r.candidates[0].analise!.acordes.find(a => a.chord === 'F7')!;
+    expect(iv7.papel).toBe('emprestado');
+    expect(iv7.detalhe).toContain('IV');
+  });
+
+  it('quem RESOLVE descendo uma quinta continua sendo dominante secundário', () => {
+    // A ordem das regras importa: o IV7 só recolhe quem não resolve em lugar nenhum.
+    const r = detectKey(['C', 'F', 'C7', 'F', 'C', 'G7', 'C', 'F', 'G7', 'C'])!;
+    const dom = r.candidates[0].analise!.acordes.find(a => a.chord === 'C7')!;
+    expect(dom.papel).toBe('dominante');
+  });
+});
+
+describe('detectKey — empréstimo do menor com sexta maior', () => {
+  it('Am6 em Lá menor vem do menor melódico, não do natural', () => {
+    // `Am6` traz Fá SUSTENIDO, que não existe em Lá menor natural. Existe no dórico sobre
+    // a mesma tônica — o menor melódico ascendente — e é de lá que a bossa o tira.
+    const r = detectKey(['Am', 'Dm', 'E7', 'Am', 'Am6', 'Dm', 'E7', 'Am', 'Am', 'Am'])!;
+    const m6 = r.candidates[0].analise!.acordes.find(a => a.chord === 'Am6')!;
+    expect(m6.papel).toBe('emprestado');
+    expect(m6.detalhe).toContain('sexta maior');
+  });
+});
+
+describe('detectKey — tonicização passageira', () => {
+  // A ponte de «Garota de Ipanema», reduzida ao osso. A música é em Fá; os três acordes do
+  // meio não pertencem a Fá de jeito nenhum, e pertencem inteiros a Fá sustenido: `F#7M` é
+  // o I, `B7` é o IV7, `F#m7` é o primeiro grau do paralelo. Meio tom acima.
+  const ponte = [
+    'F7M', 'G7(13)', 'Gm7', 'C7(9-)', 'F7M', 'Gm7', 'C7(9-)', 'F7M',
+    'F#7M', 'B7(9)', 'F#m7',
+    'Gm7', 'C7(9-)', 'F7M', 'Gm7', 'C7(9-)', 'F7M', 'F7M',
+  ];
+
+  it('a ponte é lida em Fá sustenido, meio tom acima de casa', () => {
+    const r = detectKey(ponte)!;
+    expect(r.key).toBe('F');
+    const a = r.candidates[0].analise!;
+    for (const acorde of ['F#7M', 'B7(9)', 'F#m7']) {
+      const x = a.acordes.find(y => y.chord === acorde)!;
+      expect(x.papel).toBe('tonicizacao');
+      expect(x.detalhe).toContain('F#');
+      expect(x.detalhe).toContain('meio tom acima');
+    }
+    expect(a.acordes.find(y => y.chord === 'B7(9)')!.detalhe).toContain('IV7');
+  });
+
+  it('a tonicização NÃO infla a cobertura do tom de casa', () => {
+    // Um trecho que foi para outro tom não é evidência a favor deste. Contá-lo no "X de Y
+    // acordes" inflaria todo candidato ao mesmo tempo, que é como não medir nada.
+    const c = detectKey(ponte)!.candidates[0];
+    const conta = (p: string) => c.analise!.acordes.filter(x => x.papel === p).length;
+    expect(conta('tonicizacao')).toBe(3);
+    expect(
+      conta('campo') + conta('dominante') + conta('preparacao') + conta('emprestado'),
+    ).toBe(c.fits);
+  });
+
+  it('dois acordes seguidos não fazem tonicização', () => {
+    // Menos de três é acidente: cromatismo, engano de quem digitou, baixo mal lido.
+    const r = detectKey(['C', 'F', 'G7', 'C', 'F#7M', 'B7', 'C', 'F', 'G7', 'C'])!;
+    const a = r.candidates[0].analise!;
+    expect(a.acordes.find(x => x.chord === 'F#7M')!.papel).toBe('estranho');
+  });
+
+  it('um acorde de fora derruba a leitura do trecho inteiro', () => {
+    // Exigir que o trecho caiba INTEIRO numa tônica é o que impede a regra de virar
+    // carimbo. Estes três não cabem em tônica nenhuma, e nenhum deles é explicado.
+    const r = detectKey(['C', 'F', 'G7', 'C', 'F#7M', 'C#m6', 'A#7M(5+)', 'C', 'G7', 'C'])!;
+    const a = r.candidates[0].analise!;
+    for (const acorde of ['F#7M', 'C#m6']) {
+      expect(a.acordes.find(x => x.chord === acorde)!.papel).toBe('estranho');
+    }
+  });
+});
+
+describe('detectKey — troca de modo (a tônica que fica e a terça que troca)', () => {
+  // A forma de «Tarde em Itapuã»: a parte A em Sol menor, a parte B em Sol maior. A busca
+  // por coleção é cega a isto por construção — a parte maior toma emprestado do menor, e as
+  // duas coleções empatam. O que muda é a terça da tônica.
+  const menor = ['Gm7', 'Cm7', 'D7', 'Gm7', 'Gm7', 'Cm7', 'Am7(5-)', 'D7', 'Gm7', 'Gm7'];
+  // A parte maior traz `Bb7M` e `Eb7`, emprestados do menor — e são eles que empatam as
+  // duas coleções e cegam a janela. Sem eles a busca por coleção acharia a fronteira
+  // sozinha, e o teste passaria sem exercitar a regra que se quer testar.
+  const maior = ['G7M', 'Am7', 'Bm7', 'Am7', 'Bb7M', 'Eb7(9)', 'Am7', 'D7(9)'];
+  const cancao = [...menor, ...maior, ...maior, ...menor, ...maior, ...maior];
+
+  it('a virada para o paralelo é apontada, e sem deslocar a mão', () => {
+    const r = detectKey(cancao)!;
+    expect(r.modulates).toBe(true);
+    expect(r.regions.length).toBeGreaterThanOrEqual(2);
+    // Mesma tônica do começo ao fim: `semitons` é zero em todas, e é isso que diz ao
+    // músico que não há nada a transpor — só outra cor.
+    expect(new Set(r.regions.map(x => x.tonic)).size).toBe(1);
+    expect(r.regions.every(x => x.semitons === 0)).toBe(true);
+    expect(new Set(r.regions.map(x => x.key)).size).toBe(2);
+  });
+
+  it('a fronteira cai no primeiro acorde da cor nova, não no meio do caminho', () => {
+    const r = detectKey(cancao)!;
+    expect(r.regions[1].from).toBe(menor.length);
+    expect(r.regions[0].to).toBe(menor.length - 1);
+  });
+
+  it('a terça de Picardia não é modulação', () => {
+    // O acorde maior no fim de uma peça menor é efeito de cadência. Promovê-lo a trecho
+    // próprio faria meio repertório menor "mudar de tom" no último compasso.
+    const r = detectKey(['Am', 'Dm', 'E7', 'Am', 'Dm', 'E7', 'Am', 'Dm', 'E7', 'A', 'A'])!;
+    expect(r.regions).toEqual([]);
+  });
+
+  it('o I7 não conta como tônica maior — é o dominante do iv', () => {
+    // `G7` em Sol menor tem a raiz do tom e a terça maior, mas está apontando o Dó menor.
+    // Contá-lo partia «Tarde em Itapuã» em trechos de seis acordes que não existem.
+    const r = detectKey([
+      'Gm7', 'Cm7', 'D7', 'Gm7', 'G7', 'Cm7', 'D7', 'Gm7', 'G7', 'Cm7',
+      'D7', 'Gm7', 'Gm7', 'Cm7', 'D7', 'Gm7', 'Gm7', 'Gm7', 'Cm7', 'Gm7',
+    ])!;
+    expect(r.regions).toEqual([]);
+  });
+});
+
 /**
  * Regressão contra o acervo real.
  *
@@ -787,9 +993,22 @@ describe.skipIf(!temDump)('detectKey — regressão sobre o acervo', () => {
   it('nenhuma cifra do acervo produz regiões duplicadas ou em excesso', () => {
     for (const c of cifras) {
       const r = detectKey(c.chords)!;
-      expect(r.regions.length).toBeLessThanOrEqual(4);
+      // Duas fronteiras seguidas com o mesmo nome nunca fazem sentido: seriam um trecho só.
       for (let i = 1; i < r.regions.length; i++) {
         expect(r.regions[i].key).not.toBe(r.regions[i - 1].key);
+      }
+      // O teto de quatro vale para a modulação por COLEÇÃO, onde muitos trechos são sinal
+      // de instabilidade e não de estrutura. A troca de modo não obedece a ele, e não deve:
+      // ela alterna entre exatamente DOIS nomes sobre a MESMA tônica, e repetir isso seis
+      // vezes é a forma da música («Tarde em Itapuã», «Canto de Ossanha»), não ruído. O que
+      // se exige dela é a coerência: uma tônica só, e nenhum deslocamento de mão.
+      const trocaDeModo =
+        r.regions.length > 1 && r.regions.every(x => x.tonic === r.regions[0].tonic);
+      if (trocaDeModo) {
+        expect(new Set(r.regions.map(x => x.key)).size).toBe(2);
+        expect(r.regions.every(x => x.semitons === 0)).toBe(true);
+      } else {
+        expect(r.regions.length).toBeLessThanOrEqual(4);
       }
     }
   });

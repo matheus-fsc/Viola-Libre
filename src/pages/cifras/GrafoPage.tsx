@@ -27,7 +27,8 @@ const PAPEL: Record<PapelDeAcorde, { rotulo: string; cor: string; fundo: string 
   campo: { rotulo: 'do campo harmônico', cor: '#002fa7', fundo: '#dce6f7' },
   dominante: { rotulo: 'dominante de passagem', cor: '#157a3d', fundo: '#dcefe2' },
   preparacao: { rotulo: 'ii de um ii-V', cor: '#0e6f74', fundo: '#d9eff0' },
-  emprestado: { rotulo: 'emprestado do paralelo', cor: '#8a5a00', fundo: '#f5ead2' },
+  emprestado: { rotulo: 'emprestado de outro modo', cor: '#8a5a00', fundo: '#f5ead2' },
+  tonicizacao: { rotulo: 'passa por outro tom', cor: '#6b21a8', fundo: '#ece0f5' },
   estranho: { rotulo: 'sem explicação no tom', cor: '#6b7280', fundo: '#eceaea' },
 };
 
