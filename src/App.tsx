@@ -49,6 +49,10 @@ import { TermosDeUso } from './pages/termos/TermosDeUso';
 import { PoliticaPrivacidade } from './pages/documentos/PoliticaPrivacidade';
 import { Agradecimentos } from './pages/documentos/Agradecimentos';
 
+// Onde mora o fonte e o texto da licença. O "Sobre" aponta pra cá; os Termos de Uso têm as
+// suas próprias cópias porque são página estática e não devem depender deste módulo.
+const REPO_URL = 'https://github.com/matheus-fsc/Viola-Libre';
+const LICENCA_URL = 'https://github.com/matheus-fsc/Viola-Libre/blob/main/LICENSE';
 
 const IconInfo: React.FC<{ className?: string }> = ({ className = "w-3.5 h-3.5" }) => (
   <svg className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -1374,8 +1378,12 @@ function App() {
       {/* --- ABOUT MODAL WINDOW --- */}
       {showAboutModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div ref={sobreRef} {...sobreProps} className="w-[450px] bg-[#ece9d8] border-[3px] border-[#0058e6] rounded-t-lg shadow-2xl">
-            <div className="winxp-gradient-blue text-white px-3 py-1 flex justify-between items-center rounded-t-md font-bold text-sm select-none">
+          {/* Altura limitada com o corpo rolando por dentro, e não a caixa inteira crescendo:
+              medido em 1280x640 (notebook comum), o diálogo passava 32px pra fora em cima E
+              embaixo, cortando o título e o botão de fechar sem oferecer rolagem nenhuma. A
+              barra de título fica de fora do trecho rolável para não sumir junto. */}
+          <div ref={sobreRef} {...sobreProps} className="w-[450px] max-h-[90vh] flex flex-col bg-[#ece9d8] border-[3px] border-[#0058e6] rounded-t-lg shadow-2xl">
+            <div className="winxp-gradient-blue text-white px-3 py-1 flex justify-between items-center rounded-t-md font-bold text-sm select-none shrink-0">
               <span className="flex items-center gap-1.5">
                 <IconHelp className="w-4 h-4 text-white" aria-hidden="true" />
                 <span id="titulo-sobre">Sobre o Viola Libre</span>
@@ -1387,13 +1395,17 @@ function App() {
                 ✕
               </button>
             </div>
-            <div className="p-5 flex flex-col gap-4 font-mono text-xs">
+            <div className="p-5 flex flex-col gap-4 font-mono text-xs overflow-y-auto">
               <div className="flex gap-4 items-start border-b border-[#808080]/30 pb-4">
                 <span className="text-4xl">𝄢</span>
                 <div>
                   <h2 className="text-base font-bold text-black mb-1">Viola Libre v1.1</h2>
                   <p className="text-gray-600">O Cifrário Matemático da Música Tradicional</p>
-                  <p className="text-gray-600 mt-0.5">Licença: Livre / Open Source</p>
+                  {/* Nomear a licença, e não só dizer "livre / open source": as duas coisas
+                      que a AGPL garante — o direito de estudar e modificar, e o dever de
+                      devolver — não cabem num rótulo genérico, e era esse rótulo que estava
+                      aqui desde antes de o LICENSE existir. */}
+                  <p className="text-gray-600 mt-0.5">Licença: GNU AGPL-3.0 (copyleft)</p>
                 </div>
               </div>
               
@@ -1409,6 +1421,32 @@ function App() {
                 <p>
                   O projeto homenageia a sonoridade caipira brasileira, e tem como objetivo dar acesso livre,
                   sem anúncios intrusivos e de maneira minimalista a estudantes e mestres do instrumento.
+                </p>
+              </div>
+
+              {/* A AGPL não é detalhe jurídico de rodapé: é a razão de o site poder prometer
+                  "sem anúncios" no parágrafo acima e isso valer também pra quem for usar o
+                  código depois. Quem abre o "Sobre" está perguntando o que é isto aqui —
+                  e o que é, é software livre com uma condição. */}
+              <div className="border-t border-[#808080]/30 pt-4 flex flex-col gap-2 leading-relaxed text-black/90">
+                <p>
+                  <strong>Software livre — e feito pra continuar livre.</strong> A{' '}
+                  <a href={LICENCA_URL} target="_blank" rel="noopener noreferrer" className="text-[#0058e6] underline hover:text-[#3a8bfb] font-bold">GNU AGPL-3.0</a>{' '}
+                  garante a qualquer pessoa o direito de usar, estudar, modificar e
+                  redistribuir o Viola Libre.
+                </p>
+                <p>
+                  Em troca, ela cobra uma coisa: quem publicar uma versão modificada tem que
+                  publicar o código junto, sob a mesma licença — inclusive quem só a colocar
+                  no ar como site, sem distribuir arquivo nenhum. É essa cláusula que impede
+                  uma plataforma fechada de pegar este trabalho, trancá-lo e cobrar por ele.
+                </p>
+                <p className="flex flex-wrap gap-x-3 gap-y-1 pt-1">
+                  <a href={REPO_URL} target="_blank" rel="noopener noreferrer" className="text-[#0058e6] underline hover:text-[#3a8bfb] font-bold">Código-fonte</a>
+                  {/* Em produção esta página traz o tarball do fonte exato deste bundle, que
+                      é como a §13 da AGPL é cumprida na prática. Em `npm run dev` ela não
+                      existe — é o build que a gera. */}
+                  <a href="/jslicense.html" target="_blank" rel="noopener noreferrer" className="text-[#0058e6] underline hover:text-[#3a8bfb] font-bold">JavaScript deste site</a>
                 </p>
               </div>
 
