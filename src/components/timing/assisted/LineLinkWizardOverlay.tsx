@@ -1,4 +1,5 @@
 import React from 'react';
+import { useT } from '../../../i18n';
 import { formatSeconds } from '../../../services/timingApi';
 import { useLineLinkWizardStore } from '../../../stores/useLineLinkWizardStore';
 import { useTimingRegionsStore } from '../../../stores/useTimingRegionsStore';
@@ -10,6 +11,7 @@ import { usePlayerStore } from '../../../stores/usePlayerStore';
 // painel não pode bloquear cliques na cifra. Sem countdown, sem pausar/retomar áudio em tempo
 // real — previewRange() é sob demanda (Restrições do Prompt M).
 export const LineLinkWizardOverlay: React.FC = () => {
+  const t = useT();
   const { phase, sortedSectionIds, currentIndex, confirmCurrentLink, skipCurrent, closeLineLinkPass } = useLineLinkWizardStore();
   const { regions } = useTimingRegionsStore();
   const { selectionStart, selectionEnd } = useTimingSelectionStore();
@@ -26,14 +28,14 @@ export const LineLinkWizardOverlay: React.FC = () => {
         <span className="text-base shrink-0">✓</span>
         <div className="flex-1 min-w-0 text-[10px]">
           {totalSections === 0
-            ? <span>Nenhuma seção marcada ainda — rode o Modo Guiado — Estrutura primeiro.</span>
+            ? <span>{t('timing.vincularSemSecoes')}</span>
             : <span>Todas as {totalSections} seções marcadas têm texto vinculado.</span>}
         </div>
         <button
           onClick={closeLineLinkPass}
           className="bevel-out bg-[#ece9d8] text-black border border-gray-400 px-2 py-0.5 text-[9px] font-bold hover:bg-white shrink-0"
         >
-          ✕ Fechar
+          {t('timing.vincularFechar')}
         </button>
       </div>
     );
@@ -69,20 +71,20 @@ export const LineLinkWizardOverlay: React.FC = () => {
         onClick={() => usePlayerStore.getState().previewRange(section.startTime ?? 0, section.endTime ?? 0)}
         className="bevel-out bg-[#ece9d8] text-black border border-gray-400 px-2 py-0.5 text-[9px] font-bold hover:bg-white shrink-0"
       >
-        ▶ Ouvir este trecho
+        {t('timing.vincularOuvir')}
       </button>
       <button
         onClick={skipCurrent}
         className="bevel-out bg-[#ece9d8] text-black border border-gray-400 px-2 py-0.5 text-[9px] font-bold hover:bg-white shrink-0"
       >
-        ↩ Pular por enquanto
+        {t('timing.vincularPular')}
       </button>
       <button
         onClick={() => confirmCurrentLink(selectionStart!, selectionEnd!)}
         disabled={!hasLines}
         className="bevel-out bg-[#d4edda] text-[#005500] border border-green-600 px-2 py-0.5 text-[9px] font-bold hover:bg-white shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
       >
-        ✓ Confirmar
+        {t('timing.confirmar')}
       </button>
       <button
         onClick={closeLineLinkPass}

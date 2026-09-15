@@ -1,4 +1,5 @@
 import React, { useRef, useMemo, useEffect, useCallback, useState } from 'react';
+import { useT } from '../../i18n';
 import { formatSeconds } from '../../services/timingApi';
 import { isChordLine, parseChordLine } from '../../services/cifraUtils';
 import type { ChordPos } from '../../services/cifraUtils';
@@ -92,6 +93,7 @@ const GUTTER_W = 32;
 export const CifraGridEditor: React.FC<CifraGridEditorProps> = ({
   lineRefs, onLineClick, onStartReassign,
 }) => {
+  const t = useT();
   const { lines, chordDragVisual } = useCifraTextStore();
   const { regions, markers } = useTimingRegionsStore();
   const { selectionMode, selectionStart, selectionEnd } = useTimingSelectionStore();
@@ -383,19 +385,19 @@ export const CifraGridEditor: React.FC<CifraGridEditorProps> = ({
               onClick={() => usePlayerStore.getState().previewRange(linkPopupRegion.startTime!, linkPopupRegion.endTime!)}
               className="bevel-out bg-white border border-gray-400 px-2 py-1 text-[10px] font-bold hover:bg-blue-50 text-left"
             >
-              ▶ Ouvir
+              {t('timing.ouvir')}
             </button>
             <button
               onClick={() => { onStartReassign(linkPopupRegion); setLinkPopup(null); }}
               className="bevel-out bg-white border border-gray-400 px-2 py-1 text-[10px] font-bold hover:bg-blue-50 text-left"
             >
-              🔁 Reatribuir linhas
+              {t('timing.reatribuirLinhas')}
             </button>
             <button
               onClick={() => setLinkPopup(null)}
               className="text-[9px] text-gray-500 hover:text-gray-700 text-center mt-0.5"
             >
-              Fechar
+              {t('timing.fechar')}
             </button>
           </div>
         </div>

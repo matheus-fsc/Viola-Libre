@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
+import { useT as useTrad } from '../../i18n';
 import { formatSeconds, type MarkerType } from '../../services/timingApi';
 import { clampRange, buildTracksFromRegions, SECTION_TYPE_LABEL, SECTION_ORDER, type ClipKind, type TimelineClip } from './timingTracks';
 import type { TimingRegion } from '../../services/timingRegions';
@@ -9,7 +10,7 @@ import { useDerivedJumps, findLoopConversionOccurrences } from '../../hooks/useD
 
 // "Modificar" clip popup — reuses CifraGridEditor's linkPopup visual pattern (small fixed-position
 // bevel-out card near the click, dismissed by a full-screen transparent click-catcher). Only
-// offered for 'section' clips: "Reclassificar como" always, "Converter em Loop" only when
+// offered for 'section' clips: "{trad('timing.reclassificarTitulo')}" always, "{trad('timing.converterLoopTitulo')}" only when
 // findLoopConversionOccurrences finds this section is part of an auto-detected repeat.
 type ModifyPopupState =
   | { step: 'menu';       regionId: string; x: number; y: number }
@@ -68,6 +69,8 @@ export interface TimingTimelineProps {
 export const TimingTimeline: React.FC<TimingTimelineProps> = ({
   markerMeta, creationKind, onCreateRange, onMarkerClick,
 }) => {
+  // `trad` e não `t`: neste arquivo `t` já é o nome do tipo de seção no map dos clipes.
+  const trad = useTrad();
   const { regions, markers } = useTimingRegionsStore();
   const { duration, currentTime: playerCurrentTime, playerReady, play, pause, seek } = usePlayerStore();
   const derivedJumps = useDerivedJumps(regions);
@@ -317,7 +320,7 @@ export const TimingTimeline: React.FC<TimingTimelineProps> = ({
           <button
             onClick={e => { e.stopPropagation(); useLoopSaltoWizardStore.getState().markRepeatOccurrence(clip.regionId); }}
             onPointerDown={e => e.stopPropagation()}
-            title="Marcar repetição desta seção no áudio"
+            title={trad('timing.marcarRepeticao')}
             className="opacity-0 group-hover:opacity-100 text-white text-[8px] px-0.5 shrink-0 relative z-10"
           >↻</button>
         )}
@@ -325,7 +328,7 @@ export const TimingTimeline: React.FC<TimingTimelineProps> = ({
           <button
             onClick={e => { e.stopPropagation(); setModifyPopup({ step: 'menu', regionId: clip.regionId, x: e.clientX, y: e.clientY }); }}
             onPointerDown={e => e.stopPropagation()}
-            title="Modificar este trecho"
+            title={trad('timing.modificarTrecho')}
             className="opacity-0 group-hover:opacity-100 text-white text-[8px] px-0.5 shrink-0 relative z-10"
           >⚙</button>
         )}
@@ -362,7 +365,7 @@ export const TimingTimeline: React.FC<TimingTimelineProps> = ({
           onPointerDown={e => e.stopPropagation()}
           onClick={() => seek(0)}
           disabled={!playerReady}
-          title="Reiniciar"
+          title={trad('timing.reiniciar')}
           className="bevel-out bg-[var(--color-winxp-panel)] px-1.5 text-[10px] font-bold border border-gray-400 hover:bg-white disabled:opacity-40 leading-none"
           style={{ height: 16 }}
         >⏮</button>
@@ -370,7 +373,7 @@ export const TimingTimeline: React.FC<TimingTimelineProps> = ({
           onPointerDown={e => e.stopPropagation()}
           onClick={play}
           disabled={!playerReady}
-          title="Play"
+          title={trad('timing.play')}
           className="bevel-out bg-[var(--color-winxp-panel)] px-1.5 text-[10px] font-bold border border-gray-400 hover:bg-white disabled:opacity-40 leading-none"
           style={{ height: 16 }}
         >▶</button>
@@ -378,7 +381,7 @@ export const TimingTimeline: React.FC<TimingTimelineProps> = ({
           onPointerDown={e => e.stopPropagation()}
           onClick={pause}
           disabled={!playerReady}
-          title="Pausar"
+          title={trad('timing.pausar')}
           className="bevel-out bg-[var(--color-winxp-panel)] px-1.5 text-[10px] font-bold border border-gray-400 hover:bg-white disabled:opacity-40 leading-none"
           style={{ height: 16 }}
         >⏸</button>
@@ -394,14 +397,14 @@ export const TimingTimeline: React.FC<TimingTimelineProps> = ({
         <button
           onPointerDown={e => e.stopPropagation()}
           onClick={() => applyZoom(0.67, playerCurrentTime)}
-          title="Ampliar"
+          title={trad('timing.ampliar')}
           className="bevel-out bg-[var(--color-winxp-panel)] w-4 text-[10px] font-bold border border-gray-400 hover:bg-white leading-none flex items-center justify-center"
           style={{ height: 16 }}
         >+</button>
         <button
           onPointerDown={e => e.stopPropagation()}
           onClick={() => applyZoom(1.5, playerCurrentTime)}
-          title="Reduzir"
+          title={trad('timing.reduzir')}
           className="bevel-out bg-[var(--color-winxp-panel)] w-4 text-[10px] font-bold border border-gray-400 hover:bg-white leading-none flex items-center justify-center"
           style={{ height: 16 }}
         >−</button>
@@ -409,7 +412,7 @@ export const TimingTimeline: React.FC<TimingTimelineProps> = ({
           <button
             onPointerDown={e => e.stopPropagation()}
             onClick={() => { setViewStart(0); setViewEnd(0); }}
-            title="Ver tudo"
+            title={trad('timing.verTudo')}
             className="bevel-out bg-[var(--color-winxp-panel)] w-4 text-[9px] font-bold border border-gray-400 hover:bg-white leading-none flex items-center justify-center"
             style={{ height: 16 }}
           >⊡</button>
@@ -497,7 +500,7 @@ export const TimingTimeline: React.FC<TimingTimelineProps> = ({
             </>
           ) : (
             <span className="absolute inset-0 flex items-center justify-center text-[8px] text-gray-500 pointer-events-none italic">
-              Adicione mídia para usar a timeline
+              {trad('timing.timelinePrecisaDeMidia')}
             </span>
           )}
         </div>
@@ -725,7 +728,7 @@ export const TimingTimeline: React.FC<TimingTimelineProps> = ({
               <button
                 onClick={() => setModifyPopup({ step: 'reclassify', regionId: modifyPopup.regionId, x: modifyPopup.x, y: modifyPopup.y })}
                 className="bevel-out bg-white border border-gray-400 px-2 py-1 text-[10px] font-bold hover:bg-blue-50 text-left"
-              >🏷 Reclassificar como…</button>
+              >{trad('timing.reclassificarMenu')}</button>
               {candidate && (
                 <button
                   onClick={() => setModifyPopup({
@@ -733,9 +736,9 @@ export const TimingTimeline: React.FC<TimingTimelineProps> = ({
                     occurrences: candidate, repeatCount: candidate.length,
                   })}
                   className="bevel-out bg-white border border-gray-400 px-2 py-1 text-[10px] font-bold hover:bg-blue-50 text-left"
-                >🔁 Converter em Loop…</button>
+                >{trad('timing.converterLoopMenu')}</button>
               )}
-              <button onClick={closePopup} className="text-[9px] text-gray-500 hover:text-gray-700 text-center mt-0.5">Fechar</button>
+              <button onClick={closePopup} className="text-[9px] text-gray-500 hover:text-gray-700 text-center mt-0.5">{trad('timing.fechar')}</button>
             </div>
           </>
         );
@@ -748,7 +751,7 @@ export const TimingTimeline: React.FC<TimingTimelineProps> = ({
             <div className="fixed z-[9997] bevel-out bg-[#ece9d8] border-2 border-[#316ac5] p-2 shadow-xl flex flex-col gap-1 w-52 max-h-64 overflow-y-auto"
               style={{ left, bottom }}
             >
-              <p className="font-bold text-[11px] text-[#002fa7]">Reclassificar como</p>
+              <p className="font-bold text-[11px] text-[#002fa7]">{trad('timing.reclassificarTitulo')}</p>
               {SECTION_ORDER.map(t => (
                 <button
                   key={t}
@@ -757,9 +760,9 @@ export const TimingTimeline: React.FC<TimingTimelineProps> = ({
                     closePopup();
                   }}
                   className={`bevel-out border border-gray-400 px-2 py-1 text-[10px] font-bold hover:bg-blue-50 text-left ${region.sectionType === t ? 'bg-blue-100' : 'bg-white'}`}
-                >{SECTION_TYPE_LABEL[t]}</button>
+                >{trad(SECTION_TYPE_LABEL[t])}</button>
               ))}
-              <button onClick={closePopup} className="text-[9px] text-gray-500 hover:text-gray-700 text-center mt-0.5">Cancelar</button>
+              <button onClick={closePopup} className="text-[9px] text-gray-500 hover:text-gray-700 text-center mt-0.5">{trad('comum.cancelar')}</button>
             </div>
           </>
         );
@@ -773,10 +776,10 @@ export const TimingTimeline: React.FC<TimingTimelineProps> = ({
           <div className="fixed z-[9997] bevel-out bg-[#ece9d8] border-2 border-[#316ac5] p-2 shadow-xl flex flex-col gap-1.5 w-60"
             style={{ left, bottom }}
           >
-            <p className="font-bold text-[11px] text-[#002fa7]">Converter em Loop</p>
+            <p className="font-bold text-[11px] text-[#002fa7]">{trad('timing.converterLoopTitulo')}</p>
             <p className="text-[9px] text-gray-600">{occurrences.length} ocorrências detectadas neste trecho.</p>
             <label className="text-[9px] text-gray-700 flex items-center gap-1">
-              Repetições esperadas:
+              {trad('timing.repeticoesEsperadas')}
               <input
                 type="number" min={occurrences.length} value={repeatCount}
                 onChange={e => setModifyPopup({ ...modifyPopup, repeatCount: Math.max(occurrences.length, Number(e.target.value) || occurrences.length) })}
@@ -786,8 +789,8 @@ export const TimingTimeline: React.FC<TimingTimelineProps> = ({
             <button
               onClick={() => { commitLoopConversion(occurrences, repeatCount); closePopup(); }}
               className="bevel-out bg-white border border-gray-400 px-2 py-1 text-[10px] font-bold hover:bg-blue-50 text-left"
-            >✓ Confirmar</button>
-            <button onClick={closePopup} className="text-[9px] text-gray-500 hover:text-gray-700 text-center mt-0.5">Cancelar</button>
+            >{trad('timing.confirmar')}</button>
+            <button onClick={closePopup} className="text-[9px] text-gray-500 hover:text-gray-700 text-center mt-0.5">{trad('comum.cancelar')}</button>
           </div>
         </>
       );

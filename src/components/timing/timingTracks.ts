@@ -1,4 +1,5 @@
 import type { TimingRegion } from '../../services/timingRegions';
+import type { Chave } from '../../i18n';
 import type { SectionType } from '../../services/timingApi';
 
 export type ClipKind = 'loop' | 'instrumental' | 'phrase' | 'section';
@@ -35,20 +36,23 @@ const SECTION_COLORS: Record<SectionType, string> = {
   other:        '#facc15',
 };
 
-// Portuguese labels + display order for SectionType — shared by TimingEditor's own section-type
-// metadata (which additionally carries itemClass/barColor for the sidebar) and by
-// TimingTimeline's "Reclassificar como" clip menu, which only needs the plain label list.
-export const SECTION_TYPE_LABEL: Record<SectionType, string> = {
-  intro:        'Intro',
-  verse:        'Verso',
-  'pre-chorus': 'Pré-Refrão',
-  chorus:       'Refrão',
-  bridge:       'Ponte',
-  solo:         'Solo',
-  instrumental: 'Instrumental',
-  outro:        'Final',
-  coda:         'Coda',
-  other:        'Outro',
+// Chave do dicionário + ordem de exibição para SectionType. Compartilhado pelos metadados
+// do TimingEditor (que carregam também itemClass/barColor da barra lateral) e pelo menu
+// "Reclassificar como" da TimingTimeline, que só precisa da lista de rótulos.
+//
+// Chave e não texto: a tabela é montada quando o módulo carrega, e um texto aqui ficaria
+// preso ao idioma daquele instante.
+export const SECTION_TYPE_LABEL: Record<SectionType, Chave> = {
+  intro:        'timing.secIntro',
+  verse:        'timing.secVerso',
+  'pre-chorus': 'timing.secPreRefrao',
+  chorus:       'timing.secRefrao',
+  bridge:       'timing.secPonte',
+  solo:         'timing.secSolo',
+  instrumental: 'timing.secInstrumental',
+  outro:        'timing.secFinal',
+  coda:         'timing.secCoda',
+  other:        'timing.secOutro',
 };
 
 export const SECTION_ORDER: SectionType[] = [

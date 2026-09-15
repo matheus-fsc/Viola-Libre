@@ -102,6 +102,17 @@ describe('dicionários', () => {
       'teoria.licao4RioAbaixo',
       'impressao.layout',
       'impressao.rodapeSite',
+      // Vocabulário de estúdio: «Intro», «Solo», «Instrumental», «Coda», «Loop», «Play»
+      // e «BPM» são os mesmos nos dois idiomas, e «m:ss» é formato de hora.
+      'timing.secIntro',
+      'timing.secSolo',
+      'timing.secInstrumental',
+      'timing.secCoda',
+      'timing.chipInstr',
+      'timing.bpm',
+      'timing.tempoPlaceholder',
+      'timing.loop',
+      'timing.play',
     ]);
     for (const chave of Object.keys(PT)) {
       if (iguaisDePropósito.has(chave)) continue;

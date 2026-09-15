@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useT, type Chave } from '../../../i18n';
 import type { SectionType } from '../../../services/timingApi';
 import { formatSeconds } from '../../../services/timingApi';
 import { useAssistedModeStore } from '../../../stores/useAssistedModeStore';
@@ -10,14 +11,14 @@ import { usePlayerStore } from '../../../stores/usePlayerStore';
 // form, just not suggested here — a Coda is a non-repeated tail section, not something the
 // sequential ask-next flow needs to offer), no 'Virada' (kind:'instrumental' quick-fill — removed
 // as a creation path entirely, see useAssistedModeStore.ts's header for the compat rationale).
-const NEXT_SECTION_CHIPS: { label: string; type: SectionType }[] = [
-  { label: 'Verso',    type: 'verse'       },
-  { label: 'Pré-Ref', type: 'pre-chorus'  },
-  { label: 'Refrão',  type: 'chorus'      },
-  { label: 'Ponte',   type: 'bridge'      },
-  { label: 'Solo',    type: 'solo'        },
-  { label: 'Instr.',  type: 'instrumental' },
-  { label: 'Final',   type: 'outro'       },
+const NEXT_SECTION_CHIPS: { label: Chave; type: SectionType }[] = [
+  { label: 'timing.secVerso',        type: 'verse'       },
+  { label: 'timing.chipPreRef',      type: 'pre-chorus'  },
+  { label: 'timing.secRefrao',       type: 'chorus'      },
+  { label: 'timing.secPonte',        type: 'bridge'      },
+  { label: 'timing.secSolo',         type: 'solo'        },
+  { label: 'timing.chipInstr',       type: 'instrumental' },
+  { label: 'timing.secFinal',        type: 'outro'       },
 ];
 
 const CHIP_COLORS: Record<SectionType, { bg: string; fg: string; bd: string }> = {
@@ -50,6 +51,7 @@ const RecordingBar: React.FC<{
   lyricLineTotal: number | null;
   historyLen: number;
 }> = ({ mode, segmentStartTime, lineCursor, lyricLineTotal, historyLen }) => {
+  const t = useT();
   const currentTime = usePlayerStore(s => s.currentTime);
   const elapsed = Math.max(0, currentTime - segmentStartTime);
 
@@ -65,20 +67,20 @@ const RecordingBar: React.FC<{
       {lineContext && <span className="opacity-70">— {lineContext}</span>}
       <span className="font-mono ml-1 tabular-nums">{formatSeconds(elapsed)}</span>
 
-      <span className="ml-auto opacity-70 font-normal">⏎ marcar</span>
+      <span className="ml-auto opacity-70 font-normal">{t('timing.guiadoMarcar')}</span>
       {historyLen > 0 && (
         <button
           onClick={() => useAssistedModeStore.getState().undoLast()}
           className="text-white/80 hover:text-white border border-white/30 px-1.5 py-0.5 text-[9px] rounded"
         >
-          ⌫ Voltar
+          {t('timing.guiadoVoltar')}
         </button>
       )}
       <button
         onClick={() => useAssistedModeStore.getState().exitAssisted()}
         className="text-white/80 hover:text-white border border-white/30 px-1.5 py-0.5 text-[9px] rounded ml-1"
       >
-        ✕ Sair
+        {t('timing.guiadoSair')}
       </button>
     </div>
   );
@@ -86,6 +88,7 @@ const RecordingBar: React.FC<{
 
 // ── Main overlay component ────────────────────────────────────────────────────
 export const AssistedModeOverlay: React.FC = () => {
+  const t = useT();
   const {
     active, mode, phase, showCountdown,
     pendingSectionType,
@@ -150,7 +153,7 @@ export const AssistedModeOverlay: React.FC = () => {
     const range = `${formatSeconds(dupWarning.startTime)}–${formatSeconds(dupWarning.endTime)}`;
     return (
       <Modal>
-        <p className="font-bold text-sm text-[#cc6600]">Trecho já marcado</p>
+        <p className="font-bold text-sm text-[#cc6600]">{t('timing.guiadoJaMarcado')}</p>
         <p className="text-[10px] text-gray-700">
           <strong>{dupWarning.label}</strong> já foi marcado ({range}).
           Deseja substituir ou pular?
@@ -160,7 +163,7 @@ export const AssistedModeOverlay: React.FC = () => {
             onClick={confirmDupSkip}
             className="flex-1 bevel-out bg-[#ece9d8] border border-gray-400 px-2 py-1.5 text-[10px] font-bold hover:bg-white"
           >
-            ← Pular — já está marcado
+            {t('timing.guiadoPular')}
           </button>
           <button
             onClick={confirmDupOverwrite}
@@ -177,29 +180,29 @@ export const AssistedModeOverlay: React.FC = () => {
   if (phase === 'confirm-intro') {
     return (
       <Modal>
-        <p className="font-bold text-sm text-[#002fa7]">Modo Guiado — Estrutura</p>
+        <p className="font-bold text-sm text-[#002fa7]">{t('timing.guiadoEstruturaTitulo')}</p>
         <p className="text-[11px] text-gray-700">
-          A música tem uma <strong>introdução instrumental</strong> antes da letra começar?
+          {t('timing.guiadoIntroA')} <strong>{t('timing.guiadoIntroForte')}</strong> {t('timing.guiadoIntroB')}
         </p>
         <div className="flex gap-2 mt-1">
           <button
             onClick={() => confirmIntro(true)}
             className="flex-1 bevel-out bg-[#d4edda] border border-green-500 px-3 py-2 text-xs font-bold hover:bg-white"
           >
-            ✓ Sim — tem intro
+            {t('timing.guiadoSimIntro')}
           </button>
           <button
             onClick={() => confirmIntro(false)}
             className="flex-1 bevel-out bg-[#ece9d8] border border-gray-400 px-3 py-2 text-xs font-bold hover:bg-white"
           >
-            ✗ Não
+            {t('timing.guiadoNao')}
           </button>
         </div>
         <button
           onClick={exitAssisted}
           className="text-[9px] text-gray-600 hover:text-gray-600 text-center"
         >
-          Cancelar modo guiado
+          {t('timing.guiadoCancelarModo')}
         </button>
       </Modal>
     );
@@ -228,7 +231,7 @@ export const AssistedModeOverlay: React.FC = () => {
             onClick={exitAssisted}
             className="mt-6 text-white/50 hover:text-white text-sm underline"
           >
-            Cancelar
+            {t('comum.cancelar')}
           </button>
         </div>
       </div>
@@ -256,9 +259,9 @@ export const AssistedModeOverlay: React.FC = () => {
 
     return (
       <Modal>
-        <p className="font-bold text-sm text-[#002fa7]">Próximo trecho</p>
+        <p className="font-bold text-sm text-[#002fa7]">{t('timing.guiadoProximoTrecho')}</p>
         <p className="text-[10px] text-green-700 font-bold">✓ {lastLabel}</p>
-        <p className="text-[10px] text-gray-600">Qual é o próximo trecho da música?</p>
+        <p className="text-[10px] text-gray-600">{t('timing.guiadoQualProximo')}</p>
 
         {/* Section type chips */}
         <div className="flex flex-wrap gap-1">
@@ -284,7 +287,7 @@ export const AssistedModeOverlay: React.FC = () => {
               onClick={undoLast}
               className="bevel-out bg-[#fff3cd] border border-yellow-400 px-2 py-1 text-[10px] font-bold hover:bg-white text-left"
             >
-              ⌫ Voltar — desfazer último trecho
+              {t('timing.guiadoDesfazer')}
             </button>
           )}
           <button
@@ -297,7 +300,7 @@ export const AssistedModeOverlay: React.FC = () => {
             onClick={finish}
             className="bevel-out bg-[#d4edda] border border-green-500 px-2 py-1 text-[10px] font-bold hover:bg-white text-left"
           >
-            ✓ Finalizar música
+            {t('timing.guiadoFinalizar')}
           </button>
         </div>
       </Modal>
@@ -309,18 +312,18 @@ export const AssistedModeOverlay: React.FC = () => {
     const total = lyricLineIndices?.length ?? 0;
     return (
       <Modal>
-        <p className="font-bold text-sm text-[#002fa7]">Alinhar letra — concluído</p>
+        <p className="font-bold text-sm text-[#002fa7]">{t('timing.guiadoAlinharConcluido')}</p>
         <p className="text-[11px] text-green-700 font-bold">
           ✓ {total} {total === 1 ? 'linha marcada' : 'linhas marcadas'} com sucesso!
         </p>
         <p className="text-[11px] text-gray-600">
-          Chegou ao fim da letra da cifra. Todas as linhas foram alinhadas ao áudio.
+          {t('timing.guiadoFimDaLetra')}
         </p>
         <button
           onClick={finish}
           className="bevel-out bg-[#d4edda] border border-green-500 px-3 py-2 text-xs font-bold hover:bg-white mt-1"
         >
-          ✓ Finalizar e voltar ao editor
+          {t('timing.guiadoVoltarAoEditor')}
         </button>
       </Modal>
     );

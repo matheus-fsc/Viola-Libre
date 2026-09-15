@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { useT } from '../../i18n';
 import { formatSeconds } from '../../services/timingApi';
 import { useCifraTextStore } from '../../stores/useCifraTextStore';
 import { useTimingRegionsStore } from '../../stores/useTimingRegionsStore';
@@ -13,6 +14,7 @@ import { useAutoScroll } from '../../hooks/useAutoScroll';
 // tokens, no drag targets, no click handlers. Rendered inside TimingEditor's existing scrollable
 // container (see the `overflow-y-auto` wrapper around it) — no scroll container of its own.
 export const AutoScrollPreview: React.FC = () => {
+  const t = useT();
   const { lines } = useCifraTextStore();
   const { regions } = useTimingRegionsStore();
   const currentTime = usePlayerStore(s => s.currentTime);
@@ -30,7 +32,7 @@ export const AutoScrollPreview: React.FC = () => {
   return (
     <div style={{ fontFamily: '"Fira Code", "Courier New", monospace', fontSize: 11 }}>
       <div className="sticky top-0 z-10 px-3 py-1.5 bg-[#d4d0c8] border-b border-gray-400 text-[10px] flex items-center gap-2">
-        <span className="font-bold text-gray-600">🔍 Testar rolagem</span>
+        <span className="font-bold text-gray-600">{t('timing.testarRolagemBotao')}</span>
         {activeRegion ? (
           <span className="text-[#005500] font-bold">▶ {activeRegion.label || activeRegion.kind}</span>
         ) : (

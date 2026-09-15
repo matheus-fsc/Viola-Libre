@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { useT } from '../../../i18n';
 import { formatSeconds } from '../../../services/timingApi';
 import { useLoopSaltoWizardStore } from '../../../stores/useLoopSaltoWizardStore';
 import { usePlayerStore } from '../../../stores/usePlayerStore';
@@ -8,6 +9,7 @@ import { useTimingRegionsStore } from '../../../stores/useTimingRegionsStore';
 // of an already-existing Loop region (mode 'repeat'). Loop *creation* no longer goes through
 // this store/overlay at all — see useLoopSaltoWizardStore.ts's header.
 export const LoopSaltoWizardOverlay: React.FC = () => {
+  const t = useT();
   const {
     active, mode, phase, segmentStartTime,
     pendingRepeatRegionId,
@@ -45,8 +47,8 @@ export const LoopSaltoWizardOverlay: React.FC = () => {
         <div className="pointer-events-auto bevel-out bg-[#ece9d8] border-2 border-[#316ac5] px-4 py-3 mb-2 flex items-center gap-3 shadow-xl max-w-sm w-full mx-2">
           <span className="text-lg shrink-0">↻</span>
           <div className="flex-1 min-w-0">
-            <p className="font-bold text-[11px] text-[#002fa7]">Marcar repetição</p>
-            <p className="text-[10px] text-gray-600">Posicione no início e pressione <kbd className="font-mono bg-gray-200 px-1 rounded">⏎</kbd> para marcar</p>
+            <p className="font-bold text-[11px] text-[#002fa7]">{t('timing.loopMarcarRepeticao')}</p>
+            <p className="text-[10px] text-gray-600">{t('timing.loopPosicioneA')} <kbd className="font-mono bg-gray-200 px-1 rounded">⏎</kbd> {t('timing.loopPosicioneB')}</p>
           </div>
           <button onClick={exitAssisted} className="text-gray-600 hover:text-gray-600 text-[10px] shrink-0">✕</button>
         </div>
@@ -67,14 +69,14 @@ export const LoopSaltoWizardOverlay: React.FC = () => {
         <span className="w-2 h-2 rounded-full bg-white animate-pulse shrink-0" />
         <span>Repetição — {repeatLabel}</span>
         <span className="font-mono ml-1 tabular-nums">{formatSeconds(elapsed)}</span>
-        <span className="ml-auto opacity-70 font-normal">⏎ marcar fim</span>
+        <span className="ml-auto opacity-70 font-normal">{t('timing.loopMarcarFim')}</span>
         <button onClick={undoLast}
           className="text-white/80 hover:text-white border border-white/30 px-1.5 py-0.5 text-[9px] rounded">
-          ⌫ Cancelar início
+          {t('timing.loopCancelarInicio')}
         </button>
         <button onClick={exitAssisted}
           className="text-white/80 hover:text-white border border-white/30 px-1.5 py-0.5 text-[9px] rounded ml-1">
-          ✕ Sair
+          {t('timing.guiadoSair')}
         </button>
       </div>
     );

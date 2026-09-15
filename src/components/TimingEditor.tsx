@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useT } from '../i18n';
 import {
   submitTiming, fetchTimings, voteTiming, getOrCreateEditorHash,
   extractYouTubeId, formatSeconds,
@@ -101,6 +102,7 @@ interface TimingEditorProps {
 }
 
 export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPreviewTiming }) => {
+  const t = useT();
   const [mode, setMode] = useState<EditorMode>('editing');
   const [activeTab, setActiveTab] = useState<'editor' | 'community'>('editor');
 
@@ -156,7 +158,7 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
   const [testingScroll, setTestingScroll] = useState(false);
 
   // Reassign-lines flow — lifted up from CifraGridEditor so both its line-link margin popup
-  // and the "Trechos vinculados" sidebar list below trigger the exact same in-progress state
+  // and the "{t('timing.trechosVinculados')}" sidebar list below trigger the exact same in-progress state
   // (a single source of truth; neither place caches its own copy).
   const [reassigningRegionId, setReassigningRegionId] = useState<string | null>(null);
 
@@ -359,7 +361,7 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
   };
 
   // Reassign-lines flow — used both by CifraGridEditor's line-link margin popup ("Reatribuir
-  // linhas") and by the "Trechos vinculados" sidebar list's "Revincular" button below. Reuses
+  // linhas") and by the "{t('timing.trechosVinculados')}" sidebar list's "Revincular" button below. Reuses
   // the same line-range selection mechanism as everywhere else (useTimingSelectionStore) — the
   // drag/click gesture itself is untouched, only which region the confirmed range gets written
   // to changes.
@@ -560,22 +562,22 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
             onClick={cancelReassignLines}
             className="bevel-out bg-[#ece9d8] text-black border border-gray-400 px-2 py-0.5 text-[9px] font-bold hover:bg-white shrink-0"
           >
-            ✕ Cancelar
+            {t('timing.cancelarX')}
           </button>
           <button
             onClick={confirmReassignLines}
             disabled={selectionStart === null || selectionEnd === null}
             className="bevel-out bg-[#d4edda] text-[#005500] border border-green-600 px-2 py-0.5 text-[9px] font-bold hover:bg-white shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            ✓ Confirmar
+            {t('timing.confirmar')}
           </button>
         </div>
       )}
       {mode === 'testing' && (
         <div className="fixed top-0 left-0 right-0 z-[9999] bg-[#316ac5] text-white text-sm font-bold flex items-center justify-between px-4 py-2 shadow-lg">
-          <span>Modo teste ativo — timing injetado no auto-scroll</span>
+          <span>{t('timing.modoTeste')}</span>
           <button onClick={handleStopTest} className="bevel-out bg-white text-[#002fa7] px-3 py-0.5 text-xs font-bold border border-gray-400 hover:bg-[#ece9d8]">
-            ⏹ Parar
+            {t('timing.parar')}
           </button>
         </div>
       )}
@@ -622,13 +624,13 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
 
                 {/* Media */}
                 <div className="p-2 border-b border-gray-200 flex flex-col gap-1.5">
-                  <p className="font-bold text-[10px] uppercase text-gray-500 tracking-wider">Referência de mídia</p>
+                  <p className="font-bold text-[10px] uppercase text-gray-500 tracking-wider">{t('timing.referenciaDeMidia')}</p>
                   <div className="flex gap-1">
                     <input
                       value={mediaUrlInput}
                       onChange={e => setMediaUrlInput(e.target.value)}
                       onKeyDown={e => e.key === 'Enter' && loadMedia()}
-                      placeholder="YouTube ou link de áudio..."
+                      placeholder={t('timing.midiaPlaceholder')}
                       className="bevel-in bg-white px-1.5 py-0.5 text-[10px] flex-1 min-w-0 outline-none"
                     />
                     <button onClick={loadMedia} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-[10px] font-bold border border-gray-400 hover:bg-white shrink-0">
@@ -656,14 +658,14 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
                     />
                   )}
                   {mediaType === 'other' && mediaUrl && (
-                    <a href={mediaUrl} target="_blank" rel="noopener noreferrer" className="text-[#002fa7] underline text-[10px]">Abrir mídia ↗</a>
+                    <a href={mediaUrl} target="_blank" rel="noopener noreferrer" className="text-[#002fa7] underline text-[10px]">{t('timing.abrirMidia')}</a>
                   )}
                 </div>
 
                 {/* BPM + Duração lado a lado */}
                 <div className="p-2 border-b border-gray-200 grid grid-cols-2 gap-2">
                   <div className="flex flex-col gap-1.5 min-w-0">
-                    <p className="font-bold text-[10px] uppercase text-gray-500 tracking-wider">BPM <span className="normal-case font-normal text-gray-600">(opc.)</span></p>
+                    <p className="font-bold text-[10px] uppercase text-gray-500 tracking-wider">{t('timing.bpm')} <span className="normal-case font-normal text-gray-600">{t('timing.opcionalCurto')}</span></p>
                     <div className="flex gap-1 items-center">
                       <input
                         type="number"
@@ -694,7 +696,7 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
                       value={durationInput}
                       onChange={e => setDurationInput(e.target.value)}
                       onBlur={() => { commitDuration(); if (usePlayerStore.getState().duration > 0) setDurError(null); }}
-                      placeholder="m:ss"
+                      placeholder={t('timing.tempoPlaceholder')}
                       className={`bevel-in bg-white px-1.5 py-0.5 text-xs w-full outline-none font-mono ${durError ? 'border border-[#cc3300]' : ''}`}
                     />
                   </div>
@@ -702,12 +704,12 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
 
                 {/* Alias */}
                 <div className="p-2 border-b border-gray-200 flex flex-col gap-1">
-                  <p className="font-bold text-[10px] uppercase text-gray-500 tracking-wider">Apelido <span className="normal-case font-normal text-gray-600">(opcional)</span></p>
+                  <p className="font-bold text-[10px] uppercase text-gray-500 tracking-wider">{t('timing.apelido')} <span className="normal-case font-normal text-gray-600">{t('timing.opcional')}</span></p>
                   <input
                     type="text"
                     value={editorAlias}
                     onChange={e => setEditorAlias(e.target.value)}
-                    placeholder="Anônimo"
+                    placeholder={t('timing.apelidoPlaceholder')}
                     className="bevel-in bg-white px-1.5 py-0.5 text-[10px] w-full outline-none"
                   />
                 </div>
@@ -723,13 +725,13 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
                       onClick={handleExportSnapshot}
                       className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-1 text-[10px] font-bold border border-gray-400 hover:bg-white flex-1"
                     >
-                      ⬇ Exportar JSON
+                      {t('timing.exportarJson')}
                     </button>
                     <button
                       onClick={() => importFileInputRef.current?.click()}
                       className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-1 text-[10px] font-bold border border-gray-400 hover:bg-white flex-1"
                     >
-                      ⬆ Importar JSON
+                      {t('timing.importarJson')}
                     </button>
                     <input
                       ref={importFileInputRef}
@@ -754,37 +756,37 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
                     <button
                       onClick={() => useAssistedModeStore.getState().startStructuralPass()}
                       className="wizard-btn bevel-out bg-[#ece9d8] border border-gray-400 px-1 py-1.5 text-[9px] font-bold hover:bg-white flex flex-col items-center gap-0.5"
-                      title="Marcar trechos estruturais (Intro, Verso, Refrão…) em tempo real"
-                      aria-label="Estrutura"
+                      title={t('timing.estruturaDica')}
+                      aria-label={t('timing.estrutura')}
                     >
                       <span className="text-sm leading-none">♪</span>
-                      <span className="wizard-btn-label leading-none">Estrutura</span>
+                      <span className="wizard-btn-label leading-none">{t('timing.estrutura')}</span>
                     </button>
                     <button
                       onClick={() => useAssistedModeStore.getState().startLinePass()}
                       className="wizard-btn bevel-out bg-[#ece9d8] border border-gray-400 px-1 py-1.5 text-[9px] font-bold hover:bg-white flex flex-col items-center gap-0.5"
-                      title="Alinhar cada linha de letra ao áudio (timing sequencial)"
-                      aria-label="Alinhar letra"
+                      title={t('timing.alinharLetraDica')}
+                      aria-label={t('timing.alinharLetra')}
                     >
                       <span className="text-sm leading-none">≡</span>
-                      <span className="wizard-btn-label leading-none">Alinhar letra</span>
+                      <span className="wizard-btn-label leading-none">{t('timing.alinharLetra')}</span>
                     </button>
                     <button
                       onClick={() => useLineLinkWizardStore.getState().startLineLinkPass()}
                       className="wizard-btn bevel-out bg-[#ece9d8] border border-gray-400 px-1 py-1.5 text-[9px] font-bold hover:bg-white flex flex-col items-center gap-0.5"
-                      title="Vincular cada seção marcada (Intro, Verso…) ao intervalo de linhas correspondente"
-                      aria-label="Vincular texto"
+                      title={t('timing.vincularTextoDica')}
+                      aria-label={t('timing.vincularTexto')}
                     >
                       <span className="text-sm leading-none">📍</span>
-                      <span className="wizard-btn-label leading-none">Vincular texto</span>
+                      <span className="wizard-btn-label leading-none">{t('timing.vincularTexto')}</span>
                     </button>
                     <button
                       onClick={() => setTestingScroll(v => !v)}
                       className={`wizard-btn bevel-out border px-1 py-1.5 text-[9px] font-bold flex flex-col items-center gap-0.5 ${
                         testingScroll ? 'bg-[#316ac5] text-white border-[#001a5c]' : 'bg-[#ece9d8] border-gray-400 hover:bg-white'
                       }`}
-                      title="Testar a rolagem automática usando as regions atuais (em memória, sem precisar salvar)"
-                      aria-label="Testar rolagem"
+                      title={t('timing.testarRolagemDica')}
+                      aria-label={t('timing.testarRolagem')}
                     >
                       <span className="text-sm leading-none">{testingScroll ? '⏹' : '🔍'}</span>
                       <span className="wizard-btn-label leading-none">{testingScroll ? 'Parar teste' : 'Testar rolagem'}</span>
@@ -796,19 +798,19 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
                         <button
                           onClick={() => useAssistedModeStore.getState().resumeAssisted()}
                           className="bevel-out bg-[#d4edda] border border-green-500 px-2 py-0.5 text-[9px] font-bold hover:bg-white shrink-0"
-                          title="Retomar o Modo Guiado de onde parou"
+                          title={t('timing.retomarDica')}
                         >
-                          ↩ Retomar
+                          {t('timing.retomar')}
                         </button>
                       )}
                       {assistedModeError === 'no-media' && (
                         <span className="text-[9px] text-red-600">
-                          Insira um link de áudio/vídeo antes de usar o Modo Guiado.
+                          {t('timing.precisaDeMidia')}
                         </span>
                       )}
                       {assistedModeError === 'no-lyric-lines' && (
                         <span className="text-[9px] text-red-600">
-                          Nenhuma linha de letra detectada na cifra.
+                          {t('timing.semLinhasDeLetra')}
                         </span>
                       )}
                     </div>
@@ -818,14 +820,14 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
                 {/* Lista rolável: trechos vinculados, trechos, marcadores, marcações de letra */}
                 <div className="flex-1 overflow-y-auto retro-scrollbar">
 
-                  {/* ── Trechos vinculados (sections with a Wizard 3 line link) ──
+                  {/* ── {t('timing.trechosVinculados')} (sections with a Wizard 3 line link) ──
                       Cada item ganha uma barra colorida lateral por categoria — reaproveita
                       SECTION_TYPE_META[...].barColor, a mesma cor já usada pelos clips na
                       timeline, em vez de duplicar uma paleta nova. */}
                   {linkedSections.length > 0 && (
                     <div className="p-2 border-b border-gray-200 flex flex-col gap-1">
                       <p className="font-bold text-[10px] uppercase text-gray-500 tracking-wider">
-                        Trechos vinculados
+                        {t('timing.trechosVinculados')}
                         <span className="ml-1 font-normal normal-case text-gray-600">({linkedSections.length})</span>
                       </p>
                       <div className="flex flex-col gap-0.5">
@@ -848,14 +850,14 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
                                   onClick={() => startReassignLines(r)}
                                   className="bevel-out bg-white border border-gray-400 px-1.5 py-0.5 text-[9px] font-bold hover:bg-blue-50 flex-1"
                                 >
-                                  🔁 Revincular
+                                  {t('timing.revincular')}
                                 </button>
                                 <button
                                   onClick={() => useTimingRegionsStore.getState().updateRegion(r.id, { startLine: null, endLine: null })}
                                   className="bevel-out bg-white border border-gray-400 px-1.5 py-0.5 text-[9px] font-bold hover:bg-red-50 text-red-600 flex-1"
-                                  title="Remove só o vínculo com o texto — a seção continua marcada no tempo"
+                                  title={t('timing.removerVinculoDica')}
                                 >
-                                  ✕ Remover vínculo
+                                  {t('timing.removerVinculo')}
                                 </button>
                               </div>
                             </div>
@@ -901,41 +903,41 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
                         <input
                           value={sectionFormLabel}
                           onChange={e => setSectionFormLabel(e.target.value)}
-                          placeholder="Nome do trecho"
+                          placeholder={t('timing.nomeDoTrecho')}
                           className="bevel-in bg-white px-1.5 py-0.5 text-[10px] w-full outline-none"
                         />
 
                         {/* Start time */}
                         <div className="flex items-center gap-1">
-                          <span className="text-[9px] text-gray-500 w-8 shrink-0">Início</span>
+                          <span className="text-[9px] text-gray-500 w-8 shrink-0">{t('timing.inicio')}</span>
                           <input
                             value={sectionFormStart}
                             onChange={e => setSectionFormStart(e.target.value)}
-                            placeholder="m:ss"
+                            placeholder={t('timing.tempoPlaceholder')}
                             className="bevel-in bg-white px-1 py-0.5 text-[10px] flex-1 outline-none font-mono"
                           />
                         </div>
 
                         {/* End time */}
                         <div className="flex items-center gap-1">
-                          <span className="text-[9px] text-gray-500 w-8 shrink-0">Fim</span>
+                          <span className="text-[9px] text-gray-500 w-8 shrink-0">{t('timing.fim')}</span>
                           <input
                             value={sectionFormEnd}
                             onChange={e => setSectionFormEnd(e.target.value)}
-                            placeholder="m:ss"
+                            placeholder={t('timing.tempoPlaceholder')}
                             className="bevel-in bg-white px-1 py-0.5 text-[10px] flex-1 outline-none font-mono"
                           />
                         </div>
 
                         <p className="text-[9px] text-gray-600 text-center">
-                          💡 Arraste na régua abaixo pra preencher início/fim
+                          {t('timing.arrasteNaRegua')}
                         </p>
 
                         <button
                           onClick={handleAddSection}
                           className="bevel-out bg-[#d4edda] border border-green-500 px-2 py-1 text-[10px] font-bold hover:bg-white"
                         >
-                          ✓ Adicionar Trecho
+                          {t('timing.adicionarTrecho')}
                         </button>
                       </div>
                     )}
@@ -962,8 +964,8 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
                                       });
                                     }}
                                     className="w-10 px-0.5 py-0 border border-gray-300 rounded outline-none text-black bg-white"
-                                    placeholder="Duração"
-                                    title="Duração em segundos"
+                                    placeholder={t('timing.duracao')}
+                                    title={t('timing.duracaoDica')}
                                   />
                                   <span>s</span>
                                 </span>
@@ -983,7 +985,7 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
                       No creation entry point left at all (see useAssistedModeStore.ts's header) —
                       purely read/edit of markers already in the data (old contributions, or a
                       marker finish() auto-created). Gated on having something to show, matching
-                      "Trechos vinculados"/"Marcações de letra" — otherwise this was a bare header
+                      "{t('timing.trechosVinculados')}"/"{t('timing.marcacoesDeLetra')}" — otherwise this was a bare header
                       always rendered with nothing under it for any song with zero markers so far. */}
                   {(sortedMarkers.length > 0 || (pendingLinkSource && linkCandidates.length > 0)) && (
                   <div className="p-2 border-b border-gray-200 flex flex-col gap-1.5">
@@ -1006,7 +1008,7 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
                         <div className="bevel-in bg-[#fffbeb] p-2 border-2 border-yellow-400 flex flex-col gap-1 mt-1">
                           <div className="flex items-center gap-1.5">
                             <span className="font-mono text-sm shrink-0" style={{ color: srcMeta.pinColor }}>{srcMeta.symbol}</span>
-                            <span className="font-bold text-[10px]">Qual destino?</span>
+                            <span className="font-bold text-[10px]">{t('timing.qualDestino')}</span>
                             <button onClick={() => { setPendingLinkSource(null); setLinkCandidates([]); }}
                               className="ml-auto text-[9px] text-gray-600 hover:text-gray-600">✕</button>
                           </div>
@@ -1020,13 +1022,13 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
                                 >
                                   <span className="font-mono shrink-0" style={{ color: cm.pinColor }}>{cm.symbol}</span>
                                   <span className="font-mono">{formatSeconds(c.time)}</span>
-                                  {isCurrent && <span className="text-[8px] text-yellow-600 ml-auto">atual</span>}
+                                  {isCurrent && <span className="text-[8px] text-yellow-600 ml-auto">{t('timing.destinoAtual')}</span>}
                                 </button>
                               );
                             })}
                             <button onClick={() => confirmLink(undefined)}
                               className="text-[9px] text-gray-600 hover:text-gray-600 text-left px-1 mt-0.5">
-                              ✕ remover vínculo
+                              {t('timing.removerVinculoCurto')}
                             </button>
                           </div>
                         </div>
@@ -1053,7 +1055,7 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
                                 <button
                                   onClick={() => handleMarkerClick(mk.id)}
                                   className="text-[8px] text-yellow-600 hover:text-yellow-800 shrink-0 px-0.5 border border-yellow-400 rounded"
-                                  title="Vincular destino"
+                                  title={t('timing.vincularDestino')}
                                 >⇢</button>
                               )}
                               <span className="font-mono text-gray-500 shrink-0">
@@ -1074,14 +1076,14 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
                   {/* Line-range sections summary */}
                   {regions.some(r => r.kind === 'loop' || r.kind === 'instrumental' || r.kind === 'phrase') && (
                     <div className="p-2 border-b border-gray-200 flex flex-col gap-1">
-                      <p className="font-bold text-[10px] uppercase text-gray-500 tracking-wider">Marcações de letra</p>
+                      <p className="font-bold text-[10px] uppercase text-gray-500 tracking-wider">{t('timing.marcacoesDeLetra')}</p>
                       {regions.filter(r => r.kind === 'loop').map(r => (
                         <div key={r.id} className="flex flex-col bg-blue-50 border border-blue-200 rounded overflow-hidden">
                           <div className="flex items-center gap-1 px-1.5 py-0.5">
                             <span className="text-[10px] flex-1 truncate">🔁 <b>{r.label}</b> L{r.startLine! + 1}–{r.endLine! + 1} · {r.repeatCount}×{r.startTime != null ? ` ⏱${formatSeconds(r.startTime)}` : ''}</span>
                             <button
                               onClick={() => useLoopSaltoWizardStore.getState().markRepeatOccurrence(r.id)}
-                              title="Marcar mais uma ocorrência desta repetição no áudio"
+                              title={t('timing.marcarOcorrencia')}
                               className="text-[8px] text-blue-600 hover:text-blue-800 border border-blue-300 rounded px-1 py-0.5 shrink-0 font-bold"
                             >↻</button>
                             <button onClick={() => useTimingRegionsStore.getState().removeRegion(r.id)} className="text-red-500 font-bold text-[9px] shrink-0 px-0.5">×</button>
@@ -1117,7 +1119,7 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
                       ))}
                       {regions.filter(r => r.kind === 'phrase').map(r => (
                         <div key={r.id} className="flex items-center gap-1 bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded">
-                          <span className="text-[10px] flex-1 truncate">🎤 <b>Frase</b> L{r.startLine! + 1} ⏱{formatSeconds(r.startTime ?? 0)}–{formatSeconds(r.endTime ?? 0)}</span>
+                          <span className="text-[10px] flex-1 truncate">🎤 <b>{t('timing.frase')}</b> L{r.startLine! + 1} ⏱{formatSeconds(r.startTime ?? 0)}–{formatSeconds(r.endTime ?? 0)}</span>
                           <button onClick={() => useTimingRegionsStore.getState().removeRegion(r.id)} className="text-red-500 font-bold text-[9px] shrink-0 px-0.5">×</button>
                         </div>
                       ))}
@@ -1137,21 +1139,21 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
               {/* Legend + edit toggle */}
               <div className="flex items-center gap-4 px-3 py-1 text-[9px] border-b border-gray-200 shrink-0 bg-[#f5f3ee]">
                 {!editingCifraText && <>
-                  <span className="flex items-center gap-1"><span className="w-3 h-2.5 bg-blue-50 border-l-2 border-blue-400 inline-block" /> Loop</span>
-                  <span className="flex items-center gap-1"><span className="w-3 h-2.5 bg-green-50 border-l-2 border-green-400 inline-block" /> Instrumental</span>
-                  <span className="flex items-center gap-1"><span className="w-3 h-2.5 bg-purple-50 border-l-2 border-purple-400 inline-block" /> Frase</span>
-                  <span className="flex items-center gap-1"><span className="w-3 h-2.5 bg-yellow-200 border-l-2 border-yellow-500 inline-block" /> Início selecionado</span>
-                  <span className="flex items-center gap-1"><span className="w-3 h-2.5 bg-yellow-100 inline-block" /> Selecionado</span>
+                  <span className="flex items-center gap-1"><span className="w-3 h-2.5 bg-blue-50 border-l-2 border-blue-400 inline-block" /> {t('timing.loop')}</span>
+                  <span className="flex items-center gap-1"><span className="w-3 h-2.5 bg-green-50 border-l-2 border-green-400 inline-block" /> {t('timing.secInstrumental')}</span>
+                  <span className="flex items-center gap-1"><span className="w-3 h-2.5 bg-purple-50 border-l-2 border-purple-400 inline-block" /> {t('timing.frase')}</span>
+                  <span className="flex items-center gap-1"><span className="w-3 h-2.5 bg-yellow-200 border-l-2 border-yellow-500 inline-block" /> {t('timing.inicioSelecionado')}</span>
+                  <span className="flex items-center gap-1"><span className="w-3 h-2.5 bg-yellow-100 inline-block" /> {t('timing.selecionado')}</span>
                 </>}
-                {editingCifraText && <span className="text-[9px] text-[#002fa7] font-bold">✎ Editando texto da cifra</span>}
+                {editingCifraText && <span className="text-[9px] text-[#002fa7] font-bold">{t('timing.editandoTexto')}</span>}
                 <div className="ml-auto flex gap-1">
                   {!editingCifraText && (
                     <button
                       onClick={() => { setEditTextValue(editedLines.join('\n')); setEditingCifraText(true); }}
                       className="bevel-out bg-[#ece9d8] border border-gray-400 px-2 py-0.5 text-[9px] font-bold hover:bg-white"
-                      title="Editar o texto da cifra diretamente"
+                      title={t('timing.editarTextoDica')}
                     >
-                      ✎ Editar texto
+                      {t('timing.editarTexto')}
                     </button>
                   )}
                   {editingCifraText && <>
@@ -1162,13 +1164,13 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
                       }}
                       className="bevel-out bg-[#d4edda] border border-green-500 px-2 py-0.5 text-[9px] font-bold hover:bg-white"
                     >
-                      ✓ Salvar
+                      {t('timing.salvar')}
                     </button>
                     <button
                       onClick={() => setEditingCifraText(false)}
                       className="bevel-out bg-[#ece9d8] border border-gray-400 px-2 py-0.5 text-[9px] hover:bg-white"
                     >
-                      Cancelar
+                      {t('comum.cancelar')}
                     </button>
                   </>}
                 </div>
@@ -1202,10 +1204,10 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
         {activeTab === 'editor' && mode === 'done' && (
           <div className="flex-1 flex items-center justify-center p-4">
             <div className="bevel-out bg-[#d4edda] border border-green-500 p-4 w-full max-w-sm flex flex-col gap-3">
-              <p className="font-bold text-[#155724] text-sm">✅ Contribuição salva!</p>
+              <p className="font-bold text-[#155724] text-sm">{t('timing.contribuicaoSalva')}</p>
               {submittedHash && (
                 <div className="flex items-center gap-1 flex-wrap">
-                  <span className="text-[10px] text-gray-600">Código de edição:</span>
+                  <span className="text-[10px] text-gray-600">{t('timing.codigoDeEdicao')}</span>
                   <code className="bevel-in bg-white px-1.5 py-0.5 text-[10px] font-mono text-[#002fa7]">{submittedHash}</code>
                   <button
                     onClick={() => { navigator.clipboard.writeText(submittedHash).then(() => { setCopiedHash(true); setTimeout(() => setCopiedHash(false), 2000); }).catch(() => {}); }}
@@ -1216,7 +1218,7 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
                 </div>
               )}
               <button onClick={() => { setActiveTab('community'); setCommunityLoaded(false); }} className="bevel-out bg-[var(--color-winxp-panel)] border border-gray-400 px-3 py-1 text-xs font-bold hover:bg-white self-start">
-                Ver contribuições da comunidade
+                {t('timing.verContribuicoes')}
               </button>
             </div>
           </div>
@@ -1225,9 +1227,9 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
         {/* ── Community tab ── */}
         {activeTab === 'community' && (
           <div className="flex-1 overflow-y-auto retro-scrollbar p-3 flex flex-col gap-2">
-            {loadingContribs && <p className="text-xs text-gray-500 text-center py-10">Carregando...</p>}
+            {loadingContribs && <p className="text-xs text-gray-500 text-center py-10">{t('comum.carregando')}</p>}
             {!loadingContribs && contributions.length === 0 && (
-              <p className="text-xs text-gray-500 text-center py-10">Nenhuma contribuição ainda. Seja o primeiro!</p>
+              <p className="text-xs text-gray-500 text-center py-10">{t('timing.semContribuicoes')}</p>
             )}
             {contributions.map(c => (
               <div key={c.id} className={`bevel-out p-2 flex flex-col gap-1.5 ${c.id === myTimingId ? 'bg-[#fffde7] border border-yellow-400' : 'bg-white'}`}>
@@ -1238,7 +1240,7 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
                   </span>
                   <div className="flex gap-1">
                     <button onClick={() => handleVote(c.id)} className="bevel-out bg-[#ece9d8] border border-gray-400 px-2 py-0.5 text-[10px] font-bold hover:bg-white">👍 {c.votes}</button>
-                    <button onClick={() => handleUseContribution(c)} className="bevel-out bg-[#002fa7] text-white border border-[#001a5c] px-2 py-0.5 text-[10px] font-bold hover:bg-[#316ac5]">Usar este</button>
+                    <button onClick={() => handleUseContribution(c)} className="bevel-out bg-[#002fa7] text-white border border-[#001a5c] px-2 py-0.5 text-[10px] font-bold hover:bg-[#316ac5]">{t('timing.usarEste')}</button>
                   </div>
                 </div>
                 {c.mediaUrl && (
@@ -1288,7 +1290,7 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
                 {c.loops?.length > 0 && <p className="text-[10px] text-blue-700">🔁 {c.loops.map(l => `${l.label} (${l.repeatCount}×${l.mediaTimestampStart != null ? ` ⏱${formatSeconds(l.mediaTimestampStart)}` : ''})`).join(' · ')}</p>}
                 {c.instrumentalSections?.length > 0 && <p className="text-[10px] text-green-700">🎸 {c.instrumentalSections.map(s => `${s.label}${s.mediaTimestampStart != null ? ` ⏱${formatSeconds(s.mediaTimestampStart)}` : ''}`).join(' · ')}</p>}
                 {c.id === myTimingId && (
-                  <button onClick={() => handleEditMyContribution(c)} className="bevel-out bg-[#ece9d8] border border-gray-400 px-2 py-0.5 text-[10px] font-bold hover:bg-white self-start">✏️ Editar minha contribuição</button>
+                  <button onClick={() => handleEditMyContribution(c)} className="bevel-out bg-[#ece9d8] border border-gray-400 px-2 py-0.5 text-[10px] font-bold hover:bg-white self-start">{t('timing.editarMinha')}</button>
                 )}
               </div>
             ))}
