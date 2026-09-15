@@ -2,6 +2,8 @@
 
 **O Cifrário Aberto e Matemático** para viola caipira, violão, cavaquinho e outros instrumentos de corda.
 
+[Português](./README.md) · [English](./README.en.md)
+
 [![Licença: AGPL-3.0](https://img.shields.io/badge/licen%C3%A7a-AGPL--3.0-blue.svg)](./LICENSE)
 
 Diferente de sistemas engessados, o Viola Libre **calcula** as posições dos acordes a partir de
@@ -24,6 +26,7 @@ sem cobrança. O objetivo é dar acesso livre e minimalista a estudantes e mestr
   ajudar a tirar músicas de ouvido.
 - **Editor de Timing** — sincronização de cifras com áudio/vídeo (auto-scroll, loops, saltos).
 - **Favoritos e Minhas Cifras** — salve digitações favoritas e monte o roteiro de acordes de uma música.
+- **Preferências** — instrumento, idioma, exibição das cifras e autorização de serviços de terceiros, tudo num lugar só e guardado só no navegador.
 
 ---
 
@@ -48,10 +51,12 @@ O `App.tsx` é uma "janela" única que troca de conteúdo por aba, com base na r
 ```
 src/
 ├── engine/       # Motor musical PURO (sem React): acordes, intervalos, afinações, áudio
+├── i18n/         # Idioma da interface: dicionários, chaves tipadas, store de idioma
+│   └── locales/  #   pt-BR.ts (fonte da verdade) e en.ts
 ├── components/   # UI reutilizável (braço, diagramas, seletores, editor de timing…)
 │   ├── timing/   #   Editor de timing: timeline, trilhas, modo assistido, wizards
 │   └── MelodySequenceEditor/  # Piano roll e sequenciador de melodia
-├── pages/        # Páginas por rota (cifras, minhasCifras, termos)
+├── pages/        # Páginas por rota (cifras, minhasCifras, preferencias, termos)
 ├── services/     # Cliente da API e utilitários de dados
 ├── stores/       # Estado global (Zustand): player, timing, wizards, texto da cifra
 ├── hooks/        # Hooks (filtro artista/música, auto-scroll, isMobile…)
@@ -73,6 +78,8 @@ src/
 | Tirando de Ouvido         | `src/components/EarTranscription.tsx`, `src/components/MelodySequenceEditor/*` |
 | Treinos e Teoria          | `src/components/ScaleTrainer.tsx`, `ViolaDuets.tsx`, `TheoryGuide.tsx`, `InteractivePiano.tsx` |
 | Transposição de tablatura | `src/engine/tabTransposer.ts`, `src/components/TabTransposerBlock.tsx` |
+| Idioma da interface       | `src/i18n/*`, `src/components/SeletorDeIdioma.tsx` |
+| Preferências              | `src/pages/preferencias/Preferencias.tsx` (junta os seletores que já existiam) |
 | API / dados               | `src/services/api.ts`, `authApi.ts`, `timingApi.ts` |
 
 ### Abstrações centrais (comece por aqui)
@@ -137,6 +144,57 @@ A aplicação sobe em `http://localhost:5173`.
 
 ---
 
+## Idioma da interface (i18n)
+
+A interface fala **português (pt-BR)** e **inglês**. O acervo NÃO é traduzido: título de
+música, nome de artista, letra e cifra pertencem à fonte, e traduzi-los seria inventar um
+dado que não existe. O que muda é a moldura em volta do conteúdo.
+
+### Como funciona
+
+- `src/i18n/locales/pt-BR.ts` é a **fonte da verdade**. O tipo `Dicionario` nasce dele, e é
+  contra ele que o `en.ts` é conferido: chave faltando ou escrita errado reprova o
+  `tsc -b`. Não existe fallback silencioso, então não dá para publicar uma tela meio
+  traduzida sem perceber.
+- `src/i18n/index.ts` traz a store de idioma e o `t()`. Dentro de componente use `useT()`,
+  que re-renderiza na troca; fora dele (helpers, metadados) o `t` avulso lê o idioma atual
+  sem se inscrever.
+- `useIdioma()` devolve o idioma ativo. A escolha fica no `localStorage`, e só a primeira
+  visita cai na detecção pelo `navigator.language`.
+- O seletor é o `src/components/SeletorDeIdioma.tsx`, montado dentro do diálogo "Sobre",
+  que é a única porta que existe nas duas larguras de tela.
+- Trocar o idioma atualiza também o `<html lang>` e a meta `og:locale`.
+
+Não há biblioteca de i18n, de propósito. Toda dependência que chega ao navegador precisa de
+rótulo de licença para o GNU LibreJS (ver a seção abaixo), e o que este site usa de i18n é
+procurar um texto numa tabela e trocar `{variavel}`. O tipo `Chave` já dá o que a biblioteca
+traria de verdade aqui: erro de compilação quando a chave não existe.
+
+### Acrescentando um texto
+
+1. Crie a chave em `src/i18n/locales/pt-BR.ts`, no namespace da tela.
+2. Rode `npx tsc -b`. Ele reprova, nomeando a chave que falta no `en.ts`.
+3. Escreva o inglês e use com `t('namespace.chave')`.
+
+### Regras de escrita
+
+- **Sem travessão.** Texto de interface é lido em tela estreita e por leitor de tela, onde
+  o travessão vira pausa longa sem função. Use vírgula, dois-pontos ou ponto final. Ao
+  traduzir um texto antigo, tire o travessão do lado português também, na mesma mudança.
+- **Interpole, não concatene.** `t('chave', { quantidade: n })` com `{quantidade}` dentro do
+  texto, nunca `t('a') + n + t('b')`: a ordem das palavras muda de um idioma para o outro.
+- **A chave nomeia o lugar, não o texto.** `filtros.casaMinima`, não `casaInicialMinima`.
+
+### O que ainda não passou
+
+A camada existe e a moldura está coberta por inteiro: abas, barra de título, barra de
+tarefas, "Sobre", filtros de busca, painel de resultados, tabela de favoritas, a área de
+trabalho e os metadados de busca por rota. As telas internas grandes (visualizador de cifra,
+editor de timing, tirando de ouvido, painel de favoritos, páginas jurídicas) ainda têm o
+texto em português embutido e vão sendo migradas namespace a namespace.
+
+---
+
 ## Software livre de ponta a ponta (GNU LibreJS)
 
 Não basta o repositório ser livre: o JavaScript que chega ao navegador de quem usa o site
@@ -188,8 +246,8 @@ como fallback para quem não executa JavaScript. Se ficassem só nisso, toda rot
 declararia duplicata da home — foi exatamente o que aconteceu enquanto a canônica esteve
 fixa. Quem resolve é o `useSeo` (`src/hooks/useSeo.ts`), que **atualiza** as tags já
 existentes no `<head>` em vez de acrescentar novas, garantindo uma de cada. As seções
-fixas ficam em `src/utils/seoRoutes.ts`; as rotas de cifra montam o seu a partir da
-música carregada.
+fixas ficam em `src/utils/seoRoutes.ts` (lá ficam os caminhos; o texto mora nos
+dicionários, sob `seo.*`); as rotas de cifra montam o seu a partir da música carregada.
 
 > Ao criar uma rota nova, chame `useSeo` nela. Sem isso ela herda os metadados da
 > anterior, e o Google a trata como cópia.
@@ -230,11 +288,13 @@ Contribuições são bem-vindas — de correções de acordes a novos recursos.
 3. **Mantenha o padrão visual.** A UI segue o tema Windows XP com classes Tailwind e hex diretos
    já usados no projeto — siga o estilo dos componentes vizinhos, não crie um do zero.
 4. **Motor sem UI.** Lógica musical vai em `src/engine/` (pura, testável); componentes só consomem.
-5. **Antes de abrir o PR**, garanta que passa:
+5. **Texto novo de interface passa pelo dicionário.** Nada de string fixa em componente, e
+   sem travessão. Veja a seção de i18n acima.
+6. **Antes de abrir o PR**, garanta que passa:
    ```bash
    npm run lint && npm run test && npm run build && npm run librejs:verify && npm run sitemap:verify
    ```
-6. **Abra um Pull Request** descrevendo a mudança. Toda contribuição fica sob a licença AGPL-3.0.
+7. **Abra um Pull Request** descrevendo a mudança. Toda contribuição fica sob a licença AGPL-3.0.
 
 Encontrou um bug ou tem uma ideia? Abra uma *issue* no GitHub.
 

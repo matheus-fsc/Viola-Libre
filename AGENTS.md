@@ -121,6 +121,11 @@ Detalhes completos em `graphify-out/GRAPH_REPORT.md`. Resumo:
    confie no código e considere sugerir `graphify . --update`.
 3. **Motor sem UI.** Lógica musical em `src/engine/` (pura, testável); componentes React apenas consomem.
 4. **Padrão visual.** Tema Windows XP com Tailwind + hex diretos; siga os componentes vizinhos.
-5. **Antes de concluir:** `npm run lint && npm run test && npm run build` devem passar.
-6. **Licença AGPL-3.0.** Todo código contribuído fica sob a AGPL-3.0 (veja `LICENSE`).
+5. **Texto de interface vive no dicionário.** Nada de string fixa em componente: a chave vai
+   para `src/i18n/locales/pt-BR.ts` (fonte da verdade) e a tradução para `en.ts`, que o
+   `tsc -b` confere. No componente use `useT()`; fora dele, o `t` avulso de `src/i18n`.
+   **Sem travessão** nos textos, e ao traduzir um texto antigo tire o travessão do lado
+   português também. Detalhes na seção de i18n do `README.md`.
+6. **Antes de concluir:** `npm run lint && npm run test && npm run build` devem passar.
+7. **Licença AGPL-3.0.** Todo código contribuído fica sob a AGPL-3.0 (veja `LICENSE`).
 ```
