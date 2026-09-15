@@ -64,7 +64,7 @@ export const InstrumentSelector: React.FC<InstrumentSelectorProps> = ({
       {/* Selectors Row */}
       <div className="grid grid-cols-2 gap-3">
         <div className="flex flex-col gap-1">
-          <label className="text-xs font-bold font-mono text-gray-700" htmlFor="instrument-select">Instrumento:</label>
+          <label className="text-xs font-bold font-mono text-gray-700" htmlFor="instrument-select">{t('acordes.instrumentoRotulo')}</label>
           <select
             id="instrument-select"
             value={selectedInstrument.id}
@@ -89,7 +89,7 @@ export const InstrumentSelector: React.FC<InstrumentSelectorProps> = ({
               <option key={t.id} value={t.id}>{t.name}</option>
             ))}
             {selectedTuning.id.startsWith('custom-') && (
-              <option value="custom">Personalizada</option>
+              <option value="custom">{t('acordes.afinacaoPersonalizada')}</option>
             )}
           </select>
         </div>
@@ -114,7 +114,7 @@ export const InstrumentSelector: React.FC<InstrumentSelectorProps> = ({
                 <button
                   onClick={() => adjustStringPitch(idx, 1)}
                   className="w-7 h-5 flex items-center justify-center bg-[#ece9d8] text-xs font-bold border border-white border-r-[#808080] border-bottom-[#808080] active:border-t-[#808080] active:border-l-[#808080] active:border-r-white active:border-bottom-white cursor-pointer select-none hover:bg-white"
-                  title="Aumentar meio tom (+1 semitom)"
+                  title={t('acordes.aumentarSemitom')}
                 >
                   ▲
                 </button>
@@ -128,7 +128,7 @@ export const InstrumentSelector: React.FC<InstrumentSelectorProps> = ({
                 <button
                   onClick={() => adjustStringPitch(idx, -1)}
                   className="w-7 h-5 flex items-center justify-center bg-[#ece9d8] text-xs font-bold border border-white border-r-[#808080] border-bottom-[#808080] active:border-t-[#808080] active:border-l-[#808080] active:border-r-white active:border-bottom-white cursor-pointer select-none hover:bg-white"
-                  title="Diminuir meio tom (-1 semitom)"
+                  title={t('acordes.diminuirSemitom')}
                 >
                   ▼
                 </button>

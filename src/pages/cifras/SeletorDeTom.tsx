@@ -84,6 +84,7 @@ interface GradeProps {
 
 /** A grade em si, sem posicionamento — serve solta numa folha ou dentro de um popover. */
 export function GradeDeTons({ songKey, offset, onSelect, descricao, deteccao }: GradeProps) {
+  const t = useT();
   const atual = shortestTranspose(offset);
 
   return (
@@ -120,9 +121,9 @@ export function GradeDeTons({ songKey, offset, onSelect, descricao, deteccao }: 
         })}
       </div>
       <div className="flex justify-between px-0.5 pt-1 text-[9px] text-gray-500 select-none">
-        <span>abaixar</span>
-        <span className="text-[#002fa7]">● original</span>
-        <span>subir</span>
+        <span>{t('cifra.tomAbaixar')}</span>
+        <span className="text-[#002fa7]">{t('cifra.tomOriginal')}</span>
+        <span>{t('cifra.tomSubir')}</span>
       </div>
       {/* A ressalva vem DEPOIS da fita, não antes: quem abriu isto quer trocar o tom, e
           esse é o controle. O aviso informa quem for ler, sem atrasar quem só quer clicar. */}
@@ -154,6 +155,7 @@ interface SeletorProps extends GradeProps {
  * que recortaria uma fita de 420px pendurada num painel de 176px.
  */
 export function SeletorDeTom({ songKey, offset, onSelect, aberto, onAbrir, gatilho, descricao, deteccao }: SeletorProps) {
+  const t = useT();
   useEffect(() => {
     if (!aberto) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onAbrir(false); };
@@ -171,7 +173,7 @@ export function SeletorDeTom({ songKey, offset, onSelect, aberto, onAbrir, gatil
         aria-expanded={aberto}
         aria-haspopup="dialog"
         className="font-bold text-xs bg-white border border-gray-400 px-1 text-[#002fa7] min-w-[20px] text-center cursor-pointer hover:bg-[#c2d7f2] disabled:cursor-default disabled:hover:bg-white"
-        title={desabilitado ? 'Tom desconhecido' : descricao ?? 'Escolher o tom'}
+        title={desabilitado ? t('cifra.tomDesconhecido') : descricao ?? t('cifra.tomEscolher')}
       >
         {gatilho}
       </button>
@@ -182,7 +184,7 @@ export function SeletorDeTom({ songKey, offset, onSelect, aberto, onAbrir, gatil
           <div
             role="dialog"
             aria-modal="true"
-            aria-label="Escolher o tom"
+            aria-label={t('cifra.tomEscolher')}
             /* Altura limitada + rolagem interna: o painel "avançado" cresce bastante, e sem
                teto o diálogo passava do alto e do pé da tela — com a barra de título fora de
                alcance, já que ele é posicionado pelo CENTRO. A folha do telefone sempre teve
@@ -191,11 +193,11 @@ export function SeletorDeTom({ songKey, offset, onSelect, aberto, onAbrir, gatil
             className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-40 w-[420px] max-w-[94vw] max-h-[85vh] flex flex-col bg-[#ece9d8] bevel-out shadow-xl select-none"
           >
             <div className="shrink-0 winxp-gradient-blue text-white px-2 py-0.5 flex items-center justify-between font-bold text-xs">
-              <span>Tom</span>
+              <span>{t('cifra.tomDialogo')}</span>
               <button
                 onClick={() => onAbrir(false)}
                 className="bg-red-600 border border-white border-r-gray-600 border-b-gray-600 px-1.5 text-white font-bold leading-tight"
-                aria-label="Fechar"
+                aria-label={t('comum.fechar')}
               >
                 ×
               </button>

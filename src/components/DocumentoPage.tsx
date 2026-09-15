@@ -1,4 +1,5 @@
 import React from 'react';
+import { useT } from '../i18n';
 import { useNavigate } from 'react-router-dom';
 
 /**
@@ -44,6 +45,7 @@ export const DocumentoPage: React.FC<{
   lastUpdated?: string;
   children: React.ReactNode;
 }> = ({ title, intro, lastUpdated, children }) => {
+  const t = useT();
   const navigate = useNavigate();
 
   return (
@@ -55,9 +57,9 @@ export const DocumentoPage: React.FC<{
           <button
             onClick={() => navigate('/')}
             className="shrink-0 px-2 py-0.5 bg-[#ece9d8] text-black border border-white border-r-[#808080] border-bottom-[#808080] active:border-t-[#808080] active:border-l-[#808080] font-bold text-[10px] sm:text-xs hover:bg-white cursor-pointer"
-            title="Voltar à área de trabalho"
+            title={t('documentos.voltarDica')}
           >
-            ← Voltar
+            ← {t('comum.voltar')}
           </button>
         </div>
 
@@ -70,7 +72,7 @@ export const DocumentoPage: React.FC<{
 
           {lastUpdated && (
             <div className="border-t border-[#808080] pt-3 mt-1 text-[11px] sm:text-xs text-gray-500 font-mono select-none">
-              Última atualização: {lastUpdated}
+              {t('documentos.ultimaAtualizacao', { data: lastUpdated })}
             </div>
           )}
         </div>

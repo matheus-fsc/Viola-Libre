@@ -107,9 +107,7 @@ export const InstrumentOnboardingModal: React.FC<Props> = ({ onSelect, onSkip })
         <div className="relative flex min-h-0 flex-col">
           <div ref={corpoRef} className="px-4 sm:px-5 pt-4 sm:pt-5 pb-4 flex flex-col gap-4 text-xs min-h-0 overflow-y-auto retro-scrollbar">
             <p className="text-gray-700 leading-relaxed">
-              Escolha seu instrumento principal para carregarmos automaticamente a afinação
-              certa sempre que você abrir uma cifra ou o dicionário de acordes. Dá pra trocar
-              a qualquer momento depois.
+              {t('acordes.onboardingTexto')}
             </p>
 
             {/* `items-stretch` deixa os botões de uma linha com a mesma altura mesmo quando

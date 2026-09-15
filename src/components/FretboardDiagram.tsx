@@ -530,7 +530,7 @@ export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
         {voicing.hasCostlyInteriorMute && (
           <div className={`${compact ? 'hidden sm:flex' : 'flex'} text-[9px] font-bold text-[#cc3300] font-mono mt-1 bg-[#ffcccc]/70 border border-[#cc3300] rounded px-1 py-0.5 text-center shadow-sm select-none items-center justify-center gap-1`}>
             <IconWarning className="w-3 h-3 text-[#cc3300]" />
-            <span>Abafamento Interno</span>
+            <span>{t('acordes.abafamentoInternoAviso')}</span>
           </div>
         )}
         <div className={`${compact ? 'hidden sm:block' : 'block'} text-[9px] font-mono text-gray-500 text-left mt-1.5 truncate`} title={voicing.notes.join(' ')}>

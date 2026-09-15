@@ -100,7 +100,7 @@ export const InteractiveFretboard: React.FC<InteractiveFretboardProps> = ({
       {/* Header (XP look) */}
       <div className="bg-gradient-to-r from-[#5a8f29] to-[#80bd41] text-white px-2 py-1 flex justify-between items-center font-bold text-sm select-none">
         <span>{t('acordes.dicionarioInverso')}</span>
-        <span className="font-mono text-xs">Modo Interativo</span>
+        <span className="font-mono text-xs">{t('acordes.modoInterativo')}</span>
       </div>
 
       <div className="flex flex-col gap-3 overflow-x-auto pb-2 retro-scrollbar">
@@ -261,7 +261,7 @@ export const InteractiveFretboard: React.FC<InteractiveFretboardProps> = ({
 
         {/* Display Current Notes Played */}
         <div className="bg-white border-2 border-[#808080] border-r-white border-bottom-white p-2 font-mono flex flex-col justify-center">
-          <span className="text-[10px] text-gray-500 font-bold">Notas Pressionadas:</span>
+          <span className="text-[10px] text-gray-500 font-bold">{t('acordes.notasPressionadas')}</span>
           <div className="text-sm font-bold text-[#002fa7] flex gap-1.5 mt-1 overflow-x-auto">
             {activeFrets.map((fret, idx) => {
               const label = selectedInstrument.id === 'viola' ? `${5 - idx}º` : `${numStrings - idx}`;
@@ -278,11 +278,11 @@ export const InteractiveFretboard: React.FC<InteractiveFretboardProps> = ({
 
         {/* Detected Chord Matches */}
         <div className="bg-[#d4d0c8] p-2 border border-[#808080] font-mono flex flex-col">
-          <span className="text-[10px] text-gray-600 font-bold block mb-1">Acordes Identificados:</span>
+          <span className="text-[10px] text-gray-600 font-bold block mb-1">{t('acordes.acordesIdentificados')}</span>
           
           <div className="flex-1 h-[55px] overflow-y-auto bg-white border border-[#808080] p-1 flex flex-col gap-1 retro-scrollbar">
             {detectedChords.length === 0 ? (
-              <span className="text-[10px] text-gray-600 italic text-center block mt-3">Nenhum acorde mapeado</span>
+              <span className="text-[10px] text-gray-600 italic text-center block mt-3">{t('acordes.nenhumAcordeMapeado')}</span>
             ) : (
               detectedChords.map((match, idx) => (
                 <div 

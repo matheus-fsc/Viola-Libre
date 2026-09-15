@@ -57,7 +57,7 @@ export const TimingEditorPage: React.FC = () => {
       </div>
 
       {loading && (
-        <p className="text-xs text-gray-500 text-center py-10">Carregando cifra...</p>
+        <p className="text-xs text-gray-500 text-center py-10">{t('cifra.carregando')}</p>
       )}
 
       {!loading && !cifra && (

@@ -227,14 +227,14 @@ export const SongList: React.FC = () => {
                   onClick={loadMore}
                   className="bevel-out bg-[var(--color-winxp-panel)] px-6 py-2 font-bold text-sm hover:bg-[#e0dfd6] active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white text-black"
                 >
-                  Exibir Mais
+                  {t('lista.exibirMais')}
                 </button>
               </div>
             )}
 
             {songs.length === 0 && (
               <div className="text-center text-sm text-gray-500 py-8">
-                Nenhuma cifra encontrada para este artista.
+                {t('lista.nenhumaCifraDoArtista')}
               </div>
             )}
 

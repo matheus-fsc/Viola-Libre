@@ -10,6 +10,7 @@
  * fica sempre na convenção brasileira, porque ela pertence à fonte e não a quem lê.
  */
 import { NOTATION_STANDARDS, type NotationStandard } from '../engine/notation';
+import { useT } from '../i18n';
 import { useNotationStore } from '../stores/useNotationStore';
 
 /** Exemplo vivo do que muda, para a escolha não depender de saber a teoria de cor. */
@@ -25,12 +26,13 @@ interface Props {
 }
 
 export function SeletorDeNotacao({ embutido = false, className = '' }: Props) {
+  const t = useT();
   const standard = useNotationStore(s => s.standard);
   const setStandard = useNotationStore(s => s.setStandard);
 
   const grade = (
     <div className="p-1.5">
-      <div className="flex items-stretch gap-px" role="group" aria-label="Padrão de notação">
+      <div className="flex items-stretch gap-px" role="group" aria-label={t('notacao.grupo')}>
         {NOTATION_STANDARDS.map(({ id, label }) => {
           const selecionado = id === standard;
           return (
@@ -56,7 +58,7 @@ export function SeletorDeNotacao({ embutido = false, className = '' }: Props) {
         })}
       </div>
       <p className="px-0.5 pt-1 text-[9px] text-gray-500 select-none leading-tight">
-        Muda só como o acorde é escrito. As notas continuam as mesmas.
+        {t('notacao.nota')}
       </p>
     </div>
   );
@@ -66,7 +68,7 @@ export function SeletorDeNotacao({ embutido = false, className = '' }: Props) {
   return (
     <div className={`bg-[#ece9d8] bevel-out select-none ${className}`}>
       <div className="winxp-gradient-blue text-white px-2 py-0.5 font-bold text-xs">
-        Notação
+        {t('notacao.titulo')}
       </div>
       {grade}
     </div>

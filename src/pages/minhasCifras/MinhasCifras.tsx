@@ -289,7 +289,7 @@ function CifraViewer({ cifra, onEdit, onBack }: {
         </button>
 
         <div className="flex items-center gap-2">
-          <label htmlFor="bpm-minhas-cifras" className="text-[10px] font-mono font-bold text-gray-700 shrink-0">BPM:</label>
+          <label htmlFor="bpm-minhas-cifras" className="text-[10px] font-mono font-bold text-gray-700 shrink-0">{t('cifra.rotuloBpm')}</label>
           <input
             id="bpm-minhas-cifras"
             type="range"

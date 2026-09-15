@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useT } from '../i18n';
 
 interface Note {
   name: string;
@@ -69,6 +70,7 @@ const playNoteSound = (frequency: number) => {
 };
 
 export const NaturalPiano: React.FC = () => {
+  const t = useT();
   const [activeFreq, setActiveFreq] = useState<number | null>(null);
 
   const handlePlay = (freq: number) => {
@@ -82,7 +84,7 @@ export const NaturalPiano: React.FC = () => {
   return (
     <div className="bg-[#d4d0c8] p-1 border border-[#808080] rounded shadow-inner flex flex-col gap-1.5 select-none font-mono">
       <div className="text-[10px] font-bold text-gray-700 flex justify-between items-center">
-        <span>Teclado: Notas Naturais (Dó Ré Mi Fá Sol Lá Si)</span>
+        <span>{t('acordes.pianoNaturais')}</span>
         <span className="bg-[#002fa7] text-white px-1.5 py-0.5 text-[9px] rounded font-bold">C D E F G A B</span>
       </div>
       
@@ -110,6 +112,7 @@ export const NaturalPiano: React.FC = () => {
 };
 
 export const ChromaticPiano: React.FC = () => {
+  const t = useT();
   const [activeFreq, setActiveFreq] = useState<number | null>(null);
 
   const handlePlay = (freq: number) => {
@@ -123,8 +126,8 @@ export const ChromaticPiano: React.FC = () => {
   return (
     <div className="bg-[#d4d0c8] p-1 border border-[#808080] rounded shadow-inner flex flex-col gap-1.5 select-none font-mono">
       <div className="text-[10px] font-bold text-gray-700 flex justify-between items-center">
-        <span>Teclado: Escala Cromática Completa (12 notas)</span>
-        <span className="bg-[#cc3300] text-white px-1.5 py-0.5 text-[9px] rounded font-bold">12 Notas</span>
+        <span>{t('acordes.pianoCromatico')}</span>
+        <span className="bg-[#cc3300] text-white px-1.5 py-0.5 text-[9px] rounded font-bold">{t('acordes.pianoSeloCromatico')}</span>
       </div>
       
       <div className="bg-[#808080] p-1 border border-white rounded shadow-inner flex justify-center">

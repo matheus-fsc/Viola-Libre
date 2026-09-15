@@ -51,6 +51,7 @@ interface Props {
 }
 
 export function MobileCifraBar({ destinos, aberto, onAbrir, rolando, transporte }: Props) {
+  const t = useT();
   const folha = destinos.find((d): d is DestinoFolha => d.tipo === 'folha' && d.id === aberto);
 
   // Esc fecha — teclado físico existe em tablet e é o que o usuário tenta primeiro.
@@ -79,7 +80,7 @@ export function MobileCifraBar({ destinos, aberto, onAbrir, rolando, transporte 
             <button
               onClick={() => onAbrir(null)}
               className="shrink-0 py-2 flex justify-center cursor-pointer"
-              aria-label="Fechar"
+              aria-label={t('comum.fechar')}
             >
               <span className="block w-10 h-1 bg-[#808080] rounded-full" />
             </button>

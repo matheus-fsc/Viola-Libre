@@ -277,7 +277,7 @@ export const ChordFinder: React.FC<ChordFinderProps> = ({
       
       {/* Box Header (XP look) */}
       <div className="bg-gradient-to-r from-[#0058e6] to-[#3a8bfb] text-white px-2 py-1 flex justify-between items-center font-bold text-sm select-none">
-        <span>Selecionar Acorde</span>
+        <span>{t('acordes.selecionarAcorde')}</span>
         <span className="font-mono text-xs">{selectedRootName}{selectedSuffix}{selectedBassName ? `/${selectedBassName}` : ''}</span>
       </div>
 
@@ -445,7 +445,7 @@ export const ChordFinder: React.FC<ChordFinderProps> = ({
             }`}
           >
             <input type="checkbox" checked={hasb5} disabled={quality !== 'M' && quality !== 'm'} readOnly aria-hidden="true" tabIndex={-1} className="pointer-events-none scale-90" />
-            <span>5ª Bemol</span>
+            <span>{t('acordes.quintaBemol')}</span>
           </button>
         </div>
       </div>
@@ -525,7 +525,7 @@ export const ChordFinder: React.FC<ChordFinderProps> = ({
           className="px-2 py-0.5 bg-[#ece9d8] border border-white border-r-[#808080] border-bottom-[#808080] active:border-t-[#808080] active:border-l-[#808080] hover:bg-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed font-bold"
           title={t('acordes.limparSelecao')}
         >
-          Limpar
+          {t('acordes.limpar')}
         </button>
       </div>
 

@@ -136,7 +136,8 @@ export function FavoritosDashboard() {
   const [pendingImport, setPendingImport] = useState<string | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
-  const [shareError, setShareError] = useState<string | null>(null);
+  // Chave + variáveis, não a frase: ver a nota no tipo de erro dos serviços.
+  const [shareError, setShareError] = useState<number | null>(null);
   const [copiado, setCopiado] = useState(false);
   /** Gavetas marcadas para ir no link. */
   const [shareCats, setShareCats] = useState<ReadonlySet<string>>(new Set());
@@ -431,10 +432,7 @@ export function FavoritosDashboard() {
       if (cancelado) return;
       if (token.length > MAX_LINK_CHARS) {
         setShareUrl(null);
-        setShareError(
-          `${paraCompartilhar.length} músicas não cabem num link. Use "Exportar → Lista para ` +
-          `compartilhar" e mande o arquivo, ou compartilhe uma categoria de cada vez.`
-        );
+        setShareError(paraCompartilhar.length);
         return;
       }
       setShareUrl(buildShareUrl(token, window.location.origin));
@@ -549,7 +547,7 @@ export function FavoritosDashboard() {
             onClick={() => { setOfflineOpen(v => !v); setShareOpen(false); setExportOpen(false); }}
             icon={<HardDrive size={11} />}
           >
-            No aparelho
+            {t('favoritos.noAparelho')}
           </ToolbarButton>
           <ToolbarButton onClick={abrirCompartilhar} icon={<Share2 size={11} />}>{t('favoritos.compartilhar')}</ToolbarButton>
           <ToolbarButton onClick={() => { setExportOpen(v => !v); setShareOpen(false); setOfflineOpen(false); }} icon={<Download size={11} />}>{t('favoritos.exportar')}</ToolbarButton>
@@ -681,10 +679,7 @@ export function FavoritosDashboard() {
           </fieldset>
 
           <p className="text-[10px] text-gray-700 leading-relaxed">
-            <strong>{paraCompartilhar.length} cifra{paraCompartilhar.length === 1 ? '' : 's'}</strong> no
-            link, com o tom que você escolheu para cada uma e só com as etiquetas das gavetas marcadas
-            acima. Quem abrir vê a lista e decide se quer somar à estante dele — nada é importado
-            sozinho, e o link não leva a sua identidade.
+            {t('favoritos.linkResumo', { n: paraCompartilhar.length })}
           </p>
 
           {paraCompartilhar.length === 0 ? (
@@ -692,9 +687,9 @@ export function FavoritosDashboard() {
               {t('favoritos.nadaMarcado')}
             </p>
           ) : shareError ? (
-            <p className="text-[11px] text-[#992200] leading-relaxed">{shareError}</p>
+            <p className="text-[11px] text-[#992200] leading-relaxed">{t('favoritos.linkNaoCabe', { n: shareError })}</p>
           ) : !shareUrl ? (
-            <p className="text-[11px] text-gray-500 italic">Montando o link…</p>
+            <p className="text-[11px] text-gray-500 italic">{t('favoritos.montandoLink')}</p>
           ) : (
             <>
               <div className="flex flex-col sm:flex-row gap-2">
@@ -971,7 +966,7 @@ export function FavoritosDashboard() {
                 // onde guardar a resposta, e um critério que não faz nada é pior que ausente.
                 .filter(mode => mode !== 'manual' || categoriaAtiva)
                 .map(mode => (
-                  <option key={mode} value={mode}>{SORT_LABEL[mode]}</option>
+                  <option key={mode} value={mode}>{t(SORT_LABEL[mode])}</option>
                 ))}
             </select>
           </div>
@@ -980,7 +975,7 @@ export function FavoritosDashboard() {
             <p className="text-[10px] text-gray-600 bg-[#ece9d8] border border-[#d4d0c8] px-2 py-1.5 leading-relaxed">
               {podeReordenar ? (
                 <>
-                  {t('favoritos.reordenarDica')} A ordem vale só em “{categoriaAtiva?.name}”.
+                  {t('favoritos.reordenarDica')} {t('favoritos.ordemValeEm', { categoria: categoriaAtiva?.name ?? '' })}
                 </>
               ) : (
                 <>{t('favoritos.reordenarBusca')}</>
@@ -1143,7 +1138,7 @@ function ListaRecebidaPainel({ recebida, categorias, onAceitar, onDescartar }: {
       <div className="bg-[#fff8e1] border-2 border-[#ff7f27] p-3 flex flex-wrap items-center justify-between gap-2">
         <span className="text-[11px] text-[#992200]">{t(recebida.error)}</span>
         <button onClick={onDescartar} className="px-3 py-1.5 text-xs text-gray-600 hover:text-black cursor-pointer">
-          Fechar
+          {t('favoritos.fechar')}
         </button>
       </div>
     );

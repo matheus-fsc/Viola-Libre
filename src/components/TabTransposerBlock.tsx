@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { useT } from '../i18n';
 import {
   parseTabText,
   splitTabSystems,
@@ -23,6 +24,7 @@ export const TabTransposerBlock: React.FC<Props> = ({
   extraSemitones = 0,
   posIdx,
 }) => {
+  const t = useT();
   const targetMidi      = useMemo(() => getTuningMidiHighToLow(targetStrings), [targetStrings]);
   const targetLabelsHtL = useMemo(() => getTuningLabelsHighToLow(targetStrings), [targetStrings]);
 
@@ -62,7 +64,7 @@ export const TabTransposerBlock: React.FC<Props> = ({
   return (
     <div className="my-1">
       <div className="flex items-center gap-2 py-0.5 px-1 bg-[#d4d0c8] border-b border-gray-400">
-        <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Tab</span>
+        <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">{t('acordes.tabRotulo')}</span>
         {recognized && !isSameInstrument ? (
           <>
             <span className="text-[9px] text-gray-500 italic truncate max-w-[90px]" title={sourceName}>{sourceName}</span>
@@ -73,7 +75,7 @@ export const TabTransposerBlock: React.FC<Props> = ({
         ) : recognized ? (
           <span className="text-[9px] text-gray-600 italic">{sourceName}</span>
         ) : (
-          <span className="text-[9px] text-gray-600 italic">não reconhecida</span>
+          <span className="text-[9px] text-gray-600 italic">{t('acordes.tabNaoReconhecida')}</span>
         )}
       </div>
       {renderedSystems.map((txt, i) => (

@@ -95,6 +95,11 @@ describe('dicionários', () => {
       'minhasCifras.conteudoExemplo',
       'minhasCifras.campoTituloExemplo',
       'favoritos.categoriasCurto',
+      'cifra.tomOriginal',
+      'acordes.tabRotulo',
+      // Nome próprio de afinação da viola caipira: «Rio Abaixo» não tem tradução,
+      // do mesmo jeito que «Cebolão» não vira «Big Onion».
+      'teoria.licao4RioAbaixo',
     ]);
     for (const chave of Object.keys(PT)) {
       if (iguaisDePropósito.has(chave)) continue;

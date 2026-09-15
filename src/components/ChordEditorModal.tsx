@@ -142,15 +142,15 @@ export const ChordEditorModal: React.FC<ChordEditorModalProps> = ({
       >
         {/* Title bar */}
         <div className="bg-gradient-to-r from-[#0a246a] to-[#3a6ea5] text-white px-3 py-1.5 flex justify-between items-center select-none">
-          <span id="titulo-editor-acorde" className="font-bold text-sm">Modificar acorde: <span className="font-mono">{chordName}</span></span>
-          <button onClick={onClose} className="w-5 h-5 flex items-center justify-center bg-[#ce4a3a] border border-white text-white font-bold text-xs hover:bg-[#e25a48] leading-none" title="Fechar">×</button>
+          <span id="titulo-editor-acorde" className="font-bold text-sm">{t('acordes.modificarAcorde')} <span className="font-mono">{chordName}</span></span>
+          <button onClick={onClose} className="w-5 h-5 flex items-center justify-center bg-[#ce4a3a] border border-white text-white font-bold text-xs hover:bg-[#e25a48] leading-none" title={t('comum.fechar')}>×</button>
         </div>
 
         <div className="p-3 flex flex-col gap-3">
           <VisualizationOnboardingModal />
           {/* Legend */}
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] font-mono text-gray-700 items-center">
-            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-[#0058e6] border border-[#002fa7] inline-block" /> nota tocada</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-[#0058e6] border border-[#002fa7] inline-block" /> {t('acordes.notaTocada')}</span>
             <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full border-2 border-[#228b22] bg-[#228b22]/15 inline-block" /> {t('acordes.legendaNotaDoAcorde')}</span>
             <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full border-2 border-[#c06000] bg-[#c06000]/15 inline-block" /> {t('acordes.legendaTonica')}</span>
           </div>
@@ -275,19 +275,19 @@ export const ChordEditorModal: React.FC<ChordEditorModalProps> = ({
           {/* Actions */}
           <div className="flex flex-wrap gap-2 justify-between items-center border-t border-[#d4d0c8] pt-2">
             <div className="flex gap-2">
-              <button onClick={handlePlay} className="px-3 py-1 text-xs font-bold font-mono bg-[#ece9d8] border border-white border-r-[#808080] border-b-[#808080] hover:bg-white">▶ Tocar</button>
-              <button onClick={() => setFrets(normalizedInitial)} className="px-3 py-1 text-xs font-bold font-mono bg-[#ece9d8] border border-white border-r-[#808080] border-b-[#808080] hover:bg-white">↺ Resetar</button>
+              <button onClick={handlePlay} className="px-3 py-1 text-xs font-bold font-mono bg-[#ece9d8] border border-white border-r-[#808080] border-b-[#808080] hover:bg-white">{t('acordes.tocar')}</button>
+              <button onClick={() => setFrets(normalizedInitial)} className="px-3 py-1 text-xs font-bold font-mono bg-[#ece9d8] border border-white border-r-[#808080] border-b-[#808080] hover:bg-white">{t('acordes.resetar')}</button>
               <button onClick={() => setStringOrder(isInverted ? 'standard' : 'inverted')} className="px-3 py-1 text-xs font-bold font-mono bg-[#ece9d8] border border-white border-r-[#808080] border-b-[#808080] hover:bg-white" title={t('acordes.inverterVisualizacao')}>{t('acordes.inverter')}</button>
             </div>
             <div className="flex gap-2 items-center">
               {editorSession && rankState === 'idle' && (
                 <span className="text-[9px] text-gray-500 font-mono">{t('acordes.sugestaoDeEditor')}</span>
               )}
-              {rankState === 'sending' && <span className="text-[9px] text-[#0058e6] font-mono">Enviando ranking...</span>}
-              {rankState === 'sent' && <span className="text-[9px] text-[#228b22] font-mono">✔ Ranking enviado</span>}
+              {rankState === 'sending' && <span className="text-[9px] text-[#0058e6] font-mono">{t('acordes.enviandoRanking')}</span>}
+              {rankState === 'sent' && <span className="text-[9px] text-[#228b22] font-mono">{t('acordes.rankingEnviado')}</span>}
               {rankState === 'error' && <span className="text-[9px] text-[#cc3300] font-mono">{t('acordes.falhaRanking')}</span>}
-              <button onClick={onClose} className="px-3 py-1 text-xs font-bold font-mono bg-[#ece9d8] border border-white border-r-[#808080] border-b-[#808080] hover:bg-white">Cancelar</button>
-              <button onClick={handleApply} disabled={rankState === 'sending'} className="px-4 py-1 text-xs font-bold font-mono bg-[#316ac5] text-white border border-[#1a4a9c] hover:bg-[#3f7ad6] disabled:opacity-50">Aplicar</button>
+              <button onClick={onClose} className="px-3 py-1 text-xs font-bold font-mono bg-[#ece9d8] border border-white border-r-[#808080] border-b-[#808080] hover:bg-white">{t('comum.cancelar')}</button>
+              <button onClick={handleApply} disabled={rankState === 'sending'} className="px-4 py-1 text-xs font-bold font-mono bg-[#316ac5] text-white border border-[#1a4a9c] hover:bg-[#3f7ad6] disabled:opacity-50">{t('acordes.aplicar')}</button>
             </div>
           </div>
         </div>
