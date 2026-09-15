@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-export type TabId = 'desktop' | 'cifras' | 'minhascifras' | 'chords' | 'train' | 'ear' | 'favorites' | 'termos' | 'privacidade' | 'agradecimentos';
+export type TabId = 'desktop' | 'cifras' | 'minhascifras' | 'chords' | 'train' | 'ear' | 'favorites' | 'preferencias' | 'termos' | 'privacidade' | 'agradecimentos';
 
 /** Rota "inicial" de cada aba — o ponto de partida quando não há nada memorizado. */
 export const TAB_ROOT_PATH: Record<TabId, string> = {
@@ -12,32 +12,24 @@ export const TAB_ROOT_PATH: Record<TabId, string> = {
   train: '/treinos',
   ear: '/ouvido',
   favorites: '/favoritos',
+  preferencias: '/preferencias',
   termos: '/termos',
   privacidade: '/privacidade',
   agradecimentos: '/agradecimentos',
 };
 
-/**
- * Nome de cada seção por extenso. A app bar do celular mostra só a seção atual, então aqui
- * não cabe a abreviação que a faixa de abas usa por falta de largura ("Minhas", "Ouvido").
+/*
+ * O nome de cada seção por extenso saiu daqui e virou `abas.*` no dicionário
+ * (`src/i18n/locales/*`), junto da abreviação `abasCurtas.*` que a faixa de abas usa
+ * por falta de largura. Este módulo continua respondendo só pelas ROTAS, que não se
+ * traduzem: a mesma tela tem um endereço só nos dois idiomas.
  */
-export const TAB_LABEL: Record<TabId, string> = {
-  desktop: 'Viola Libre',
-  cifras: 'Explore Cifras',
-  minhascifras: 'Minhas Cifras',
-  chords: 'Dicionário de Acordes',
-  train: 'Treinos e Teoria',
-  ear: 'Tirando de Ouvido',
-  favorites: 'Meus Favoritos',
-  termos: 'Termos de Uso',
-  privacidade: 'Política de Privacidade',
-  agradecimentos: 'Agradecimentos',
-};
 
 export function tabFromPathname(pathname: string): TabId {
   // '/' é a área de trabalho — caso EXPLÍCITO, nunca o fallback. Se o desktop virasse o
   // fallback, toda rota inexistente cairia nele em vez de no explorador de cifras.
   if (pathname === '/') return 'desktop';
+  if (pathname === '/preferencias') return 'preferencias';
   if (pathname === '/termos') return 'termos';
   if (pathname === '/privacidade') return 'privacidade';
   if (pathname === '/agradecimentos') return 'agradecimentos';

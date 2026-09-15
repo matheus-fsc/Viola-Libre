@@ -35,9 +35,15 @@ export interface SeoData {
   noindex?: boolean;
 }
 
-/** Título completo, com o sufixo do site — exceto quando já é o nome do site. */
+/**
+ * Título completo, com o sufixo do site, exceto quando já é o nome do site.
+ *
+ * Separador `|` e não travessão: o travessão saiu do texto de interface do projeto
+ * (ver `src/i18n/locales/pt-BR.ts`), e o título da aba é interface. A barra também é
+ * o separador que buscador e leitor de tela tratam melhor numa linha só.
+ */
 function fullTitle(title: string): string {
-  return title === SITE_NAME ? title : `${title} — ${SITE_NAME}`;
+  return title === SITE_NAME ? title : `${title} | ${SITE_NAME}`;
 }
 
 function absoluteUrl(path: string): string {

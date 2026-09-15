@@ -32,13 +32,14 @@ import {
 } from './services/authApi';
 import { getPreferredInstrumentId, setPreferredInstrumentId } from './utils/instrumentPreference';
 import { preloadSoundfont } from './engine/AudioEngine';
-import { ArrowLeft } from 'lucide-react';
-import { useTabNavigation, TAB_LABEL, tabFromPathname } from './hooks/useTabNavigation';
+import { ArrowLeft, Settings } from 'lucide-react';
+import { useTabNavigation, tabFromPathname } from './hooks/useTabNavigation';
 import { minimizarJanela, lerJanelaMinimizada, limparJanelaMinimizada } from './services/janelaMinimizada';
 import { useSeo } from './hooks/useSeo';
 import { useDialog } from './hooks/useDialog';
 import { useJsonLd, websiteJsonLd } from './hooks/useJsonLd';
-import { TAB_SEO } from './utils/seoRoutes';
+import { tabSeo } from './utils/seoRoutes';
+import { useT } from './i18n';
 import { useImmersiveStore } from './stores/useImmersiveStore';
 import { useCifraFavorites, useFavoritesBootSync } from './hooks/useCifraFavorites';
 import { FavoritosDashboard } from './pages/favoritos/FavoritosDashboard';
@@ -48,6 +49,7 @@ import { MinhasCifras } from './pages/minhasCifras/MinhasCifras';
 import { TermosDeUso } from './pages/termos/TermosDeUso';
 import { PoliticaPrivacidade } from './pages/documentos/PoliticaPrivacidade';
 import { Agradecimentos } from './pages/documentos/Agradecimentos';
+import { Preferencias } from './pages/preferencias/Preferencias';
 
 // Onde mora o fonte e o texto da licença. O "Sobre" aponta pra cá; os Termos de Uso têm as
 // suas próprias cópias porque são página estática e não devem depender deste módulo.
@@ -80,6 +82,10 @@ interface FavoriteVoicing {
 }
 
 function App() {
+  // Todo texto de interface sai daqui. Trocar de idioma muda a identidade do `t`, então
+  // o componente inteiro re-renderiza e nada fica no idioma anterior.
+  const t = useT();
+
   // Navigation & View States
   const [selectedInst, setSelectedInst] = useState<Instrument>(() => {
     const savedId = getPreferredInstrumentId();
@@ -257,7 +263,7 @@ function App() {
 
   // Qual seção está lá dentro, para o botão da barra de tarefas dizer o que vai restaurar.
   const secaoMinimizada = rotaMinimizada
-    ? TAB_LABEL[tabFromPathname(rotaMinimizada.split('?')[0])]
+    ? t(`abas.${tabFromPathname(rotaMinimizada.split('?')[0])}`)
     : null;
 
   // A seta da app bar do celular é a ÚNICA afordância de voltar naquela largura — a barra
@@ -269,12 +275,12 @@ function App() {
   // desfazer — o menu é o destino honesto. Lido no corpo do componente de propósito: ele
   // re-renderiza a cada navegação, então o valor acompanha.
   const temPassoAnterior = (window.history.state?.idx ?? 0) > 0;
-  const rotuloVoltar = temPassoAnterior ? 'Voltar' : 'Voltar ao menu';
+  const rotuloVoltar = temPassoAnterior ? t('comum.voltar') : t('comum.voltarAoMenu');
   const isTimingRoute = /\/cifras\/[^/]+\/[^/]+\/timing$/.test(pathname);
 
   // Metadados de busca das seções fixas. A subárvore de cifras responde pelos seus
   // (o título depende da música), então aqui ela recebe `null` para não sobrescrever.
-  useSeo(activeTab === 'cifras' ? null : TAB_SEO[activeTab]);
+  useSeo(activeTab === 'cifras' ? null : tabSeo(t, activeTab));
   // A caixa de busca do Google e a identidade do site pertencem à home, e só a ela:
   // repetir em toda rota não acrescenta nada e polui o head.
   useJsonLd(activeTab === 'desktop' ? websiteJsonLd : null);
@@ -295,7 +301,11 @@ function App() {
   // precisam ser estáveis (useCallback): recriadas a cada render, refariam o efeito do
   // diálogo — e com ele o foco inicial — sem parar.
   const fecharSobre = React.useCallback(() => setShowAboutModal(false), []);
-  const fecharWip = React.useCallback(() => setWipPopup(null), []);
+  // `setWipPopup` no array, e `[]` no de cima: com o componente maior, o React Compiler
+  // deixou de inferir sozinho que este setter é estável e passou a reprovar a lista vazia
+  // ("Existing memoization could not be preserved"). Setter de useState nunca muda de
+  // identidade, então declarar a dependência não altera nada em runtime.
+  const fecharWip = React.useCallback(() => setWipPopup(null), [setWipPopup]);
   const { ref: sobreRef, props: sobreProps } = useDialog({ onClose: fecharSobre, titleId: 'titulo-sobre', active: showAboutModal });
   const { ref: wipRef, props: wipProps } = useDialog({ onClose: fecharWip, titleId: 'titulo-wip', active: Boolean(wipPopup) });
 
@@ -657,15 +667,15 @@ function App() {
           o renderiza é a própria página — dois h1 competindo seria pior que nenhum. */}
       {activeTab !== 'cifras' && (
         <>
-          <h1 className="sr-only">{TAB_SEO[activeTab].title}</h1>
-          <p className="sr-only">{TAB_SEO[activeTab].description}</p>
+          <h1 className="sr-only">{t(`seo.${activeTab}.title`)}</h1>
+          <p className="sr-only">{t(`seo.${activeTab}.description`)}</p>
         </>
       )}
 
       {/* Primeiro item do Tab em qualquer página: pula a faixa de abas e a barra de
           tarefas e vai direto ao conteúdo. Sem ele, chegar na cifra por teclado custa
           percorrer toda a navegação — em toda página, toda vez. */}
-      <a href="#conteudo" className="skip-link">Pular para o conteúdo</a>
+      <a href="#conteudo" className="skip-link">{t('app.pularConteudo')}</a>
       {/* Com uma aba aberta, a janela flutua sobre a própria área de trabalho desfocada.
           Fora na rota de timing, que ocupa a viewport inteira e não deixa nada à mostra. */}
       {activeTab !== 'desktop' && !isTimingRoute && <DesktopBackdrop />}
@@ -722,21 +732,21 @@ function App() {
               <ArrowLeft size={18} strokeWidth={2.5} />
             </button>
             <span className="flex-1 min-w-0 truncate font-bold text-sm tracking-wide font-mono">
-              {TAB_LABEL[activeTab]}
+              {t(`abas.${activeTab}`)}
             </span>
             <button
               onClick={() => goToTab('favorites')}
               className={`w-8 h-8 shrink-0 rounded flex items-center justify-center focus:outline-none cursor-pointer ${activeTab === 'favorites' ? 'bg-[#ff7f27]' : 'hover:bg-white/20 active:bg-white/30'}`}
-              aria-label="Abrir Favoritos"
-              title="Abrir Favoritos"
+              aria-label={t('app.abrirFavoritos')}
+              title={t('app.abrirFavoritos')}
             >
               <StarIcon className="w-4 h-4" fill={activeTab === 'favorites' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" />
             </button>
             <button
               onClick={() => setShowAboutModal(true)}
               className="w-8 h-8 shrink-0 rounded flex items-center justify-center hover:bg-white/20 active:bg-white/30 focus:outline-none cursor-pointer"
-              aria-label="Sobre o Viola Libre"
-              title="Sobre"
+              aria-label={t('app.sobreViolaLibre')}
+              title={t('app.sobre')}
             >
               <IconInfo className="w-4 h-4" />
             </button>
@@ -746,7 +756,7 @@ function App() {
           <div className="hidden md:flex winxp-gradient-blue text-white px-3 py-1.5 justify-between items-center md:rounded-t-md border-b-2 border-[#002fa7] select-none">
             <div className="flex items-center gap-2 min-w-0">
               <span className="font-bold text-xs sm:text-sm tracking-wide font-mono truncate">
-                Viola Libre v1.1
+                {t('app.tituloJanela')}
               </span>
             </div>
             
@@ -757,8 +767,8 @@ function App() {
               <button
                 onClick={() => setShowAboutModal(true)}
                 className="w-[21px] h-[21px] rounded bg-[#0058e6] border border-white flex items-center justify-center focus:outline-none cursor-pointer hover:bg-[#3a8bfb]"
-                aria-label="Sobre o Viola Libre"
-                title="Sobre"
+                aria-label={t('app.sobreViolaLibre')}
+                title={t('app.sobre')}
               >
                 <IconInfo className="w-3 h-3" />
               </button>
@@ -767,15 +777,15 @@ function App() {
               <button
                 onClick={minimizarParaDesktop}
                 className="w-[21px] h-[21px] rounded bg-[#0058e6] border border-white flex items-center justify-center font-bold text-xs hover:bg-[#3a8bfb] focus:outline-none cursor-pointer"
-                aria-label={`Minimizar ${TAB_LABEL[activeTab]} para a área de trabalho`}
-                title="Minimizar (fica na barra de tarefas)"
+                aria-label={t('app.minimizarAria', { secao: t(`abas.${activeTab}`) })}
+                title={t('app.minimizarDica')}
               >
               <span aria-hidden="true">_</span>
               </button>
               <button 
                 onClick={() => goToTab('favorites')}
                 className={`w-[21px] h-[21px] rounded border flex items-center justify-center font-bold text-xs focus:outline-none cursor-pointer ${activeTab === 'favorites' ? 'bg-[#ff7f27] border-white text-white' : 'bg-[#0058e6] border-white hover:bg-[#3a8bfb]'}`}
-                title="Abrir Favoritos"
+                title={t('app.abrirFavoritos')}
               >
                 <StarIcon className="w-3.5 h-3.5" fill={activeTab === 'favorites' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" />
               </button>
@@ -784,8 +794,8 @@ function App() {
               <button
                 onClick={fecharJanela}
                 className="w-[21px] h-[21px] rounded bg-[#cc3300] border border-white flex items-center justify-center font-bold text-xs hover:bg-red-500 focus:outline-none cursor-pointer"
-                aria-label="Fechar e voltar ao início"
-                title="Fechar (voltar ao início)"
+                aria-label={t('app.fecharAria')}
+                title={t('app.fecharDica')}
               >
                 <span aria-hidden="true">✕</span>
               </button>
@@ -799,7 +809,7 @@ function App() {
               Sem isso o dedo "puxa" a página junto na diagonal e a barra parece solta.
               overscroll-x-contain: evita o overscroll encadear em voltar-página/bounce. */}
           <nav
-            aria-label="Seções do site"
+            aria-label={t('app.navSecoes')}
             className="flex pl-2 gap-1 bg-[#ece9d8] border-b border-[#d4d0c8] select-none pt-2 z-10 overflow-x-auto overflow-y-hidden touch-pan-x overscroll-x-contain no-scrollbar whitespace-nowrap"
           >
             <button
@@ -810,7 +820,7 @@ function App() {
                   : 'bg-[#d4d0c8] border-[#ece9d8] border-r-[#808080] border-bottom-[#808080] text-gray-700 hover:bg-white/50'
               }`}
             >
-              <span>Explore Cifras</span>
+              <span>{t('abas.cifras')}</span>
             </button>
             <button
               onClick={() => goToTab('favorites')}
@@ -822,11 +832,11 @@ function App() {
             >
               <span className="hidden sm:inline-flex items-center gap-1">
                 <StarIcon className="w-3.5 h-3.5 text-[#ff7f27]" fill={activeTab === 'favorites' ? '#ff7f27' : 'none'} stroke="currentColor" strokeWidth="1.5" />
-                <span>Meus Favoritos ({cifraFavorites.entries.length})</span>
+                <span>{t('abas.favorites')} ({cifraFavorites.entries.length})</span>
               </span>
               <span className="inline-flex sm:hidden items-center gap-1">
                 <StarIcon className="w-3 h-3 text-[#ff7f27]" fill={activeTab === 'favorites' ? '#ff7f27' : 'none'} stroke="currentColor" strokeWidth="1.5" />
-                <span>Favoritos ({cifraFavorites.entries.length})</span>
+                <span>{t('abasCurtas.favorites')} ({cifraFavorites.entries.length})</span>
               </span>
             </button>
             <button
@@ -837,8 +847,8 @@ function App() {
                   : 'bg-[#d4d0c8] border-[#ece9d8] border-r-[#808080] border-bottom-[#808080] text-gray-700 hover:bg-white/50'
               }`}
             >
-              <span className="hidden sm:inline">Minhas Cifras</span>
-              <span className="inline sm:hidden">Minhas</span>
+              <span className="hidden sm:inline">{t('abas.minhascifras')}</span>
+              <span className="inline sm:hidden">{t('abasCurtas.minhascifras')}</span>
             </button>
             <button
               onClick={() => goToTab('chords')}
@@ -848,7 +858,7 @@ function App() {
                   : 'bg-[#d4d0c8] border-[#ece9d8] border-r-[#808080] border-bottom-[#808080] text-gray-700 hover:bg-white/50'
               }`}
             >
-              <span>Dicionário de Acordes</span>
+              <span>{t('abas.chords')}</span>
             </button>
             <button 
               onClick={() => goToTab('train')}
@@ -858,8 +868,8 @@ function App() {
                   : 'bg-[#d4d0c8] border-[#ece9d8] border-r-[#808080] border-bottom-[#808080] text-gray-700 hover:bg-white/50'
               }`}
             >
-              <span className="hidden sm:inline">Treinos e Teoria</span>
-              <span className="inline sm:hidden">Treinos</span>
+              <span className="hidden sm:inline">{t('abas.train')}</span>
+              <span className="inline sm:hidden">{t('abasCurtas.train')}</span>
             </button>
             <button 
               onClick={() => goToTab('ear')}
@@ -869,8 +879,8 @@ function App() {
                   : 'bg-[#d4d0c8] border-[#ece9d8] border-r-[#808080] border-bottom-[#808080] text-gray-700 hover:bg-white/50'
               }`}
             >
-              <span className="hidden sm:inline">Tirando de Ouvido</span>
-              <span className="inline sm:hidden">Ouvido</span>
+              <span className="hidden sm:inline">{t('abas.ear')}</span>
+              <span className="inline sm:hidden">{t('abasCurtas.ear')}</span>
             </button>
           </nav>
 
@@ -926,46 +936,46 @@ function App() {
                   {/* Advanced Filters Panel */}
                   <div className="bg-[#ece9d8] text-black border-2 border-white border-r-[#808080] border-bottom-[#808080] p-4 flex flex-col gap-3 shadow-md">
                     <div className="bg-gradient-to-r from-[#0058e6] to-[#3a8bfb] text-white px-2 py-1 flex justify-between items-center font-bold text-sm select-none">
-                      <span>Filtros de Busca</span>
+                      <span>{t('filtros.titulo')}</span>
                       <span className="font-mono text-xs">XP</span>
                     </div>
 
                     <div className="flex flex-col gap-1">
                       <label className="text-xs font-bold font-mono text-gray-700 flex justify-between">
-                        <span>Casa inicial mínima:</span>
-                        {minFretFilter > 0 && <span className="text-[#cc3300] font-bold">≥ {minFretFilter}ª casa</span>}
+                        <span>{t('filtros.casaMinima')}</span>
+                        {minFretFilter > 0 && <span className="text-[#cc3300] font-bold">{t('filtros.casaMinimaAtiva', { casa: minFretFilter })}</span>}
                       </label>
                       <select
                         value={minFretFilter}
                         onChange={(e) => setMinFretFilter(Number(e.target.value))}
                         className="w-full text-xs font-mono bg-white border-2 border-r-white border-bottom-white border-[#808080] p-1.5 shadow-inner focus:outline-none cursor-pointer"
                       >
-                        <option value={0}>Todas as casas (Canto/Nut)</option>
-                        <option value={1}>1ª Casa ou acima</option>
-                        <option value={2}>2ª Casa ou acima</option>
-                        <option value={3}>3ª Casa ou acima</option>
-                        <option value={4}>4ª Casa ou acima</option>
-                        <option value={5}>5ª Casa ou acima (Posições médias)</option>
-                        <option value={7}>7ª Casa ou acima (Agudos)</option>
-                        <option value={9}>9ª Casa ou acima</option>
+                        <option value={0}>{t('filtros.todasAsCasas')}</option>
+                        <option value={1}>{t('filtros.casaOuAcima', { casa: 1 })}</option>
+                        <option value={2}>{t('filtros.casaOuAcima', { casa: 2 })}</option>
+                        <option value={3}>{t('filtros.casaOuAcima', { casa: 3 })}</option>
+                        <option value={4}>{t('filtros.casaOuAcima', { casa: 4 })}</option>
+                        <option value={5}>{t('filtros.casaMedia')}</option>
+                        <option value={7}>{t('filtros.casaAguda')}</option>
+                        <option value={9}>{t('filtros.casaOuAcima', { casa: 9 })}</option>
                       </select>
                     </div>
 
                     <div className="flex flex-col gap-1">
-                      <label className="text-xs font-bold font-mono text-gray-700">Dificuldade e Abafamento:</label>
+                      <label className="text-xs font-bold font-mono text-gray-700">{t('filtros.dificuldade')}</label>
                       <select
                         value={interiorMuteFilter}
                         onChange={(e) => setInteriorMuteFilter(e.target.value as 'all' | 'hide')}
                         className="w-full text-xs font-mono bg-white border-2 border-r-white border-bottom-white border-[#808080] p-1.5 shadow-inner focus:outline-none cursor-pointer"
                       >
-                        <option value="all">Mostrar todas as posições (com penalidade)</option>
-                        <option value="hide">Ocultar posições difíceis (abafamento interno)</option>
+                        <option value="all">{t('filtros.mostrarTodas')}</option>
+                        <option value="hide">{t('filtros.ocultarDificeis')}</option>
                       </select>
                     </div>
 
                     <div className="text-[10px] font-mono text-gray-600 bg-[#d4d0c8] p-1.5 border border-[#808080] select-none flex items-start gap-1.5">
                       <IconInfo className="w-3.5 h-3.5 text-[#0058e6] shrink-0 mt-0.5" />
-                      <span><em>Acordes com cordas abafadas no meio são penalizados e classificados como mais difíceis.</em></span>
+                      <span><em>{t('filtros.notaAbafamento')}</em></span>
                     </div>
                   </div>
 
@@ -980,37 +990,37 @@ function App() {
                     {/* Window Header */}
                     <div className="flex justify-between items-center border-b border-dashed border-[#808080] pb-2 mb-4 font-mono select-none">
                       <span className="text-xs font-bold text-gray-600">
-                        Instrumento: <span className="text-black">{selectedInst.name}</span> | Afinação: <span className="text-[#cc3300] font-bold">{selectedTuning.name}</span>
+                        {t('resultados.cabecalho', { instrumento: selectedInst.name, afinacao: selectedTuning.name })}
                       </span>
                       <span className="text-sm font-bold text-[#002fa7]">
-                        Cordelete de Acorde: {rootName ? chordDisplayName : "Nenhum"}
+                        {t('resultados.acordeAtual', { acorde: rootName ? chordDisplayName : t('comum.nenhum') })}
                       </span>
                     </div>
 
                     {/* Diagrams Grid */}
                     {!rootName ? (
                       <div className="flex-1 flex flex-col items-center justify-center text-center p-8 bg-[#ece9d8]/50 border border-dotted border-[#808080]">
-                        <h3 className="text-base font-bold text-gray-700 font-mono">Nenhum Tom Selecionado</h3>
+                        <h3 className="text-base font-bold text-gray-700 font-mono">{t('resultados.semTomTitulo')}</h3>
                         <p className="text-xs text-gray-600 font-mono mt-2 max-w-sm">
-                          &lt;- Escolha um tom na barra lateral esquerda para exibir os acordes e as formas no braço.
+                          {t('resultados.semTomTexto')}
                         </p>
                       </div>
                     ) : activeVoicings.length === 0 ? (
                       <div className="flex-1 flex flex-col items-center justify-center text-center p-8 bg-[#ece9d8]/50 border border-dotted border-[#cc3300]">
-                        <h3 className="text-base font-bold text-[#cc3300] font-mono">Forma Incompatível</h3>
+                        <h3 className="text-base font-bold text-[#cc3300] font-mono">{t('resultados.incompativelTitulo')}</h3>
                         <p className="text-xs text-gray-600 font-mono mt-1 max-w-sm">
-                          Nenhuma posição anatômica válida foi encontrada para o acorde <strong className="text-black">{chordDisplayName}</strong> com a afinação atual.
+                          {t('resultados.incompativelTexto', { acorde: chordDisplayName })}
                           <br /><br />
-                          Tente alterar a afinação ou escolha outro tipo de acorde.
+                          {t('resultados.incompativelDica')}
                         </p>
                       </div>
                     ) : filteredVoicings.length === 0 ? (
                       <div className="flex-1 flex flex-col items-center justify-center text-center p-8 bg-[#ece9d8]/50 border border-dotted border-[#cc3300]">
-                        <h3 className="text-base font-bold text-[#cc3300] font-mono">Sem Resultados (Filtro Ativo)</h3>
+                        <h3 className="text-base font-bold text-[#cc3300] font-mono">{t('resultados.semResultadoTitulo')}</h3>
                         <p className="text-xs text-gray-600 font-mono mt-1 max-w-sm">
-                          Nenhuma posição para o acorde <strong className="text-black">{chordDisplayName}</strong> corresponde aos filtros de busca selecionados.
+                          {t('resultados.semResultadoTexto', { acorde: chordDisplayName })}
                           <br /><br />
-                          Tente diminuir a "Casa Mínima" ou alterar o filtro de "Abafamento Interno".
+                          {t('resultados.semResultadoDica')}
                         </p>
                       </div>
                     ) : (
@@ -1054,7 +1064,7 @@ function App() {
                               onClick={() => setVisibleVariationsLimit(orderedVoicings.length)}
                               className="bevel-out bg-[#ece9d8] text-black px-6 py-2 font-bold text-sm active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white transition-all hover:bg-white"
                             >
-                              Carregar Mais ({orderedVoicings.length - visibleVariationsLimit} posições ocultas)
+                              {t('resultados.carregarMais', { quantidade: orderedVoicings.length - visibleVariationsLimit })}
                             </button>
                           </div>
                         )}
@@ -1086,31 +1096,31 @@ function App() {
                   <div className="flex justify-between items-center border-b border-dashed border-[#808080] pb-2 mb-4 select-none">
                     <span className="text-sm font-bold text-[#002fa7] flex items-center gap-1.5">
                       <StarIcon className="w-4 h-4 text-[#ff7f27]" fill="currentColor" />
-                      <span>Minhas Posições Favoritadas ({favorites.length})</span>
+                      <span>{t('favoritas.titulo', { quantidade: favorites.length })}</span>
                     </span>
                     <button
                       onClick={clearFavorites}
                       disabled={favorites.length === 0}
                       className="px-3 py-1 text-xs font-bold bg-[#ece9d8] border border-white border-r-[#808080] border-bottom-[#808080] active:border-t-[#808080] active:border-l-[#808080] hover:bg-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed select-none"
                     >
-                      Limpar Todas
+                      {t('comum.limparTodas')}
                     </button>
                   </div>
 
                   {favorites.length === 0 ? (
                     <div className="text-center text-gray-600 py-10 italic text-sm select-none">
-                      Nenhuma posição favoritada. Clique no ícone da estrela em qualquer diagrama acima para guardar a digitação aqui.
+                      {t('favoritas.vazio')}
                     </div>
                   ) : (
                     <div className="overflow-x-auto no-scrollbar w-full min-w-0">
                       <table className="w-full text-xs text-left border-collapse select-none min-w-[600px]">
                         <thead>
                           <tr className="bg-[#d4d0c8] border-b border-[#808080] font-bold text-gray-700">
-                            <th className="p-2.5 border-r border-[#808080]">Acorde</th>
-                            <th className="p-2.5 border-r border-[#808080]">Instrumento</th>
-                            <th className="p-2.5 border-r border-[#808080]">Afinação</th>
-                            <th className="p-2.5 border-r border-[#808080]">Digitação (Cordas)</th>
-                            <th className="p-2.5 text-center">Ações</th>
+                            <th className="p-2.5 border-r border-[#808080]">{t('favoritas.colunaAcorde')}</th>
+                            <th className="p-2.5 border-r border-[#808080]">{t('favoritas.colunaInstrumento')}</th>
+                            <th className="p-2.5 border-r border-[#808080]">{t('favoritas.colunaAfinacao')}</th>
+                            <th className="p-2.5 border-r border-[#808080]">{t('favoritas.colunaDigitacao')}</th>
+                            <th className="p-2.5 text-center">{t('favoritas.colunaAcoes')}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1127,9 +1137,9 @@ function App() {
                                 <button
                                   onClick={() => loadFavorite(fav)}
                                   className="px-3 py-1 bg-[#ece9d8] border border-white border-r-[#808080] border-bottom-[#808080] active:border-t-[#808080] active:border-l-[#808080] font-bold text-xs mr-2 hover:bg-white cursor-pointer"
-                                  title="Carregar no Localizador de Acordes"
+                                  title={t('favoritas.carregarDica')}
                                 >
-                                  Carregar
+                                  {t('comum.carregar')}
                                 </button>
                                 <button
                                   onClick={() => {
@@ -1138,9 +1148,9 @@ function App() {
                                     localStorage.setItem('viola_libre_favs', JSON.stringify(updated));
                                   }}
                                   className="px-3 py-1 bg-[#ff7f27] border border-white border-r-[#808080] border-bottom-[#808080] active:border-t-[#808080] active:border-l-[#808080] text-white font-bold text-xs hover:bg-orange-600 cursor-pointer"
-                                  title="Excluir"
+                                  title={t('comum.excluir')}
                                 >
-                                  Remover
+                                  {t('comum.remover')}
                                 </button>
                               </td>
                             </tr>
@@ -1221,6 +1231,22 @@ function App() {
 
           {activeTab === 'favorites' && <FavoritosDashboard />}
 
+          {/* `handleInstrumentChange` sozinho mudaria o app e esqueceria no próximo boot.
+              Aqui a troca é uma DECISÃO, não um experimento, então ela também grava a
+              preferência, que é exatamente o que separa este painel do seletor da barra
+              lateral do Dicionário de Acordes. */}
+          {activeTab === 'preferencias' && (
+            <div className="w-full" style={{ minHeight: '400px' }}>
+              <Preferencias
+                instrument={selectedInst}
+                onInstrumentChange={(inst) => {
+                  handleInstrumentChange(inst);
+                  setPreferredInstrumentId(inst.id);
+                }}
+              />
+            </div>
+          )}
+
           {activeTab === 'termos' && (
             <div className="w-full" style={{ minHeight: '400px' }}>
               <TermosDeUso />
@@ -1256,7 +1282,7 @@ function App() {
             activeTab === 'termos' ? 'text-white font-bold' : 'text-white/75 hover:text-white'
           }`}
         >
-          Termos de Uso
+          {t('abas.termos')}
         </button>
       </div>
 
@@ -1266,7 +1292,7 @@ function App() {
           <div className="winxp-gradient-blue text-white px-3 py-1 flex justify-between items-center rounded-t-md select-none font-bold text-sm">
             <span className="flex items-center gap-1.5">
               <IconNotepad className="w-4.5 h-4.5" />
-              <span>Minha Cifra (Roteiro de Acordes da Música)</span>
+              <span>{t('minhaCifra.titulo')}</span>
             </span>
             <button 
               onClick={() => setShowCifraWindow(false)}
@@ -1277,14 +1303,14 @@ function App() {
           </div>
           <div className="p-4 flex flex-col gap-4">
             <p className="text-xs font-mono text-gray-700 leading-normal">
-              Abaixo estão os acordes selecionados para a cifra desta música. Você pode ver os diagramas, carregar no braço ou exportar a digitação.
+              {t('minhaCifra.descricao')}
             </p>
             
             <div className="max-h-[350px] overflow-y-auto bg-white border-2 border-[#808080] border-r-white border-bottom-white p-4 font-mono retro-scrollbar flex flex-wrap gap-4 justify-center">
               {cifraVoicings.length === 0 ? (
                 <div className="text-center text-gray-600 py-16 italic text-sm w-full flex flex-col items-center justify-center gap-2">
                   <IconNotepad className="w-6 h-6 text-gray-600" />
-                  <span>Nenhum acorde adicionado à cifra. Vá na aba "Dicionário de Acordes" e clique no ícone do bloco de notas para salvar as posições da música aqui!</span>
+                  <span>{t('minhaCifra.vazio')}</span>
                 </div>
               ) : (
                 cifraVoicings.map((fav) => {
@@ -1328,7 +1354,7 @@ function App() {
                         }}
                         className="mt-2 w-full py-1 bg-[#0058e6] text-white border border-white font-mono text-xs cursor-pointer text-center font-bold hover:bg-blue-600 active:bg-blue-800"
                       >
-                        Carregar no Braço
+                        {t('minhaCifra.carregarNoBraco')}
                       </button>
                     </div>
                   );
@@ -1337,20 +1363,20 @@ function App() {
             </div>
             
             <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 font-mono">
-              <span className="text-xs text-gray-600 font-bold">Acordes na Cifra: {cifraVoicings.length}</span>
+              <span className="text-xs text-gray-600 font-bold">{t('minhaCifra.contador', { quantidade: cifraVoicings.length })}</span>
               <div className="flex gap-2 justify-end">
                 <button
                   onClick={() => {
                     const text = cifraVoicings.map(c => `${c.chordName}: ${c.frets.map(f => f === -1 ? 'X' : f).join('-')} (${c.instrumentName})`).join('\n');
                     navigator.clipboard.writeText(text);
-                    alert("Cifragem copiada para a área de transferência:\n\n" + text);
+                    alert(t('minhaCifra.copiado') + '\n\n' + text);
                   }}
                   disabled={cifraVoicings.length === 0}
                   className="px-3 py-1 bg-[#ece9d8] border border-white border-r-[#808080] border-bottom-[#808080] active:border-t-[#808080] active:border-l-[#808080] font-bold text-xs hover:bg-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
-                  title="Copiar acordes como texto"
+                  title={t('minhaCifra.copiarDica')}
                 >
                   <IconCopy className="w-3.5 h-3.5" />
-                  <span>Copiar Cifragem (Texto)</span>
+                  <span>{t('minhaCifra.copiar')}</span>
                 </button>
                 <button
                   onClick={() => {
@@ -1361,13 +1387,13 @@ function App() {
                   className="px-3 py-1 bg-[#ece9d8] border border-white border-r-[#808080] border-bottom-[#808080] active:border-t-[#808080] active:border-l-[#808080] font-bold text-xs hover:bg-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
                 >
                   <IconTrash className="w-3.5 h-3.5" />
-                  <span>Limpar Cifra</span>
+                  <span>{t('minhaCifra.limpar')}</span>
                 </button>
                 <button
                   onClick={() => setShowCifraWindow(false)}
                   className="px-3 py-1 bg-[#0058e6] text-white border border-[#002fa7] font-bold text-xs hover:bg-blue-600 cursor-pointer"
                 >
-                  Fechar
+                  {t('comum.fechar')}
                 </button>
               </div>
             </div>
@@ -1386,7 +1412,7 @@ function App() {
             <div className="winxp-gradient-blue text-white px-3 py-1 flex justify-between items-center rounded-t-md font-bold text-sm select-none shrink-0">
               <span className="flex items-center gap-1.5">
                 <IconHelp className="w-4 h-4 text-white" aria-hidden="true" />
-                <span id="titulo-sobre">Sobre o Viola Libre</span>
+                <span id="titulo-sobre">{t('sobre.titulo')}</span>
               </span>
               <button 
                 onClick={() => setShowAboutModal(false)}
@@ -1399,29 +1425,33 @@ function App() {
               <div className="flex gap-4 items-start border-b border-[#808080]/30 pb-4">
                 <span className="text-4xl">𝄢</span>
                 <div>
-                  <h2 className="text-base font-bold text-black mb-1">Viola Libre v1.1</h2>
-                  <p className="text-gray-600">O Cifrário Matemático da Música Tradicional</p>
+                  <h2 className="text-base font-bold text-black mb-1">{t('sobre.nome')}</h2>
+                  <p className="text-gray-600">{t('sobre.subtitulo')}</p>
                   {/* Nomear a licença, e não só dizer "livre / open source": as duas coisas
                       que a AGPL garante — o direito de estudar e modificar, e o dever de
                       devolver — não cabem num rótulo genérico, e era esse rótulo que estava
                       aqui desde antes de o LICENSE existir. */}
-                  <p className="text-gray-600 mt-0.5">Licença: GNU AGPL-3.0 (copyleft)</p>
+                  <p className="text-gray-600 mt-0.5">{t('sobre.licenca')}</p>
                 </div>
               </div>
+
+              {/* O seletor de idioma morou aqui por um tempo, porque o Sobre era a única
+                  porta que existia nas duas larguras de tela. Agora existem as
+                  Preferências, e uma configuração em dois lugares é uma configuração que
+                  alguém vai procurar no lugar errado. Fica o caminho. */}
+              <button
+                onClick={() => { setShowAboutModal(false); navigate('/preferencias'); }}
+                className="self-start text-[#0058e6] underline hover:text-[#3a8bfb] font-bold cursor-pointer"
+              >
+                {t('sobre.irParaPreferencias')}
+              </button>
               
               <div className="flex flex-col gap-2 leading-relaxed text-black/90">
                 <p>
-                  <strong>Diferente de sistemas engessados</strong>, o Viola Libre calcula
-                  as posições das notas baseando-se em equações e intervalos de semitons.
+                  <strong>{t('sobre.calculoForte')}</strong>{t('sobre.calculo')}
                 </p>
-                <p>
-                  Isso permite trocar de afinação instantaneamente (ex: Cebolão Ré, Cebolão Mi, Rio Abaixo)
-                  ou alterar a nota individual de qualquer corda e recalcular tudo instantaneamente.
-                </p>
-                <p>
-                  O projeto homenageia a sonoridade caipira brasileira, e tem como objetivo dar acesso livre,
-                  sem anúncios intrusivos e de maneira minimalista a estudantes e mestres do instrumento.
-                </p>
+                <p>{t('sobre.afinacao')}</p>
+                <p>{t('sobre.proposito')}</p>
               </div>
 
               {/* A AGPL não é detalhe jurídico de rodapé: é a razão de o site poder prometer
@@ -1430,23 +1460,20 @@ function App() {
                   e o que é, é software livre com uma condição. */}
               <div className="border-t border-[#808080]/30 pt-4 flex flex-col gap-2 leading-relaxed text-black/90">
                 <p>
-                  <strong>Software livre — e feito pra continuar livre.</strong> A{' '}
-                  <a href={LICENCA_URL} target="_blank" rel="noopener noreferrer" className="text-[#0058e6] underline hover:text-[#3a8bfb] font-bold">GNU AGPL-3.0</a>{' '}
-                  garante a qualquer pessoa o direito de usar, estudar, modificar e
-                  redistribuir o Viola Libre.
+                  <strong>{t('sobre.livreForte')}</strong>{' '}
+                  {t('sobre.livreTexto')}
                 </p>
-                <p>
-                  Em troca, ela cobra uma coisa: quem publicar uma versão modificada tem que
-                  publicar o código junto, sob a mesma licença — inclusive quem só a colocar
-                  no ar como site, sem distribuir arquivo nenhum. É essa cláusula que impede
-                  uma plataforma fechada de pegar este trabalho, trancá-lo e cobrar por ele.
-                </p>
+                <p>{t('sobre.copyleft')}</p>
+                {/* O link da licença desceu para esta linha junto dos outros: inline, ele
+                    obrigava a quebrar a frase em pedaços e cada idioma a montar a mesma
+                    frase numa ordem diferente. */}
                 <p className="flex flex-wrap gap-x-3 gap-y-1 pt-1">
-                  <a href={REPO_URL} target="_blank" rel="noopener noreferrer" className="text-[#0058e6] underline hover:text-[#3a8bfb] font-bold">Código-fonte</a>
+                  <a href={LICENCA_URL} target="_blank" rel="noopener noreferrer" className="text-[#0058e6] underline hover:text-[#3a8bfb] font-bold">{t('sobre.linkLicenca')}</a>
+                  <a href={REPO_URL} target="_blank" rel="noopener noreferrer" className="text-[#0058e6] underline hover:text-[#3a8bfb] font-bold">{t('sobre.codigoFonte')}</a>
                   {/* Em produção esta página traz o tarball do fonte exato deste bundle, que
                       é como a §13 da AGPL é cumprida na prática. Em `npm run dev` ela não
                       existe — é o build que a gera. */}
-                  <a href="/jslicense.html" target="_blank" rel="noopener noreferrer" className="text-[#0058e6] underline hover:text-[#3a8bfb] font-bold">JavaScript deste site</a>
+                  <a href="/jslicense.html" target="_blank" rel="noopener noreferrer" className="text-[#0058e6] underline hover:text-[#3a8bfb] font-bold">{t('sobre.javascript')}</a>
                 </p>
               </div>
 
@@ -1455,7 +1482,7 @@ function App() {
                   onClick={() => setShowAboutModal(false)}
                   className="px-4 py-1.5 bg-[#ece9d8] border border-white border-r-[#808080] border-bottom-[#808080] active:border-t-[#808080] active:border-l-[#808080] font-bold text-xs hover:bg-white cursor-pointer"
                 >
-                  Fechar Janela
+                  {t('comum.fecharJanela')}
                 </button>
               </div>
             </div>
@@ -1479,7 +1506,7 @@ function App() {
             pointerEvents: isTaskbarCollapsed ? 'auto' : 'none',
             overflow: 'hidden'
           }}
-          title="Expandir barra de tarefas"
+          title={t('barraTarefas.expandir')}
         >
           <span className="text-white text-[9px] font-bold">▶</span>
         </button>
@@ -1498,7 +1525,7 @@ function App() {
             <button
               onClick={() => setIsTaskbarCollapsed(true)}
               className="h-[28px] w-[24px] flex items-center justify-center bg-[#ece9d8] text-black border border-white border-r-[#808080] border-b-[#808080] hover:bg-white active:border-t-[#808080] active:border-l-[#808080] rounded cursor-pointer select-none text-[10px] font-bold"
-              title="Recolher barra de tarefas"
+              title={t('barraTarefas.recolher')}
             >
               ◀
             </button>
@@ -1516,9 +1543,9 @@ function App() {
                   ? 'bg-[#3a8bfb] text-white border-[#002fa7] border-t-white border-l-white shadow-[inset_1px_1px_0_#ffffff50]'
                   : 'bg-[#ece9d8] text-black border-white border-r-[#808080] border-bottom-[#808080] hover:bg-white'
               }`}
-              title={secaoMinimizada ? `Restaurar ${secaoMinimizada}` : 'Mostrar área de trabalho'}
+              title={secaoMinimizada ? t('barraTarefas.restaurarSecao', { secao: secaoMinimizada }) : t('barraTarefas.mostrarAreaDeTrabalho')}
             >
-              <span>{rotaMinimizada ? 'Restaurar janela' : 'Área de Trabalho'}</span>
+              <span>{rotaMinimizada ? t('barraTarefas.restaurarJanela') : t('barraTarefas.areaDeTrabalho')}</span>
             </button>
 
             <button
@@ -1529,7 +1556,7 @@ function App() {
                   : 'bg-[#ece9d8] text-black border-white border-r-[#808080] border-bottom-[#808080] hover:bg-white'
               }`}
             >
-              <span>Explore Cifras</span>
+              <span>{t('abas.cifras')}</span>
             </button>
 
             <button 
@@ -1540,7 +1567,7 @@ function App() {
                   : 'bg-[#ece9d8] text-black border-white border-r-[#808080] border-bottom-[#808080] hover:bg-white'
               }`}
             >
-              <span>Favoritos ({cifraFavorites.entries.length})</span>
+              <span>{t('barraTarefas.favoritosContador', { quantidade: cifraFavorites.entries.length })}</span>
             </button>
 
             <button 
@@ -1551,7 +1578,7 @@ function App() {
                   : 'bg-[#ece9d8] text-black border-white border-r-[#808080] border-bottom-[#808080] hover:bg-white'
               }`}
             >
-              <span>Acordes</span>
+              <span>{t('abasCurtas.chords')}</span>
             </button>
             
             <button 
@@ -1563,29 +1590,43 @@ function App() {
               }`}
             >
               <IconNotepad className="w-3.5 h-3.5" />
-              <span>Minha Cifra ({cifraVoicings.length})</span>
+              <span>{t('barraTarefas.minhaCifraContador', { quantidade: cifraVoicings.length })}</span>
             </button>
           </div>
 
           {/* System Tray (Clock and icons) */}
           <div className="h-[30px] bg-[#0997f7] border-l-2 border-[#1a6b1a] flex items-center px-3 gap-2 text-white font-mono text-xs shadow-[inset_1px_1px_1px_#ffffff30] rounded-l-sm">
+            {/* As Preferências não estão na faixa de abas de propósito: são painel de
+                configuração, não uma seção de conteúdo, e um sétimo botão lá espremeria a
+                faixa justamente na largura onde ela já rola na horizontal. O caminho é o
+                ícone da área de trabalho; esta engrenagem é o atalho para quem já está
+                com uma janela aberta e não quer minimizá-la para chegar lá. */}
+            <button
+              onClick={() => goToTab('preferencias')}
+              className={`flex items-center justify-center cursor-pointer hover:bg-white/20 px-1 rounded transition-colors ${activeTab === 'preferencias' ? 'text-[#ddffdd]' : ''}`}
+              title={t('abas.preferencias')}
+              aria-label={t('abas.preferencias')}
+            >
+              <Settings size={13} aria-hidden="true" />
+            </button>
+            <div className="w-[1.5px] h-4 bg-white/30 mx-1"></div>
             <button 
               onClick={() => setShowEditorLogin(true)}
               className="flex items-center justify-center cursor-pointer hover:bg-white/20 px-1 rounded transition-colors"
-              title="Acesso de Editor"
+              title={t('barraTarefas.editorDica')}
             >
-              <span className={editorSession ? "text-[#ddffdd]" : "opacity-70"}>🔑 Editor</span>
+              <span className={editorSession ? "text-[#ddffdd]" : "opacity-70"}>{t('barraTarefas.editor')}</span>
             </button>
             <div className="w-[1.5px] h-4 bg-white/30 mx-1"></div>
             <button
               onClick={() => goToTab('termos')}
               className={`cursor-pointer hover:bg-white/20 px-1 rounded transition-colors ${activeTab === 'termos' ? 'text-[#ddffdd] font-bold' : ''}`}
-              title="Termos de Uso"
+              title={t('abas.termos')}
             >
-              Termos de Uso
+              {t('abas.termos')}
             </button>
             <div className="w-[1.5px] h-4 bg-white/30 mx-1"></div>
-            <span className="font-bold text-[11px]" title="Hora local do sistema">{time}</span>
+            <span className="font-bold text-[11px]" title={t('barraTarefas.horaDica')}>{time}</span>
           </div>
         </div>
       </footer>
@@ -1626,23 +1667,23 @@ function App() {
             onClick={e => e.stopPropagation()}
           >
             <div id="titulo-wip" className="winxp-gradient-blue text-white px-3 py-1.5 flex items-center gap-2 font-bold text-xs sm:text-sm font-mono border-b-2 border-[#002fa7] select-none rounded-t">
-              ⚠️ Aviso
+              ⚠️ {t('comum.aviso')}
             </div>
             <div className="p-4 sm:p-6 flex flex-col gap-3 text-sm text-black/90">
               <p className="font-bold text-[#002fa7]">
-                🚧 {wipPopup === 'ear' ? 'Esta aba está em construção!' : wipPopup === 'minhascifras' ? 'Esta aba está em construção!' : 'O editor de timing está em construção!'}
+                🚧 {wipPopup === 'timing' ? t('wip.tituloTiming') : t('wip.tituloAba')}
               </p>
               <p>
-                {wipPopup === 'ear' && 'A funcionalidade de "Tirando de Ouvido" ainda está sendo desenvolvida e por enquanto não faz muito sentido. Estamos trabalhando para trazer algo legal aqui em breve.'}
-                {wipPopup === 'minhascifras' && 'A funcionalidade de "Minhas Cifras" ainda está sendo desenvolvida e por enquanto não faz muito sentido. Estamos trabalhando para trazer algo legal aqui em breve.'}
-                {wipPopup === 'timing' && 'O editor de timing ainda está sendo desenvolvido e por enquanto não faz muito sentido. Estamos trabalhando para trazer algo legal aqui em breve.'}
+                {wipPopup === 'ear' && t('wip.textoEar')}
+                {wipPopup === 'minhascifras' && t('wip.textoMinhasCifras')}
+                {wipPopup === 'timing' && t('wip.textoTiming')}
               </p>
               <div className="flex justify-end pt-2">
                 <button
                   onClick={() => setWipPopup(null)}
                   className="px-6 py-1.5 bg-[#ece9d8] border-2 border-white border-r-[#808080] border-b-[#808080] font-bold text-xs hover:bg-white active:border-t-[#808080] active:border-l-[#808080] cursor-pointer"
                 >
-                  OK
+                  {t('comum.ok')}
                 </button>
               </div>
             </div>

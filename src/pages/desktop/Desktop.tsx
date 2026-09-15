@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Music, Music2, Guitar, BookOpen, Ear, Flame, Heart, Search, ScrollText, ShieldCheck, HeartHandshake } from 'lucide-react';
+import { Music, Music2, Guitar, BookOpen, Ear, Flame, Heart, Search, ScrollText, ShieldCheck, HeartHandshake, Settings } from 'lucide-react';
 import { StarIcon } from '../../components/Icons';
 import { IconNotepad } from '../../components/FretboardDiagram';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useCifraFavorites } from '../../hooks/useCifraFavorites';
+import { useIdioma, useT } from '../../i18n';
 import {
   getTopSongs,
   getTopLikes,
@@ -32,20 +33,35 @@ interface Shortcut {
   shortLabel: string;
   icon: React.ReactNode;
   badge?: number;
+  /**
+   * No telefone, sai da grade e vira uma faixa larga e baixa embaixo dela.
+   *
+   * Não é enfeite: a grade tem três colunas, e um atalho que sobra depois da última linha
+   * cheia fica como um quadrado solto no meio do vazio. A faixa resolve o encaixe e ainda
+   * diz a verdade sobre o item, que não é mais um app entre os outros e sim o lugar onde
+   * se ajusta o resto. É o mesmo gesto do telefone antigo, onde Configurações mora fora
+   * da grade de apps.
+   */
+  faixaNoTelefone?: boolean;
 }
 
 function useShortcuts(): Shortcut[] {
   const favorites = useCifraFavorites();
+  const t = useT();
+  // O atalho de cifras é o único com rótulo próprio: na área de trabalho ele é um VERBO
+  // ("Explorar Cifras"), porque ali se está escolhendo o que abrir, e não lendo o nome de
+  // uma aba já aberta. Os outros oito repetem o rótulo da aba de propósito.
   return [
-    { to: '/cifras', label: 'Explorar Cifras', shortLabel: 'Cifras', icon: <Music /> },
-    { to: '/favoritos', label: 'Meus Favoritos', shortLabel: 'Favoritos', icon: <StarIcon />, badge: favorites.entries.length },
-    { to: '/minhascifras', label: 'Minhas Cifras', shortLabel: 'Minhas', icon: <IconNotepad className="w-full h-full" /> },
-    { to: '/chords', label: 'Dicionário de Acordes', shortLabel: 'Acordes', icon: <Guitar /> },
-    { to: '/treinos', label: 'Treinos e Teoria', shortLabel: 'Treinos', icon: <BookOpen /> },
-    { to: '/ouvido', label: 'Tirando de Ouvido', shortLabel: 'Ouvido', icon: <Ear /> },
-    { to: '/termos', label: 'Termos de Uso', shortLabel: 'Termos', icon: <ScrollText /> },
-    { to: '/privacidade', label: 'Privacidade', shortLabel: 'Privacidade', icon: <ShieldCheck /> },
-    { to: '/agradecimentos', label: 'Agradecimentos', shortLabel: 'Agradecimentos', icon: <HeartHandshake /> },
+    { to: '/cifras', label: t('desktop.explorarCifras'), shortLabel: t('abasCurtas.cifras'), icon: <Music /> },
+    { to: '/favoritos', label: t('abas.favorites'), shortLabel: t('abasCurtas.favorites'), icon: <StarIcon />, badge: favorites.entries.length },
+    { to: '/minhascifras', label: t('abas.minhascifras'), shortLabel: t('abasCurtas.minhascifras'), icon: <IconNotepad className="w-full h-full" /> },
+    { to: '/chords', label: t('abas.chords'), shortLabel: t('abasCurtas.chords'), icon: <Guitar /> },
+    { to: '/treinos', label: t('abas.train'), shortLabel: t('abasCurtas.train'), icon: <BookOpen /> },
+    { to: '/ouvido', label: t('abas.ear'), shortLabel: t('abasCurtas.ear'), icon: <Ear /> },
+    { to: '/preferencias', label: t('abas.preferencias'), shortLabel: t('abasCurtas.preferencias'), icon: <Settings />, faixaNoTelefone: true },
+    { to: '/termos', label: t('abas.termos'), shortLabel: t('abasCurtas.termos'), icon: <ScrollText /> },
+    { to: '/privacidade', label: t('abasCurtas.privacidade'), shortLabel: t('abasCurtas.privacidade'), icon: <ShieldCheck /> },
+    { to: '/agradecimentos', label: t('abas.agradecimentos'), shortLabel: t('abasCurtas.agradecimentos'), icon: <HeartHandshake /> },
   ];
 }
 
@@ -229,6 +245,7 @@ const SearchWindow: React.FC<{ className?: string }> = ({ className = '' }) => {
   const [q, setQ] = useState('');
   const [modo, setModo] = useState<'artistas' | 'musicas'>('artistas');
   const navigate = useNavigate();
+  const t = useT();
   const { itens: sugestoes, carregando } = useSugestoes(q, modo);
 
   const submit = (e: React.FormEvent) => {
@@ -259,26 +276,26 @@ const SearchWindow: React.FC<{ className?: string }> = ({ className = '' }) => {
     <section className={`bg-[#ece9d8] border-[3px] border-[#0058e6] rounded-t-lg shadow-2xl ${className}`}>
       <h2 className="winxp-gradient-blue text-white px-3 py-1.5 flex items-center gap-2 font-bold text-xs sm:text-sm tracking-wide font-mono border-b-2 border-[#002fa7] select-none">
         <Search size={14} className="shrink-0" />
-        Buscar cifras
+        {t('desktop.buscarTitulo')}
       </h2>
       <form onSubmit={submit} className="p-2 flex flex-col gap-2">
         <div className="flex gap-1">
-          {tab('artistas', 'Artistas')}
-          {tab('musicas', 'Músicas')}
+          {tab('artistas', t('desktop.abaArtistas'))}
+          {tab('musicas', t('desktop.abaMusicas'))}
         </div>
         <div className="flex items-stretch gap-1">
           <input
             type="search"
             value={q}
             onChange={e => setQ(e.target.value)}
-            placeholder={modo === 'artistas' ? 'Nome do artista...' : 'Nome da música...'}
-            aria-label={modo === 'artistas' ? 'Buscar artista' : 'Buscar música'}
+            placeholder={modo === 'artistas' ? t('desktop.placeholderArtista') : t('desktop.placeholderMusica')}
+            aria-label={modo === 'artistas' ? t('desktop.ariaBuscarArtista') : t('desktop.ariaBuscarMusica')}
             className="bevel-in px-2 py-1.5 text-sm w-full outline-none min-w-0"
           />
           <button
             type="submit"
             className="bevel-out bg-[var(--color-winxp-panel)] px-3 shrink-0 flex items-center justify-center hover:bg-white active:border-t-[#808080] active:border-l-[#808080] active:border-b-white active:border-r-white cursor-pointer"
-            title="Buscar"
+            title={t('desktop.buscarDica')}
           >
             <Search size={16} className="text-[#0058e6]" />
           </button>
@@ -293,7 +310,7 @@ const SearchWindow: React.FC<{ className?: string }> = ({ className = '' }) => {
             lenta, sem sinal de que algo mudou. Esmaecer diz "isto já não vale" sem sumir com
             o conteúdo, que seria pior: piscar a lista a cada tecla. */}
         {carregando && sugestoes.length === 0 && (
-          <p className="px-2 py-1.5 text-xs text-gray-500 italic">Buscando...</p>
+          <p className="px-2 py-1.5 text-xs text-gray-500 italic">{t('comum.buscando')}</p>
         )}
         {sugestoes.length > 0 && (
           <ul className={`bevel-in bg-white max-h-64 overflow-y-auto retro-scrollbar transition-opacity ${carregando ? 'opacity-50' : 'opacity-100'}`}>
@@ -325,6 +342,7 @@ const SearchWindow: React.FC<{ className?: string }> = ({ className = '' }) => {
 const EmAltaPanel: React.FC<{ className?: string }> = ({ className = '' }) => {
   const [mode, setMode] = useState<TopMode>('vistas');
   const { songs, hasAny } = useTopSongs(mode);
+  const t = useT();
 
   if (!hasAny) return null;
 
@@ -348,12 +366,12 @@ const EmAltaPanel: React.FC<{ className?: string }> = ({ className = '' }) => {
     <section className={`bg-[#ece9d8] border-[3px] border-[#0058e6] rounded-t-lg shadow-2xl flex flex-col overflow-hidden ${className}`}>
       <h2 className="winxp-gradient-blue text-white px-3 py-1.5 flex items-center gap-2 font-bold text-xs sm:text-sm tracking-wide font-mono border-b-2 border-[#002fa7] select-none">
         <Flame size={15} className="text-orange-300 shrink-0" />
-        Em alta
+        {t('desktop.emAltaTitulo')}
       </h2>
 
       <div className="flex gap-1 p-1.5 pb-0">
-        {tab('vistas', 'Mais vistas', <Flame size={13} className={mode === 'vistas' ? 'text-orange-300' : 'text-orange-500'} />)}
-        {tab('curtidas', 'Mais curtidas', <Heart size={13} className={mode === 'curtidas' ? 'text-red-300' : 'text-red-500'} />)}
+        {tab('vistas', t('desktop.maisVistas'), <Flame size={13} className={mode === 'vistas' ? 'text-orange-300' : 'text-orange-500'} />)}
+        {tab('curtidas', t('desktop.maisCurtidas'), <Heart size={13} className={mode === 'curtidas' ? 'text-red-300' : 'text-red-500'} />)}
       </div>
 
       <ol className="bevel-in bg-white m-1.5 p-1 flex-1 overflow-y-auto retro-scrollbar">
@@ -363,7 +381,7 @@ const EmAltaPanel: React.FC<{ className?: string }> = ({ className = '' }) => {
               to={`/cifras/${song.artist_slug}/${song.slug}`}
               className="flex items-center gap-2 px-2 py-1.5 hover:bg-[#316ac5] hover:text-white group"
             >
-              <span className="w-5 shrink-0 text-xs font-bold text-gray-600 group-hover:text-white">{i + 1}º</span>
+              <span className="w-5 shrink-0 text-xs font-bold text-gray-600 group-hover:text-white">{t('comum.ordinal', { n: i + 1 })}</span>
               <span className="flex flex-col min-w-0">
                 <span className="text-sm font-bold truncate">{song.title}</span>
                 <span className="text-xs text-gray-500 group-hover:text-gray-200 truncate">{song.artist_name}</span>
@@ -372,7 +390,7 @@ const EmAltaPanel: React.FC<{ className?: string }> = ({ className = '' }) => {
           </li>
         ))}
         {songs.length === 0 && (
-          <li className="px-2 py-3 text-xs text-gray-500">Carregando...</li>
+          <li className="px-2 py-3 text-xs text-gray-500">{t('comum.carregando')}</li>
         )}
       </ol>
     </section>
@@ -429,12 +447,20 @@ const DesktopIcons: React.FC<{ shortcuts: Shortcut[]; decorative?: boolean }> = 
 
 /** Tela inicial do celular antigo: barra de status colada no topo e grid de apps. */
 const PhoneHome: React.FC<{ shortcuts: Shortcut[] }> = ({ shortcuts }) => {
+  const idioma = useIdioma();
   const [clock, setClock] = useState(() => new Date());
   useEffect(() => {
     const id = setInterval(() => setClock(new Date()), 30_000);
     return () => clearInterval(id);
   }, []);
-  const hhmm = clock.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  // A hora segue o idioma escolhido, não o do aparelho: quem lê a interface em inglês
+  // espera 09:40 PM, e a barra de status é a única peça deste projeto com formato de hora.
+  const hhmm = clock.toLocaleTimeString(idioma, { hour: '2-digit', minute: '2-digit' });
+
+  // A ordem da lista manda nos dois grupos: quem vira faixa sai da grade sem furar a
+  // sequência do que ficou, e a área de trabalho do desktop continua lendo a lista inteira.
+  const grade = shortcuts.filter(s => !s.faixaNoTelefone);
+  const faixas = shortcuts.filter(s => s.faixaNoTelefone);
 
   return (
     <div className="flex flex-col">
@@ -447,9 +473,14 @@ const PhoneHome: React.FC<{ shortcuts: Shortcut[] }> = ({ shortcuts }) => {
         <span>{hhmm}</span>
       </div>
 
-      <ul className="grid grid-cols-3 gap-2.5 p-3">
-        {shortcuts.map(s => (
-          <li key={s.to}>
+      {/* Flex em vez de `grid grid-cols-3`: a base de um terço mantém as mesmas três
+          colunas e centra a linha incompleta, então acrescentar ou tirar um atalho deixa
+          de ser uma mudança de layout. `basis` calculada em vez de `w-1/3` porque a base
+          tem de descontar o gap, senão três tiles mais dois gaps passam de 100% e viram
+          dois por linha. */}
+      <ul className="flex flex-wrap justify-center gap-2.5 p-3">
+        {grade.map(s => (
+          <li key={s.to} className="basis-[calc((100%-1.25rem)/3)] grow-0 shrink-0">
             <Link
               to={s.to}
               className="flex flex-col items-center justify-center gap-1.5 aspect-square rounded-xl bevel-out bg-[#ece9d8] p-1 shadow-lg active:border-t-[#808080] active:border-l-[#808080] active:border-b-white active:border-r-white"
@@ -471,6 +502,34 @@ const PhoneHome: React.FC<{ shortcuts: Shortcut[] }> = ({ shortcuts }) => {
           </li>
         ))}
       </ul>
+
+      {/* A faixa: largura inteira, altura de uma linha, alinhada à esquerda como item de
+          lista e não como ícone. Usa o rótulo LONGO porque aqui sobra largura, e a
+          abreviação só existia por falta dela. */}
+      {faixas.length > 0 && (
+        <ul className="flex flex-col gap-2 px-3 pb-3">
+          {faixas.map(s => (
+            <li key={s.to}>
+              <Link
+                to={s.to}
+                className="flex items-center gap-2.5 w-full rounded-xl bevel-out bg-[#ece9d8] px-3 py-2 shadow-lg active:border-t-[#808080] active:border-l-[#808080] active:border-b-white active:border-r-white"
+              >
+                <span className="relative w-6 h-6 shrink-0 flex items-center justify-center text-[#0058e6] [&>svg]:w-5 [&>svg]:h-5">
+                  {s.icon}
+                  {s.badge !== undefined && s.badge > 0 && (
+                    <span className="absolute -top-1 -right-1.5 min-w-4 h-4 px-1 rounded-full bg-[#ff7f27] border border-white text-[10px] font-bold leading-4 text-center text-white">
+                      {s.badge}
+                    </span>
+                  )}
+                </span>
+                <span className="font-mono text-xs font-bold leading-tight text-black truncate">
+                  {s.label}
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 };
