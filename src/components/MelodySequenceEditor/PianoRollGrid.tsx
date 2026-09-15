@@ -1,4 +1,5 @@
 import React from 'react';
+import { useT } from '../../i18n';
 import { usePlayback } from './PlaybackContext';
 import type { MelodyNote } from './types';
 
@@ -27,6 +28,7 @@ const NoteBadge = React.memo<NoteBadgeProps>(({
   onOpenMenu,
   onRemoveNote
 }) => {
+  const t = useT();
   const { noteRefs } = usePlayback();
 
   return (
@@ -71,7 +73,7 @@ const NoteBadge = React.memo<NoteBadgeProps>(({
           className={`px-1 py-px bg-gray-300 hover:bg-gray-400 text-gray-800 text-[8px] font-bold rounded-sm cursor-pointer select-none shrink-0 border border-gray-400 active:scale-90 ${
             isSelected ? 'bg-white/20 text-white border-white/40 hover:bg-white/30' : ''
           }`}
-          title="Diminuir duração (-1/4 tempo)"
+          title={t('ouvido.diminuirDuracao')}
         >
           &lt;
         </button>
@@ -86,7 +88,7 @@ const NoteBadge = React.memo<NoteBadgeProps>(({
       {cellWidth >= 100 && (
         <span 
           className="text-[9px] font-bold text-gray-600 select-none px-0.5 shrink-0 cursor-grab"
-          title="Arraste para mover no tempo ou transpor"
+          title={t('ouvido.arrastarNota')}
         >
           ::::
         </span>
@@ -99,7 +101,7 @@ const NoteBadge = React.memo<NoteBadgeProps>(({
           className={`hover:bg-black/10 px-1 py-0.5 rounded text-[8px] transition-colors cursor-pointer font-bold shrink-0 ${
             isSelected ? 'text-white' : 'text-gray-500'
           }`}
-          title="Ações da Nota"
+          title={t('ouvido.acoesDaNota')}
         >
           ▼
         </button>
@@ -115,7 +117,7 @@ const NoteBadge = React.memo<NoteBadgeProps>(({
           className={`px-1 py-px bg-gray-300 hover:bg-gray-400 text-gray-800 text-[8px] font-bold rounded-sm cursor-pointer select-none shrink-0 border border-gray-400 active:scale-90 ${
             isSelected ? 'bg-white/20 text-white border-white/40 hover:bg-white/30' : ''
           }`}
-          title="Aumentar duração (+1/4 tempo)"
+          title={t('ouvido.aumentarDuracao')}
         >
           &gt;
         </button>

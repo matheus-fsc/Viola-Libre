@@ -113,6 +113,14 @@ describe('dicionários', () => {
       'timing.tempoPlaceholder',
       'timing.loop',
       'timing.play',
+      // «Add», «Timeline», «Reset» e «Tempo» a UI em português já usa cru; «Anunciação»
+      // é nome de música e «109 BPM» é número.
+      'ouvido.add',
+      'ouvido.tempoPadraoMusica',
+      'ouvido.tempoPadraoBpm',
+      'ouvido.timeline',
+      'ouvido.resetRange',
+      'ouvido.tempoRotulo',
     ]);
     for (const chave of Object.keys(PT)) {
       if (iguaisDePropósito.has(chave)) continue;

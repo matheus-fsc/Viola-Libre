@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
+import { useT } from '../i18n';
 import type { Tuning, Instrument } from '../engine/types';
 import { noteNameToPitchClass, shouldUseFlats } from '../engine/chordCalculator';
 
@@ -92,6 +93,7 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
   editorHeight,
   onEditorHeightChange,
 }) => {
+  const t = useT();
   const {
     melody,
     setMelody,
@@ -1065,7 +1067,7 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
       <div
         onMouseDown={(e) => handleEdgeResizeStart('top', e)}
         className="h-[6px] cursor-ns-resize bg-gradient-to-b from-[#ece9d8] to-[#d4d0c8] hover:from-[#3a8bfb] hover:to-[#0058e6] transition-colors duration-150 rounded-t-sm select-none flex items-center justify-center"
-        title="Arraste para redimensionar a altura do editor"
+        title={t('ouvido.redimensionar')}
       >
         <div className="w-10 h-[2px] bg-[#808080] rounded opacity-50" />
       </div>
@@ -1077,10 +1079,10 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
       >
         <div className="flex items-center gap-2">
           <span className="text-[13px]">🎵</span>
-          <span className="font-sans text-[11px] tracking-wide">Sequenciador & Editor de Melodia</span>
+          <span className="font-sans text-[11px] tracking-wide">{t('ouvido.editorTitulo')}</span>
           {isDocked && (
             <span className="text-[9px] bg-white/20 border border-white/30 text-white px-1.5 py-0.5 rounded-sm font-sans uppercase font-bold tracking-wider">
-              Acoplado no Rodapé
+              {t('ouvido.acopladoNoRodape')}
             </span>
           )}
         </div>
@@ -1115,7 +1117,7 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
           <button 
             onClick={() => setIsEditorOpen(false)}
             className="w-5 h-4 bg-red-600 hover:bg-red-500 border border-red-800 text-white text-[10px] font-bold flex items-center justify-center cursor-pointer select-none"
-            title="Fechar Editor"
+            title={t('ouvido.fecharEditor')}
           >
             ✕
           </button>
@@ -1153,13 +1155,13 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
                 ) : (
                   <div className="bg-gray-200 border border-gray-400 px-2 py-0.5 rounded-sm font-bold text-gray-600 flex items-center gap-1">
                     <span>🚫</span>
-                    <span>Nenhuma nota selecionada</span>
+                    <span>{t('ouvido.nenhumaNotaSelecionada')}</span>
                   </div>
                 )}
 
                 {/* String / Fret Selectors */}
                 <div className="flex items-center gap-1 border-r border-dashed border-[#808080] pr-2">
-                  <span className="font-bold text-gray-600">Corda/Par:</span>
+                  <span className="font-bold text-gray-600">{t('ouvido.cordaPar')}</span>
                   <select
                     disabled={!hasActiveNote}
                     value={note ? note.stringIdx : ""}
@@ -1179,7 +1181,7 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
                     })}
                   </select>
 
-                  <span className="font-bold text-gray-600 ml-1">Traste:</span>
+                  <span className="font-bold text-gray-600 ml-1">{t('ouvido.traste')}</span>
                   <input
                     disabled={!hasActiveNote}
                     type="number"
@@ -1198,24 +1200,24 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
 
                 {/* Duration */}
                 <div className="flex items-center gap-1 border-r border-dashed border-[#808080] pr-2">
-                  <span className="font-bold text-gray-600">Duração:</span>
+                  <span className="font-bold text-gray-600">{t('ouvido.duracao')}</span>
                   <select
                     disabled={!hasActiveNote}
                     value={note ? (note.duration || 1.0) : 1.0}
                     onChange={(e) => handleUpdateStepDuration(stepId, parseFloat(e.target.value))}
                     className="bg-[#ece9d8] border border-[#808080] text-[10px] px-1 py-0.5 focus:outline-none cursor-pointer rounded-sm disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <option value="0.25">1/4 tempo</option>
-                    <option value="0.5">1/2 tempo</option>
-                    <option value="1.0">1 tempo</option>
-                    <option value="2.0">2 tempos</option>
-                    <option value="4.0">4 tempos</option>
+                    <option value="0.25">{t('ouvido.dur14')}</option>
+                    <option value="0.5">{t('ouvido.dur12')}</option>
+                    <option value="1.0">{t('ouvido.dur1')}</option>
+                    <option value="2.0">{t('ouvido.dur2')}</option>
+                    <option value="4.0">{t('ouvido.dur4')}</option>
                   </select>
                 </div>
 
                 {/* Chord Selector */}
                 <div className="flex items-center gap-1 border-r border-dashed border-[#808080] pr-2">
-                  <span className="font-bold text-gray-600">Acorde:</span>
+                  <span className="font-bold text-gray-600">{t('ouvido.acordeRotulo')}</span>
                   <select
                     disabled={!hasActiveNote}
                     value={note ? (note.suggestedChord || "") : ""}
@@ -1223,7 +1225,7 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
                     className="bg-[#ece9d8] border border-[#808080] text-[10px] px-1 py-0.5 focus:outline-none cursor-pointer max-w-[90px] rounded-sm disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <option value="">(Nenhum)</option>
-                    <optgroup label="Acordes do Tom">
+                    <optgroup label={t('ouvido.acordesDoTom')}>
                       {currentDiatonicChords.map((chord) => (
                         <option key={`opt-chord-${chord.name}`} value={chord.name}>
                           {chord.name}
@@ -1231,7 +1233,7 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
                       ))}
                     </optgroup>
                     {customPoolChords.length > 0 && (
-                      <optgroup label="Outros do Pool">
+                      <optgroup label={t('ouvido.outrosDoPool')}>
                         {customPoolChords.map((chord) => (
                           <option key={`opt-pool-${chord}`} value={chord}>
                             {chord}
@@ -1244,12 +1246,12 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
 
                 {/* Note Actions Toolbar */}
                 <div className="flex items-center gap-0.5 border-r border-dashed border-[#808080] pr-2">
-                  <span className="font-bold text-gray-500 mr-1">Nota:</span>
+                  <span className="font-bold text-gray-500 mr-1">{t('ouvido.notaRotulo')}</span>
                   <button
                     disabled={!hasActiveNote || selectedNoteIdx === 0}
                     onClick={() => handleShiftPosition(selectedNoteIdx!, 'left')}
                     className="px-1.5 py-0.5 bg-[#ece9d8] border border-white border-r-[#808080] border-bottom-[#808080] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white active:border-t-[#808080] active:border-l-[#808080] font-bold cursor-pointer rounded-sm"
-                    title="Mover Nota para Esquerda"
+                    title={t('ouvido.moverNotaEsq')}
                   >
                     ←
                   </button>
@@ -1257,7 +1259,7 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
                     disabled={!hasActiveNote || selectedNoteIdx === melody.length - 1}
                     onClick={() => handleShiftPosition(selectedNoteIdx!, 'right')}
                     className="px-1.5 py-0.5 bg-[#ece9d8] border border-white border-r-[#808080] border-bottom-[#808080] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white active:border-t-[#808080] active:border-l-[#808080] font-bold cursor-pointer rounded-sm"
-                    title="Mover Nota para Direita"
+                    title={t('ouvido.moverNotaDir')}
                   >
                     →
                   </button>
@@ -1265,7 +1267,7 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
                     disabled={!hasActiveNote}
                     onClick={() => handleTransposeNote(selectedNoteIdx!, 1)}
                     className="px-1.5 py-0.5 bg-[#ece9d8] border border-white border-r-[#808080] border-bottom-[#808080] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white active:border-t-[#808080] active:border-l-[#808080] font-bold cursor-pointer rounded-sm"
-                    title="Transpor +1 Semitom"
+                    title={t('ouvido.transporMaisDica')}
                   >
                     ▲
                   </button>
@@ -1273,7 +1275,7 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
                     disabled={!hasActiveNote}
                     onClick={() => handleTransposeNote(selectedNoteIdx!, -1)}
                     className="px-1.5 py-0.5 bg-[#ece9d8] border border-white border-r-[#808080] border-bottom-[#808080] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white active:border-t-[#808080] active:border-l-[#808080] font-bold cursor-pointer rounded-sm"
-                    title="Transpor -1 Semitom"
+                    title={t('ouvido.transporMenosDica')}
                   >
                     ▼
                   </button>
@@ -1281,7 +1283,7 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
                     disabled={!hasActiveNote}
                     onClick={() => handleDuplicateNote(selectedNoteIdx!)}
                     className="px-1.5 py-0.5 bg-[#ece9d8] border border-white border-r-[#808080] border-bottom-[#808080] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white active:border-t-[#808080] active:border-l-[#808080] font-bold cursor-pointer rounded-sm"
-                    title="Duplicar Nota"
+                    title={t('ouvido.duplicarNotaDica')}
                   >
                     📋
                   </button>
@@ -1289,7 +1291,7 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
                     disabled={!hasActiveNote}
                     onClick={() => handleRemoveMelodyNote(selectedNoteIdx!)}
                     className="px-1.5 py-0.5 bg-red-600 text-white border border-red-800 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-red-500 font-bold cursor-pointer rounded-sm"
-                    title="Excluir Nota"
+                    title={t('ouvido.excluirNotaDica')}
                   >
                     🗑️
                   </button>
@@ -1297,12 +1299,12 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
 
                 {/* Step Actions Toolbar */}
                 <div className="flex items-center gap-0.5">
-                  <span className="font-bold text-gray-500 mr-1">Passo:</span>
+                  <span className="font-bold text-gray-500 mr-1">{t('ouvido.passoRotulo')}</span>
                   <button
                     disabled={!hasActiveNote}
                     onClick={() => handleShiftStep(stepId, 'left')}
                     className="px-1.5 py-0.5 bg-[#ece9d8] border border-white border-r-[#808080] border-bottom-[#808080] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white active:border-t-[#808080] active:border-l-[#808080] font-bold cursor-pointer rounded-sm"
-                    title="Mover Passo para Esquerda"
+                    title={t('ouvido.moverPassoEsqDica')}
                   >
                     🡄
                   </button>
@@ -1310,7 +1312,7 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
                     disabled={!hasActiveNote}
                     onClick={() => handleShiftStep(stepId, 'right')}
                     className="px-1.5 py-0.5 bg-[#ece9d8] border border-white border-r-[#808080] border-bottom-[#808080] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white active:border-t-[#808080] active:border-l-[#808080] font-bold cursor-pointer rounded-sm"
-                    title="Mover Passo para Direita"
+                    title={t('ouvido.moverPassoDirDica')}
                   >
                     🡆
                   </button>
@@ -1318,7 +1320,7 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
                     disabled={!hasActiveNote}
                     onClick={() => handleAddNoteToStep(stepId)}
                     className="px-1.5 py-0.5 bg-emerald-600 text-white border border-emerald-800 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-emerald-500 font-bold cursor-pointer rounded-sm"
-                    title="Adicionar Nota ao Passo (Acorde)"
+                    title={t('ouvido.addNotaAoPassoDica')}
                   >
                     ➕
                   </button>
@@ -1326,7 +1328,7 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
                     disabled={!hasActiveNote}
                     onClick={() => handleDuplicateStep(stepId)}
                     className="px-1.5 py-0.5 bg-indigo-600 text-white border border-indigo-800 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-indigo-500 font-bold cursor-pointer rounded-sm"
-                    title="Duplicar Passo Inteiro"
+                    title={t('ouvido.duplicarPassoDica')}
                   >
                     🗗
                   </button>
@@ -1334,7 +1336,7 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
                     disabled={!hasActiveNote}
                     onClick={() => handleRemoveStep(stepId)}
                     className="px-1.5 py-0.5 bg-red-800 text-white border border-red-950 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-red-700 font-bold cursor-pointer rounded-sm"
-                    title="Excluir Passo Inteiro"
+                    title={t('ouvido.excluirPassoDica')}
                   >
                     🚫
                   </button>
@@ -1351,13 +1353,13 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
                   🤖 Gerador de Harmonia Algorítmica (Melodia ➔ Acordes)
                 </span>
                 <span className="text-[10px] text-gray-500 italic">
-                  Tenta ajustar a melhor sequência de acordes diatônicos usando heurística
+                  {t('ouvido.harmonizarDica')}
                 </span>
               </div>
               
               <div className="flex flex-wrap items-center gap-4 text-[11px]">
                 <div className="flex flex-col gap-1">
-                  <label className="font-bold text-gray-700">Tom de Referência:</label>
+                  <label className="font-bold text-gray-700">{t('ouvido.tomDeReferencia')}</label>
                   <select
                     value={harmRoot}
                     onChange={(e) => setHarmRoot(e.target.value)}
@@ -1389,19 +1391,19 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <label className="font-bold text-gray-700">Estilo de Progressão:</label>
+                  <label className="font-bold text-gray-700">{t('ouvido.estiloDeProgressao')}</label>
                   <select
                     value={harmStyle}
                     onChange={(e) => setHarmStyle(e.target.value as 'pop' | 'jazz')}
                     className="bevel-in px-2 py-0.5 bg-[#ece9d8] font-bold text-xs cursor-pointer focus:outline-none w-48"
                   >
-                    <option value="pop">Popular / Tradicional (Tríades)</option>
-                    <option value="jazz">Jazz / Bossa Nova (Tétrades)</option>
+                    <option value="pop">{t('ouvido.estiloPop')}</option>
+                    <option value="jazz">{t('ouvido.estiloJazz')}</option>
                   </select>
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <label className="font-bold text-gray-700">Compasso (Régua):</label>
+                  <label className="font-bold text-gray-700">{t('ouvido.compasso')}</label>
                   <select
                     value={timeSignature}
                     onChange={(e) => setTimeSignature(e.target.value)}
@@ -1415,17 +1417,17 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <label className="font-bold text-gray-700">Rítmica dos Acordes:</label>
+                  <label className="font-bold text-gray-700">{t('ouvido.ritmicaDosAcordes')}</label>
                   <select
                     value={chordRhythm}
                     onChange={(e) => setChordRhythm(e.target.value)}
                     className="bevel-in px-2 py-0.5 bg-[#ece9d8] font-bold text-xs cursor-pointer focus:outline-none w-48"
                   >
-                    <option value="every-beat">A cada tempo (1/1)</option>
-                    <option value="every-2-beats">A cada 2 tempos (1/2)</option>
-                    <option value="every-bar">A cada compasso (Compasso Cheio)</option>
-                    <option value="changes-only">Apenas na mudança de acorde</option>
-                    <option value="manual">Manual (Desativado / Só Rótulos)</option>
+                    <option value="every-beat">{t('ouvido.ritmoCadaTempo')}</option>
+                    <option value="every-2-beats">{t('ouvido.ritmoCada2')}</option>
+                    <option value="every-bar">{t('ouvido.ritmoCadaCompasso')}</option>
+                    <option value="changes-only">{t('ouvido.ritmoSoMudanca')}</option>
+                    <option value="manual">{t('ouvido.ritmoManual')}</option>
                   </select>
                 </div>
 
@@ -1434,20 +1436,20 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
                     onClick={handleHarmonizeMelody}
                     className="px-3 py-1 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white border border-amber-800 font-bold active:scale-95 cursor-pointer rounded-sm text-[11px] shadow-sm"
                   >
-                    ⚡ Harmonizar
+                    {t('ouvido.harmonizar')}
                   </button>
                   <button
                     onClick={handleLoadChordsToPool}
                     className="px-2.5 py-1 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white border border-blue-800 font-bold active:scale-95 cursor-pointer rounded-sm text-[11px] shadow-sm"
-                    title="Adiciona todos os acordes gerados na melodia ao pool global da música"
+                    title={t('ouvido.addAoPoolDica')}
                   >
-                    📥 Add ao Pool
+                    {t('ouvido.addAoPool')}
                   </button>
                   <button
                     onClick={handleClearChords}
                     className="px-2.5 py-1 bg-[#ece9d8] hover:bg-gray-100 text-gray-700 border border-gray-400 font-bold active:scale-95 cursor-pointer rounded-sm text-[11px] shadow-sm"
                   >
-                    🗑 Limpar
+                    {t('ouvido.limparEditor')}
                   </button>
                 </div>
               </div>
@@ -1458,68 +1460,68 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
           <div className="flex items-center justify-between bg-[#f1efe2] border border-[#808080] p-1 rounded-t-sm gap-1 select-none" style={{ fontSize: '10px' }}>
             {/* LEFT: Horizontal Timeline Slow Scroll */}
             <div className="flex items-center gap-1">
-              <span className="font-bold text-gray-600 text-[9px] mr-0.5">Timeline:</span>
+              <span className="font-bold text-gray-600 text-[9px] mr-0.5">{t('ouvido.timeline')}</span>
               <button
                 onMouseDown={() => startSlowScroll('left')}
                 onMouseUp={stopSlowScroll}
                 onMouseLeave={stopSlowScroll}
                 className="px-1.5 py-0.5 bg-[#ece9d8] border border-white border-r-[#808080] border-b-[#808080] hover:bg-white active:border-t-[#808080] active:border-l-[#808080] font-bold cursor-pointer rounded-sm text-[10px] select-none"
-                title="Rolagem lenta para esquerda (segure)"
+                title={t('ouvido.rolarEsqDica')}
               >
-                ◀ Rolar
+                {t('ouvido.rolarEsq')}
               </button>
               <button
                 onMouseDown={() => startSlowScroll('right')}
                 onMouseUp={stopSlowScroll}
                 onMouseLeave={stopSlowScroll}
                 className="px-1.5 py-0.5 bg-[#ece9d8] border border-white border-r-[#808080] border-b-[#808080] hover:bg-white active:border-t-[#808080] active:border-l-[#808080] font-bold cursor-pointer rounded-sm text-[10px] select-none"
-                title="Rolagem lenta para direita (segure)"
+                title={t('ouvido.rolarDirDica')}
               >
-                Rolar ▶
+                {t('ouvido.rolarDir')}
               </button>
             </div>
 
             {/* RIGHT: Vertical MIDI Range Expand/Shrink */}
             <div className="flex items-center gap-1">
-              <span className="font-bold text-gray-600 text-[9px] mr-0.5">Teclado MIDI:</span>
+              <span className="font-bold text-gray-600 text-[9px] mr-0.5">{t('ouvido.tecladoMidi')}</span>
               <button
                 onClick={() => setExtraHighRows(prev => Math.min(prev + 3, 36))}
                 className="px-1.5 py-0.5 bg-[#ece9d8] border border-white border-r-[#808080] border-b-[#808080] hover:bg-white active:border-t-[#808080] active:border-l-[#808080] font-bold cursor-pointer rounded-sm text-[10px]"
-                title="Expandir agudos (+3 notas acima)"
+                title={t('ouvido.expandirAgudos')}
               >
-                ▲ Agudos
+                {t('ouvido.agudosMais')}
               </button>
               <button
                 onClick={() => setExtraHighRows(prev => Math.max(prev - 3, 0))}
                 className="px-1.5 py-0.5 bg-[#ece9d8] border border-white border-r-[#808080] border-b-[#808080] hover:bg-white active:border-t-[#808080] active:border-l-[#808080] font-bold cursor-pointer rounded-sm text-[10px] disabled:opacity-40 disabled:cursor-not-allowed"
-                title="Reduzir agudos (-3 notas acima)"
+                title={t('ouvido.reduzirAgudos')}
                 disabled={extraHighRows === 0}
               >
-                ▼ Agudos
+                {t('ouvido.agudosMenos')}
               </button>
               <div className="w-px h-4 bg-[#808080] mx-0.5" />
               <button
                 onClick={() => setExtraLowRows(prev => Math.min(prev + 3, 36))}
                 className="px-1.5 py-0.5 bg-[#ece9d8] border border-white border-r-[#808080] border-b-[#808080] hover:bg-white active:border-t-[#808080] active:border-l-[#808080] font-bold cursor-pointer rounded-sm text-[10px]"
-                title="Expandir graves (+3 notas abaixo)"
+                title={t('ouvido.expandirGraves')}
               >
-                ▼ Graves
+                {t('ouvido.gravesMenos')}
               </button>
               <button
                 onClick={() => setExtraLowRows(prev => Math.max(prev - 3, 0))}
                 className="px-1.5 py-0.5 bg-[#ece9d8] border border-white border-r-[#808080] border-b-[#808080] hover:bg-white active:border-t-[#808080] active:border-l-[#808080] font-bold cursor-pointer rounded-sm text-[10px] disabled:opacity-40 disabled:cursor-not-allowed"
-                title="Reduzir graves (-3 notas abaixo)"
+                title={t('ouvido.reduzirGraves')}
                 disabled={extraLowRows === 0}
               >
-                ▲ Graves
+                {t('ouvido.gravesMais')}
               </button>
               {(extraHighRows > 0 || extraLowRows > 0) && (
                 <button
                   onClick={() => { setExtraHighRows(0); setExtraLowRows(0); }}
                   className="px-1.5 py-0.5 bg-amber-100 border border-amber-400 hover:bg-amber-200 font-bold cursor-pointer rounded-sm text-[9px] text-amber-800"
-                  title="Resetar range do teclado MIDI para o padrão"
+                  title={t('ouvido.resetRangeDica')}
                 >
-                  ↺ Reset
+                  {t('ouvido.resetRange')}
                 </button>
               )}
             </div>
@@ -1532,10 +1534,10 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
             onKeyDown={handleKeyDown}
             onWheel={handleScrollOrWheel}
             className="flex flex-col bg-white border border-[#808080] border-t-0 overflow-auto whitespace-nowrap retro-scrollbar outline-none focus:ring-1 focus:ring-[#0058e6] focus:border-[#0058e6] shadow-inner rounded-b-sm relative flex-1 min-h-0"
-            title="Foque aqui para usar atalhos do teclado (Delete, ←/→, +/-, D)"
+            title={t('ouvido.foqueAqui')}
           >
             {melody.length === 0 ? (
-              <span className="p-4 text-gray-600 italic text-[11px] whitespace-normal">Nenhuma nota tocada. Toque no braço acima para construir a melodia passo a passo!</span>
+              <span className="p-4 text-gray-600 italic text-[11px] whitespace-normal">{t('ouvido.semNotas')}</span>
             ) : (
               <div className="relative inline-block min-w-full min-w-max">
                 {/* Playhead Pin (using high-performance CSS translateX layout translation) */}
@@ -1592,7 +1594,7 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
             <div
               onMouseDown={(e) => handleEdgeResizeStart('bottom', e)}
               className="h-[6px] cursor-ns-resize bg-gradient-to-b from-[#d4d0c8] to-[#ece9d8] hover:from-[#0058e6] hover:to-[#3a8bfb] transition-colors duration-150 rounded-b-sm select-none flex items-center justify-center"
-              title="Arraste para redimensionar a altura do editor"
+              title={t('ouvido.redimensionar')}
             >
               <div className="w-10 h-[2px] bg-[#808080] rounded opacity-50" />
             </div>
@@ -1615,7 +1617,7 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
           className="bg-[#ece9d8] border-2 border-white border-r-[#808080] border-bottom-[#808080] shadow-[2px_2px_10px_rgba(0,0,0,0.3)] rounded-sm py-1 text-[10px] text-gray-800 font-mono select-none"
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="px-2 py-0.5 text-[8px] font-bold text-gray-500 uppercase border-b border-gray-300">Nota</div>
+          <div className="px-2 py-0.5 text-[8px] font-bold text-gray-500 uppercase border-b border-gray-300">{t('ouvido.nota')}</div>
           <button
             onClick={() => {
               handleDuplicateNote(menuCoords!.index);
@@ -1623,7 +1625,7 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
             }}
             className="w-full text-left px-2 py-1 hover:bg-[#0058e6] hover:text-white cursor-pointer flex items-center gap-1.5"
           >
-            <span>🗐</span> Duplicar Nota
+            <span>🗐</span> {t('ouvido.duplicarNota')}
           </button>
           <button
             onClick={() => {
@@ -1632,7 +1634,7 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
             }}
             className="w-full text-left px-2 py-1 hover:bg-[#0058e6] hover:text-white cursor-pointer flex items-center gap-1.5"
           >
-            <span>▴</span> Transpor +1
+            <span>▴</span> {t('ouvido.transporMais')}
           </button>
           <button
             onClick={() => {
@@ -1641,7 +1643,7 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
             }}
             className="w-full text-left px-2 py-1 hover:bg-[#0058e6] hover:text-white cursor-pointer flex items-center gap-1.5"
           >
-            <span>▾</span> Transpor -1
+            <span>▾</span> {t('ouvido.transporMenos')}
           </button>
           <button
             onClick={() => {
@@ -1650,7 +1652,7 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
             }}
             className="w-full text-left px-2 py-1 hover:bg-red-600 hover:text-white text-red-600 font-bold cursor-pointer flex items-center gap-1.5"
           >
-            <span>🗑</span> Excluir Nota
+            <span>🗑</span> {t('ouvido.excluirNota')}
           </button>
 
           <div className="px-2 py-0.5 mt-1 text-[8px] font-bold text-gray-500 uppercase border-t border-b border-gray-300">Passo (Acorde)</div>
@@ -1661,7 +1663,7 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
             }}
             className="w-full text-left px-2 py-1 hover:bg-[#0058e6] hover:text-white cursor-pointer flex items-center gap-1.5"
           >
-            <span>➕</span> Add Nota ao Passo
+            <span>➕</span> {t('ouvido.addNotaAoPasso')}
           </button>
           <button
             onClick={() => {
@@ -1670,7 +1672,7 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
             }}
             className="w-full text-left px-2 py-1 hover:bg-[#0058e6] hover:text-white cursor-pointer flex items-center gap-1.5"
           >
-            <span>🗗</span> Duplicar Passo
+            <span>🗗</span> {t('ouvido.duplicarPasso')}
           </button>
           <button
             onClick={() => {
@@ -1679,7 +1681,7 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
             }}
             className="w-full text-left px-2 py-1 hover:bg-[#0058e6] hover:text-white cursor-pointer flex items-center gap-1.5"
           >
-            <span>◀</span> Mover Passo Esq.
+            <span>◀</span> {t('ouvido.moverPassoEsq')}
           </button>
           <button
             onClick={() => {
@@ -1688,7 +1690,7 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
             }}
             className="w-full text-left px-2 py-1 hover:bg-[#0058e6] hover:text-white cursor-pointer flex items-center gap-1.5"
           >
-            <span>▶</span> Mover Passo Dir.
+            <span>▶</span> {t('ouvido.moverPassoDir')}
           </button>
           <button
             onClick={() => {
@@ -1697,7 +1699,7 @@ const MelodySequenceEditorContent: React.FC<MelodySequenceEditorProps> = ({
             }}
             className="w-full text-left px-2 py-1 hover:bg-red-800 hover:text-white text-red-800 font-bold cursor-pointer flex items-center gap-1.5"
           >
-            <span>🗑</span> Excluir Passo
+            <span>🗑</span> {t('ouvido.excluirPasso')}
           </button>
         </div>
       )}

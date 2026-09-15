@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useT } from '../i18n';
 import type { Tuning, Instrument } from '../engine/types';
 import { NOTE_NAMES_SHARP, NOTE_NAMES_FLAT, CHORD_FORMULAS } from '../engine/tunings';
 import { noteNameToPitchClass, midiToNoteName, shouldUseFlats } from '../engine/chordCalculator';
@@ -6,7 +7,7 @@ import { MelodySequenceEditor } from './MelodySequenceEditor';
 import type { MelodyNote } from './MelodySequenceEditor';
 
 // ────────────────────────────────────────────────────────────
-// ANUNCIAÇÃO – Alceu Valença  │ Tom: G Maior │ 109 BPM
+// ANUNCIAÇÃO – Alceu Valença  │ Tom: G Maior │ {t('ouvido.tempoPadraoBpm')}
 // Cifra melódica: cifras.com.br / ciframelodica / partituras
 // ────────────────────────────────────────────────────────────
 interface PresetNote {
@@ -584,6 +585,7 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
   editorHeight,
   onEditorHeightChange,
 }) => {
+  const t = useT();
   const numStrings = selectedTuning.strings.length;
   const maxFrets = 12;
 
@@ -990,15 +992,15 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
       
       {/* Box Header (XP style) */}
       <div className="bg-gradient-to-r from-[#0058e6] to-[#3a8bfb] text-white px-2 py-1 flex justify-between items-center font-bold text-sm select-none">
-        <span>Tirando de Ouvido</span>
-        <span className="font-mono text-xs opacity-80">Análise de Tom & Harmonia</span>
+        <span>{t('ouvido.titulo')}</span>
+        <span className="font-mono text-xs opacity-80">{t('ouvido.analiseTitulo')}</span>
       </div>
 
       {/* Workflow hint */}
       <div className="bg-[#fff9e6] border border-[#e0c060] px-3 py-1.5 font-mono text-[10px] text-gray-700 flex flex-wrap gap-x-4 gap-y-0.5 leading-relaxed select-none">
-        <span><strong className="text-[#0058e6]">① Clique notas no braço</strong> → detecção automática de notas</span>
-        <span><strong className="text-[#228b22]">② Tom sugerido aparece</strong> → clique para confirmar a escala</span>
-        <span><strong className="text-[#cc3300]">③ Veja os acordes</strong> que cabem naquele tom</span>
+        <span><strong className="text-[#0058e6]">{t('ouvido.passo1')}</strong> {t('ouvido.passo1b')}</span>
+        <span><strong className="text-[#228b22]">{t('ouvido.passo2')}</strong> {t('ouvido.passo2b')}</span>
+        <span><strong className="text-[#cc3300]">{t('ouvido.passo3')}</strong> {t('ouvido.passo3b')}</span>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -1062,7 +1064,7 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
                   onClick={handleAddChord}
                   className="px-1 py-1 bg-[#ece9d8] border border-white border-r-[#808080] border-bottom-[#808080] font-bold active:border-t-[#808080] active:border-l-[#808080] hover:bg-white cursor-pointer select-none col-span-1 w-full text-center truncate"
                 >
-                  + Add
+                  {t('ouvido.add')}
                 </button>
               </div>
             </div>
@@ -1086,7 +1088,7 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
             <div className="flex flex-wrap items-center gap-3">
               {/* File Input */}
               <div className="flex flex-col gap-1">
-                <label htmlFor="sample-file-upload" className="font-bold text-gray-600 text-[10px]">Carregar Arquivo de Áudio:</label>
+                <label htmlFor="sample-file-upload" className="font-bold text-gray-600 text-[10px]">{t('ouvido.carregarAudio')}</label>
                 <div className="relative">
                   <input
                     type="file"
@@ -1113,11 +1115,11 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
 
               {/* Preset Loader */}
               <div className="flex flex-col gap-1">
-                <label className="font-bold text-gray-600 text-[10px]">Presets de Treino:</label>
+                <label className="font-bold text-gray-600 text-[10px]">{t('ouvido.presetsDeTreino')}</label>
                 <button
                   onClick={handleLoadAnunciacao}
                   className="px-2.5 py-1 bg-gradient-to-r from-[#0058e6] to-[#3a8bfb] text-white border border-[#002fa7] font-bold active:scale-95 hover:from-[#0047c4] cursor-pointer text-[11px] flex items-center gap-1 rounded-sm shadow-sm"
-                  title="Carregar melodia de Anunciação de Alceu Valença a 109 BPM"
+                  title={t('ouvido.presetDica')}
                 >
                   🎵 Anunciação (Alceu Valença)
                 </button>
@@ -1140,7 +1142,7 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
                   
                   {/* Playback speed control */}
                   <div className="flex items-center gap-1.5 bg-white/50 border border-gray-400 px-2 py-0.5 rounded-sm">
-                    <span className="font-bold text-gray-600 text-[10px]">Velocidade:</span>
+                    <span className="font-bold text-gray-600 text-[10px]">{t('ouvido.velocidade')}</span>
                     <select
                       value={playbackRate}
                       onChange={(e) => {
@@ -1165,12 +1167,12 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
             
             {sampleName && (
               <div className="text-[10px] text-gray-500 font-semibold truncate max-w-full">
-                Arquivo ativo: <span className="text-[#002fa7]">{sampleName}</span>
+                {t('ouvido.arquivoAtivo')} <span className="text-[#002fa7]">{sampleName}</span>
               </div>
             )}
 
             <div className="text-[9px] text-gray-500 border-t border-dashed border-gray-400 pt-1.5 mt-1.5 leading-normal">
-              💡 <strong>Dica de Ritmo (Baião):</strong> O tempo padrão de <em>"Anunciação"</em> é <strong>109 BPM</strong>. Músicos e softwares frequentemente utilizam contagem dobrada (<strong>195 BPM a 200 BPM</strong>) para loops de bateria rápidos ou para facilitar a escrita da subdivisão rápida do baião caipira.
+              💡 <strong>Dica de Ritmo (Baião):</strong> {t('ouvido.tempoPadraoA')} <em>{t('ouvido.tempoPadraoMusica')}</em> é <strong>{t('ouvido.tempoPadraoBpm')}</strong>. Músicos e softwares frequentemente utilizam contagem dobrada (<strong>{t('ouvido.tempoPadraoFaixa')}</strong>) para loops de bateria rápidos ou para facilitar a escrita da subdivisão rápida do baião caipira.
             </div>
             </div>}
           </div>
@@ -1190,7 +1192,7 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
                       }}
                       className="px-2 py-0.5 bg-[#0058e6] text-white border border-blue-800 hover:bg-blue-600 active:scale-95 cursor-pointer font-bold flex items-center gap-1.5 rounded-sm shadow-sm"
                     >
-                      🎵 Abrir Editor de Melodia
+                      {t('ouvido.abrirEditor')}
                     </button>
                   )}
                   <button 
@@ -1198,14 +1200,14 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
                     disabled={melody.length === 0}
                     className="px-2 py-0.5 bg-[#d4d0c8] border border-white border-r-[#808080] border-bottom-[#808080] hover:bg-white active:border-t-[#808080] active:border-l-[#808080] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                   >
-                    Apagar Última
+                    {t('ouvido.apagarUltima')}
                   </button>
                   <button 
                     onClick={handleClearNotes}
                     disabled={melody.length === 0}
                     className="px-2 py-0.5 bg-[#d4d0c8] border border-white border-r-[#808080] border-bottom-[#808080] hover:bg-white active:border-t-[#808080] active:border-l-[#808080] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                   >
-                    Limpar
+                    {t('ouvido.limpar')}
                   </button>
                 </div>
               </div>
@@ -1333,7 +1335,7 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
             <span className="font-bold text-gray-600 block mb-2">Pool de Notas Ativas (Diferentes Pitch Classes encontradas):</span>
             <div className="flex flex-wrap gap-1.5">
               {activePcs.size === 0 ? (
-                <span className="text-gray-600 italic text-[11px]">Nenhuma nota no pool. Toque no braço ou adicione acordes acima.</span>
+                <span className="text-gray-600 italic text-[11px]">{t('ouvido.poolVazio')}</span>
               ) : (
                 Array.from(activePcs).map(pc => (
                   <span
@@ -1355,19 +1357,19 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
           {/* Chords Added Container */}
           <div className="bg-white border-2 border-[#808080] border-r-white border-bottom-white p-3 flex flex-col gap-2 font-mono text-xs">
             <div className="flex justify-between items-center border-b border-dashed border-[#808080] pb-1.5">
-              <span className="font-bold text-gray-700">Acordes Adicionados:</span>
+              <span className="font-bold text-gray-700">{t('ouvido.acordesAdicionados')}</span>
               <button 
                 onClick={handleClearChords}
                 disabled={selectedChords.length === 0}
                 className="text-[10px] px-1.5 py-0.5 bg-[#d4d0c8] border border-white border-r-[#808080] border-bottom-[#808080] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white active:border-t-[#808080] active:border-l-[#808080] cursor-pointer"
               >
-                Limpar
+                {t('ouvido.limpar')}
               </button>
             </div>
             
             <div className="flex flex-wrap gap-1.5 min-h-[50px] items-center p-2 bg-[#ece9d8]/30 border border-dotted border-gray-400 rounded">
               {selectedChords.length === 0 ? (
-                <span className="text-gray-600 italic text-[11px]">Nenhum acorde adicionado ainda.</span>
+                <span className="text-gray-600 italic text-[11px]">{t('ouvido.semAcordes')}</span>
               ) : (
                 selectedChords.map(c => (
                   <span 
@@ -1390,14 +1392,14 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
           {/* Key Analysis Results */}
           <div className="bg-white border-2 border-[#808080] border-r-white border-bottom-white p-3 flex flex-col gap-2 font-mono text-xs flex-1">
             <span className="font-bold text-[#002fa7] border-b border-dashed border-[#808080] pb-1.5 flex items-center justify-between">
-              <span>Sugestão de Tom:</span>
-              <span className="font-normal text-[9px] text-gray-500">clique para confirmar escala</span>
+              <span>{t('ouvido.sugestaoDeTom')}</span>
+              <span className="font-normal text-[9px] text-gray-500">{t('ouvido.cliqueParaConfirmar')}</span>
             </span>
 
             <div className="flex-1 overflow-y-auto max-h-[300px] flex flex-col gap-2 pr-1 retro-scrollbar">
               {activePcs.size === 0 ? (
                 <div className="text-gray-600 italic text-[11px] text-center py-8">
-                  Adicione notas no braço ou insira acordes ao lado para ver os tons correspondentes.
+                  {t('ouvido.adicioneNotas')}
                 </div>
               ) : (
                 sortedMatches.slice(0, 5).map(match => {
@@ -1430,12 +1432,12 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
 
                       {selectedChords.length > 0 && (
                         <div className="text-[10px] text-gray-600">
-                          Acordes no tom: <strong className="text-gray-900">{match.compatibleChordsCount} / {selectedChords.length}</strong>
+                          {t('ouvido.acordesNoTom')} <strong className="text-gray-900">{match.compatibleChordsCount} / {selectedChords.length}</strong>
                         </div>
                       )}
                       {isActive && (
                         <div className="text-[9px] text-[#0058e6] font-bold">
-                          Escala visível no braço • Acordes listados abaixo
+                          {t('ouvido.escalaVisivel')}
                         </div>
                       )}
                     </button>
@@ -1447,9 +1449,9 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
             {/* Key Fusions/Modulations section */}
             {fusions.length > 0 && (
               <div className="border-t border-[#808080]/30 pt-2.5 mt-2">
-                <span className="font-bold text-[#cc3300] block mb-1">Possível Modulação / Fusão de Tons:</span>
+                <span className="font-bold text-[#cc3300] block mb-1">{t('ouvido.modulacao')}</span>
                 <p className="text-[10px] text-gray-600 leading-normal mb-2">
-                  Como nenhuma escala cobre 100% das notas inseridas sozinhos, a música pode transitar entre os seguintes tons:
+                  {t('ouvido.modulacaoTexto')}
                 </p>
                 <div className="max-h-[100px] overflow-y-auto flex flex-col gap-1 pr-1 retro-scrollbar">
                   {fusions.slice(0, 3).map((f, idx) => (
@@ -1466,7 +1468,7 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
           {/* Recommended Chords Container */}
           <div className="bg-white border-2 border-[#808080] border-r-white border-bottom-white p-3 flex flex-col gap-2 font-mono text-xs">
             <span className="font-bold text-[#228b22] border-b border-dashed border-[#808080] pb-1.5 flex items-center justify-between">
-              <span>Acordes Diatônicos:</span>
+              <span>{t('ouvido.acordesDiatonicos')}</span>
               {sortedMatches[0] && (
                 <span className="font-normal text-[9px] text-gray-500">{sortedMatches[0]?.name}</span>
               )}
@@ -1474,7 +1476,7 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
             
             {melody.length === 0 ? (
               <div className="text-gray-600 italic text-[11px] text-center py-4">
-                Monte uma melodia para ver sugestões de acordes harmonizados.
+                {t('ouvido.monteMelodia')}
               </div>
             ) : (
               <div className="flex flex-col gap-2 max-h-[220px] overflow-y-auto pr-1 retro-scrollbar">
@@ -1499,7 +1501,7 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
                           </span>
                         ) : (
                           <span className="text-[9px] text-gray-600 block truncate">
-                            Nenhuma nota compartilhada
+                            {t('ouvido.semNotaCompartilhada')}
                           </span>
                         )}
                       </div>
@@ -1513,7 +1515,7 @@ export const EarTranscription: React.FC<EarTranscriptionProps> = ({
                         disabled={alreadyAdded}
                         className="px-2 py-0.5 text-[10px] font-bold bg-[#ece9d8] border border-white border-r-[#808080] border-bottom-[#808080] active:border-t-[#808080] active:border-l-[#808080] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white cursor-pointer select-none shrink-0"
                       >
-                        {alreadyAdded ? "✓ Adicionado" : "+ Add"}
+                        {alreadyAdded ? "✓ Adicionado" : "{t('ouvido.add')}"}
                       </button>
                     </div>
                   );

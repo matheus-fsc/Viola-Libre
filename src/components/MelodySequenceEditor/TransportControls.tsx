@@ -1,4 +1,5 @@
 import React from 'react';
+import { useT } from '../../i18n';
 import { UndoIcon, RedoIcon, PlayIcon, PauseIcon, RestartIcon, RobotIcon } from '../Icons';
 import { usePlayback } from './PlaybackContext';
 
@@ -19,6 +20,7 @@ export const TransportControls: React.FC<TransportControlsProps> = ({
   showHarmonizer,
   setShowHarmonizer,
 }) => {
+  const t = useT();
   const {
     bpm,
     setBpm,
@@ -37,10 +39,10 @@ export const TransportControls: React.FC<TransportControlsProps> = ({
       <div className="flex items-center gap-3 flex-wrap">
         {/* BPM Slider */}
         <div className="flex items-center gap-1.5 text-[11px] font-bold text-gray-600">
-          <span>Tempo:</span>
+          <span>{t('ouvido.tempoRotulo')}</span>
           <input
             type="range"
-            aria-label="Andamento em BPM"
+            aria-label={t('ouvido.bpmAria')}
             min="60"
             max="220"
             value={bpm}
@@ -56,7 +58,7 @@ export const TransportControls: React.FC<TransportControlsProps> = ({
             onClick={handleUndo}
             disabled={historyIndex <= 0}
             className="px-2 py-0.5 bg-[#ece9d8] border border-white border-r-[#808080] border-bottom-[#808080] disabled:opacity-40 disabled:cursor-not-allowed font-bold active:border-t-[#808080] active:border-l-[#808080] hover:bg-white cursor-pointer select-none text-[10px] rounded-sm flex items-center gap-1"
-            title="Desfazer ação (Ctrl+Z)"
+            title={t('ouvido.desfazer')}
           >
             <UndoIcon className="w-4 h-4" />
           </button>
@@ -64,7 +66,7 @@ export const TransportControls: React.FC<TransportControlsProps> = ({
             onClick={handleRedo}
             disabled={historyIndex >= historyLength - 1}
             className="px-2 py-0.5 bg-[#ece9d8] border border-white border-r-[#808080] border-bottom-[#808080] disabled:opacity-40 disabled:cursor-not-allowed font-bold active:border-t-[#808080] active:border-l-[#808080] hover:bg-white cursor-pointer select-none text-[10px] rounded-sm flex items-center gap-1"
-            title="Refazer ação (Ctrl+Y)"
+            title={t('ouvido.refazer')}
           >
             <RedoIcon className="w-4 h-4" />
           </button>
@@ -89,7 +91,7 @@ export const TransportControls: React.FC<TransportControlsProps> = ({
             onClick={handleRestartMelody}
             disabled={melody.length === 0}
             className="px-3 py-1 bg-[#ece9d8] border border-[#808080] hover:bg-white text-gray-700 font-bold active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer select-none flex items-center gap-1.5 rounded-sm transition-all"
-            title="Reiniciar da primeira nota"
+            title={t('ouvido.reiniciar')}
           >
             <RestartIcon className="w-4 h-4" />
           </button>
@@ -104,7 +106,7 @@ export const TransportControls: React.FC<TransportControlsProps> = ({
               ? 'bg-amber-100 border-amber-600 text-amber-900 shadow-inner'
               : 'bg-[#ece9d8] border-[#808080] hover:bg-white text-gray-700'
           }`}
-          title="Painel de Harmonização e Geração de Acordes"
+          title={t('ouvido.painelHarmonizacao')}
         >
           <RobotIcon className="w-4 h-4" />
         </button>

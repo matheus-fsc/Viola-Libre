@@ -1,7 +1,9 @@
 import React from 'react';
+import { useT } from '../../i18n';
 import { usePlayback } from './PlaybackContext';
 
 export const TimeRuler: React.FC = React.memo(() => {
+  const t = useT();
   const { stepPositions, seekToBeat } = usePlayback();
 
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -72,7 +74,7 @@ export const TimeRuler: React.FC = React.memo(() => {
       <div className="flex h-6 bg-[#f1efe2] border-b border-[#808080] shrink-0 font-mono text-[9px] font-bold text-gray-600 select-none">
         {/* Sticky left offset header label */}
         <div className="sticky left-0 bg-[#ece9d8] border-r border-[#808080] w-14 h-full shrink-0 z-20 flex items-center justify-center text-[8px] text-gray-500 font-bold uppercase tracking-wider">
-          Nota
+          {t('ouvido.nota')}
         </div>
         {stepPositions.map((step) => (
           <div 
