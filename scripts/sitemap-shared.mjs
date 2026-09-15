@@ -25,6 +25,7 @@ export const API_BASE = process.env.SITEMAP_API_BASE || 'https://api.violalibre.
  * Fora daqui, de propósito:
  *   /minhascifras — rascunho local, sem versão pública (noindex + robots.txt);
  *   /favoritos    — a estante de quem visita; para o rastreador a página é vazia;
+ *   /preferencias — painel de configuração local, sem conteúdo público (noindex);
  *   as rotas de timing — ferramenta de edição, mesma cifra que já está indexada.
  */
 export const STATIC_PATHS = [

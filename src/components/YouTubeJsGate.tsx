@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { allowYouTubeJs, denyYouTubeJs } from '../services/youtubeApi';
+import { allowYouTubeJs, denyYouTubeJs, type YouTubeJsConsent } from '../services/youtubeApi';
+import { useT, type Chave } from '../i18n';
 import { useYouTubeJsConsent } from '../hooks/useYouTubeJsAllowed';
 
 interface YouTubeJsGateProps {
@@ -17,37 +18,40 @@ interface YouTubeJsGateProps {
  * autorizado. O texto é explícito de propósito: quem escolhe usar um site livre
  * merece saber exatamente o que está aceitando antes de aceitar, e não depois.
  */
-export const YouTubeJsGate: React.FC<YouTubeJsGateProps> = ({ className = '', compact = false }) => (
-  <div className={`flex flex-col items-center justify-center gap-2 text-center px-3 py-3 ${className}`}>
-    <p className={`${compact ? 'text-[10px]' : 'text-[11px]'} leading-snug`}>
-      O player do YouTube depende de <strong>JavaScript não-livre</strong>, de terceiros.
-      {!compact && ' Ele não é carregado sem o seu consentimento — o resto do site funciona normalmente sem ele.'}
-    </p>
-    <button
-      type="button"
-      onClick={allowYouTubeJs}
-      className="bevel-out bg-[var(--color-winxp-panel)] text-black px-2 py-0.5 text-[11px] font-bold border border-gray-400 hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
-    >
-      Carregar o player do YouTube
-    </button>
-    <p className={`${compact ? 'text-[9px]' : 'text-[10px]'} opacity-70 leading-snug`}>
-      A escolha fica lembrada neste navegador e pode ser desfeita na{' '}
-      <Link to="/privacidade" className="underline">Política de Privacidade</Link>.
-    </p>
-  </div>
-);
+export const YouTubeJsGate: React.FC<YouTubeJsGateProps> = ({ className = '', compact = false }) => {
+  const t = useT();
+  return (
+    <div className={`flex flex-col items-center justify-center gap-2 text-center px-3 py-3 ${className}`}>
+      {/* O que está em negrito é uma frase inteira, e não um pedaço costurado no meio da
+          outra: cada idioma põe "não-livre" numa posição diferente da oração, e texto
+          partido em três para embrulhar um <strong> só sai certo num deles. */}
+      <p className={`${compact ? 'text-[10px]' : 'text-[11px]'} leading-snug`}>
+        <strong>{t('youtube.gateForte')}</strong>{' '}
+        {compact ? t('youtube.gateCurto') : t('youtube.gateLongo')}
+      </p>
+      <button
+        type="button"
+        onClick={allowYouTubeJs}
+        className="bevel-out bg-[var(--color-winxp-panel)] text-black px-2 py-0.5 text-[11px] font-bold border border-gray-400 hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
+      >
+        {t('youtube.gateBotao')}
+      </button>
+      {/* O link aponta para as Preferências, e não mais para a Política de Privacidade:
+          a chave continua nas duas telas, mas agora o lugar de REVER uma escolha é o
+          painel que junta todas elas. */}
+      <p className={`${compact ? 'text-[9px]' : 'text-[10px]'} opacity-70 leading-snug`}>
+        {t('youtube.gateLembrada')}{' '}
+        <Link to="/preferencias" className="underline">{t('youtube.gateMudar')}</Link>.
+      </p>
+    </div>
+  );
+};
 
-/**
- * Controle de autorização para a Política de Privacidade.
- *
- * Uma permissão que só pode ser concedida, nunca retirada, não é permissão. Este
- * é o lugar onde ela volta atrás.
- */
-/** Legenda de cada estado — o "ainda não perguntado" não é igual a um "não". */
-const LEGENDA: Record<string, string> = {
-  'nao-perguntado': 'Ninguém perguntou ainda, e nada foi carregado. A chave liga na primeira vez que você pedir um vídeo — ou aqui mesmo, agora.',
-  sim: 'O player pode carregar. Desligar vale a partir do próximo vídeo; recarregue a página para tirar da memória o script já baixado.',
-  nao: 'O script do YouTube não é carregado, e o site não perde nada além do player: a rolagem automática deduz o tempo pelo BPM da cifra.',
+/** Chave da legenda de cada estado: o "ainda não perguntado" não é igual a um "não". */
+const LEGENDA: Record<YouTubeJsConsent, Chave> = {
+  'nao-perguntado': 'youtube.legendaNaoPerguntado',
+  sim: 'youtube.legendaSim',
+  nao: 'youtube.legendaNao',
 };
 
 /**
@@ -55,12 +59,14 @@ const LEGENDA: Record<string, string> = {
  *
  * Uma permissão que só pode ser concedida, nunca retirada, não é permissão —
  * este é o lugar onde ela volta atrás. Desenhada como interruptor e não como
- * link porque o estado precisa ser legível de relance: quem abre a Política de
- * Privacidade quer saber o que está ligado, não ler um parágrafo para descobrir.
+ * link porque o estado precisa ser legível de relance: quem abre as Preferências ou a
+ * Política de Privacidade quer saber o que está ligado, não ler um parágrafo para
+ * descobrir. O mesmo componente serve às duas telas, e por isso elas nunca discordam.
  */
 export const YouTubeJsConsentControl: React.FC = () => {
   const consent = useYouTubeJsConsent();
   const allowed = consent === 'sim';
+  const t = useT();
 
   return (
     <div className="mt-3 bevel-out bg-[var(--color-winxp-bg)] p-2.5 flex flex-col gap-2 max-w-md">
@@ -69,7 +75,7 @@ export const YouTubeJsConsentControl: React.FC = () => {
           type="button"
           role="switch"
           aria-checked={allowed}
-          aria-label="Autorizar o JavaScript não-livre do YouTube"
+          aria-label={t('youtube.chaveAria')}
           onClick={allowed ? denyYouTubeJs : allowYouTubeJs}
           // Trilho afundado com o botão em relevo, como um interruptor do XP.
           // As bordas vão explícitas em vez de `bevel-in` porque aquela classe
@@ -83,7 +89,7 @@ export const YouTubeJsConsentControl: React.FC = () => {
               allowed ? 'left-[5px] text-white' : 'right-[5px] text-[#606060]'
             }`}
           >
-            {allowed ? 'SIM' : 'NÃO'}
+            {allowed ? t('youtube.chaveSim') : t('youtube.chaveNao')}
           </span>
           <span
             className={`absolute top-0 w-[24px] h-[20px] bg-[var(--color-winxp-panel)] border-2 border-t-white border-l-white border-r-[#808080] border-b-[#808080] transition-all duration-150 ${
@@ -93,12 +99,12 @@ export const YouTubeJsConsentControl: React.FC = () => {
         </button>
 
         <span className="font-mono text-xs sm:text-sm font-bold text-black/85">
-          JavaScript do YouTube: {allowed ? 'autorizado' : 'bloqueado'}
+          {allowed ? t('youtube.estadoAutorizado') : t('youtube.estadoBloqueado')}
         </span>
       </div>
 
       <p className="text-[11px] sm:text-xs text-gray-600 leading-snug">
-        {LEGENDA[consent]}
+        {t(LEGENDA[consent])}
       </p>
     </div>
   );
