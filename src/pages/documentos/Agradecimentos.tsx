@@ -1,94 +1,74 @@
 import React from 'react';
 import { DocumentoPage, Section, Lista, Link } from '../../components/DocumentoPage';
+import { useT } from '../../i18n';
 
 const CONTACT_EMAIL = 'suporte@violalibre.com.br';
 
 /**
  * Página deliberadamente incompleta: a lista de pessoas está vazia até que cada uma diga se
  * quer ser nomeada. Listar quem não pediu para aparecer é justamente o oposto do que a
- * página de privacidade promete — então o vazio aqui é a posição correta, não pendência.
+ * página de privacidade promete, então o vazio aqui é a posição correta, não pendência.
  *
  * Os créditos de projetos externos não dependem de consulta: são licenças a cumprir.
+ *
+ * NOME DE PESSOA E DE PROJETO NÃO SE TRADUZ. O que vai para o dicionário é o texto em
+ * volta; «Ernopolis», «Nino Coutinho», «React» e «Lucide» continuam escritos como são.
  */
-export const Agradecimentos: React.FC = () => (
-  <DocumentoPage
-    title="Agradecimentos — Viola Libre"
-    intro={
-      <>
-        O Viola Libre existe por causa de gente que emprestou tempo, ouvido e conhecimento sem
-        pedir nada em troca, e de trabalho aberto que outras pessoas deixaram disponível para
-        quem viesse depois.
-      </>
-    }
-  >
-    <Section n={1} title="Amigos">
-      <Lista>
-        <li>
-          <Link href="https://ernopolis.neocities.org/">Ernopolis</Link>, idealizador
-          do projeto. A fagulha inicial que fez tudo isso acontecer, e que continua
-          contribuindo ativamente para a plataforma.
-        </li>
-        <li>
-          Nino Coutinho (<Link href="https://www.youtube.com/@johndowland/videos">YouTube</Link>,{' '}
-          <Link href="https://www.tiktok.com/@coutinhonino">TikTok</Link>), colaborou e colabora
-          ativamente com a revisão dos voicings e digitações, sanando dúvidas teóricas e ajudando
-          a refinar musicalmente os algoritmos do projeto.
-        </li>
-      </Lista>
-      <p className="text-gray-600 italic mt-1">
-        Esta lista continua sendo montada. Quem contribuiu está sendo consultado, um a um,
-        sobre querer ou não ser nomeado aqui. Ninguém entra sem ter dito que sim.
-      </p>
-      <p>
-        Se você contribuiu e quer aparecer (ou prefere não aparecer), escreva para{' '}
-        <Link href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</Link>.
-      </p>
-    </Section>
+export const Agradecimentos: React.FC = () => {
+  const t = useT();
+  return (
+    <DocumentoPage
+      title={t('documentos.agradecimentosTitulo')}
+      intro={t('documentos.agradecimentosIntro')}
+    >
+      <Section n={1} title={t('documentos.agradSecAmigos')}>
+        <Lista>
+          <li>
+            <Link href="https://ernopolis.neocities.org/">Ernopolis</Link>
+            {t('documentos.agradErnopolis')}
+          </li>
+          <li>
+            Nino Coutinho (<Link href="https://www.youtube.com/@johndowland/videos">YouTube</Link>,{' '}
+            <Link href="https://www.tiktok.com/@coutinhonino">TikTok</Link>)
+            {t('documentos.agradNino')}
+          </li>
+        </Lista>
+        <p className="text-gray-600 italic mt-1">{t('documentos.agradListaEmMontagem')}</p>
+        <p>
+          {t('documentos.agradEscrevaPara')}{' '}
+          <Link href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</Link>.
+        </p>
+      </Section>
 
-    <Section n={2} title="A todos os artistas e compositores">
-      <p>
-        Um agradecimento que não cabe em lista nenhuma: a todos os artistas e compositores que,
-        de forma generalizada e imensurável, moldaram e continuam moldando a cultura e a arte
-        que escrevem a história da humanidade.
-      </p>
-      <p>
-        A música é o tempero que dá sabor à existência, não só de paz e amor, mas de todos os
-        efeitos históricos que ela carrega e não deixa morrer na lembrança de cada um. Cada
-        melodia composta, cada verso cantado, cada acorde inventado é um pedaço de memória
-        coletiva que atravessa gerações e mantém vivo aquilo que os livros sozinhos não
-        conseguem preservar.
-      </p>
-      <p>
-        Este projeto existe porque antes dele existiu música. E a música existiu porque alguém
-        teve a coragem de criar.
-      </p>
-    </Section>
+      <Section n={2} title={t('documentos.agradSecArtistas')}>
+        <p>{t('documentos.agradArtistas1')}</p>
+        <p>{t('documentos.agradArtistas2')}</p>
+        <p>{t('documentos.agradArtistas3')}</p>
+      </Section>
 
-    <Section n={3} title="Projetos que tornaram isto possível">
-      <p>
-        O site se apoia em trabalho aberto de outras pessoas:
-      </p>
-      <Lista>
-        <li>
-          <Link href="https://github.com/gleitz/midi-js-soundfonts">midi-js-soundfonts</Link>,
-          os bancos de som que fazem os acordes soarem.
-        </li>
-        <li>
-          <Link href="https://react.dev">React</Link>,{' '}
-          <Link href="https://vite.dev">Vite</Link> e{' '}
-          <Link href="https://tailwindcss.com">Tailwind CSS</Link>, a base sobre a qual a
-          interface foi construída.
-        </li>
-        <li>
-          <Link href="https://lucide.dev">Lucide</Link>, os ícones.
-        </li>
-      </Lista>
-    </Section>
+      <Section n={3} title={t('documentos.agradSecProjetos')}>
+        <p>{t('documentos.agradProjetosIntro')}</p>
+        <Lista>
+          <li>
+            <Link href="https://github.com/gleitz/midi-js-soundfonts">midi-js-soundfonts</Link>
+            {t('documentos.agradSoundfonts')}
+          </li>
+          <li>
+            <Link href="https://react.dev">React</Link>,{' '}
+            <Link href="https://vite.dev">Vite</Link> {t('comum.e')}{' '}
+            <Link href="https://tailwindcss.com">Tailwind CSS</Link>
+            {t('documentos.agradBase')}
+          </li>
+          <li>
+            <Link href="https://lucide.dev">Lucide</Link>
+            {t('documentos.agradIcones')}
+          </li>
+        </Lista>
+      </Section>
 
-    <Section n={4} title="A quem tocou antes">
-      <p>
-        À tradição da viola caipira e a quem a manteve viva sem esperar por site nenhum.
-      </p>
-    </Section>
-  </DocumentoPage>
-);
+      <Section n={4} title={t('documentos.agradSecAntes')}>
+        <p>{t('documentos.agradAntes')}</p>
+      </Section>
+    </DocumentoPage>
+  );
+};

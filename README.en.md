@@ -199,13 +199,30 @@ library would really buy here: a compile error when a key does not exist.
   text, never `t('a') + n + t('b')`: word order differs between languages.
 - **Keys describe the place, not the text.** `filtros.casaMinima`, not `casaInicialMinima`.
 
-### Not translated yet
+### Coverage
 
-The language layer is in place and the shell is fully covered: tabs, window chrome, taskbar,
-About dialog, search filters, results panel, favorites table, the desktop home screen and
-the per-route search metadata. The larger inner screens (chart viewer, timing editor, ear
-transcription, favorites dashboard, the legal pages) still carry their Portuguese strings
-inline and are being migrated namespace by namespace.
+The whole interface goes through the dictionary: tabs and window chrome, the desktop home,
+the chart explorer, the chart viewer, the chord dictionary, practice and theory, playing by
+ear, the timing editor, favorites, the print sheet, preferences and the three documents
+(terms, privacy, acknowledgements).
+
+What stays out, on purpose:
+
+- **The lyrics and the body of a chart.** They belong to the source, not to the reader.
+- **Proper names.** Artists, songs, companies, projects, and the viola tunings
+  ("Cebolão", "Rio Abaixo").
+- **Musical data.** Note names, degrees, chord symbols and the C major scale table on
+  Cebolão: they are the same in any language.
+- **Identifiers the engine returns.** `'Fácil' | 'Média' | 'Difícil'` is a type, and the
+  regression suite compares against it; translation happens at the boundary, in
+  `src/i18n/musica.ts`.
+
+The translated legal documents carry, in the English version only, a note that the
+Portuguese text prevails in case of any divergence.
+
+To check that nothing slipped through, `src/i18n/i18n.test.ts` covers key parity,
+interpolation variables, absence of em dashes, and forgotten translations (identical text
+in both languages, with an exception list that says why each entry is there).
 
 ---
 

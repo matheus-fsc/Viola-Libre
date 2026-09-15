@@ -185,13 +185,30 @@ traria de verdade aqui: erro de compilação quando a chave não existe.
   texto, nunca `t('a') + n + t('b')`: a ordem das palavras muda de um idioma para o outro.
 - **A chave nomeia o lugar, não o texto.** `filtros.casaMinima`, não `casaInicialMinima`.
 
-### O que ainda não passou
+### Cobertura
 
-A camada existe e a moldura está coberta por inteiro: abas, barra de título, barra de
-tarefas, "Sobre", filtros de busca, painel de resultados, tabela de favoritas, a área de
-trabalho e os metadados de busca por rota. As telas internas grandes (visualizador de cifra,
-editor de timing, tirando de ouvido, painel de favoritos, páginas jurídicas) ainda têm o
-texto em português embutido e vão sendo migradas namespace a namespace.
+Toda a interface passa pelo dicionário: abas e janela, área de trabalho, explorador de
+cifras, visualizador de cifra, dicionário de acordes, treinos e teoria, tirando de ouvido,
+editor de timing, favoritos, folha de impressão, preferências e os três documentos
+(termos, privacidade, agradecimentos).
+
+O que fica de fora, de propósito:
+
+- **A letra e o corpo da cifra.** Pertencem à fonte, não a quem lê.
+- **Nome próprio.** Artista, música, empresa, projeto, e as afinações da viola
+  («Cebolão», «Rio Abaixo»).
+- **Dado musical.** Nome de nota, grau, sigla de acorde e a tabela da escala de Dó no
+  Cebolão: valem igual em qualquer idioma.
+- **Identificador que o motor devolve.** `'Fácil' | 'Média' | 'Difícil'` é tipo, e a suíte
+  de regressão compara com ele; a tradução acontece na fronteira, em `src/i18n/musica.ts`.
+
+Os documentos jurídicos traduzidos trazem, só na versão em inglês, a nota de que o texto em
+português prevalece em caso de divergência.
+
+Para conferir que nada escapou, `scripts/` não tem varredor próprio: o teste
+`src/i18n/i18n.test.ts` cobre paridade de chaves, variáveis de interpolação, ausência de
+travessão e tradução esquecida (texto idêntico nos dois idiomas, com uma lista de exceções
+que diz por que cada uma está lá).
 
 ---
 

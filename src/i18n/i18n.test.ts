@@ -121,6 +121,12 @@ describe('dicionários', () => {
       'ouvido.timeline',
       'ouvido.resetRange',
       'ouvido.tempoRotulo',
+      // «editor» é a mesma palavra nos dois idiomas.
+      'documentos.priv1bForte',
+      // Nome de empresa não se traduz.
+      'documentos.priv5Cloudflare',
+      'documentos.priv5YouTube',
+      'documentos.priv5GitHub',
     ]);
     for (const chave of Object.keys(PT)) {
       if (iguaisDePropósito.has(chave)) continue;
