@@ -16,6 +16,7 @@
  * caractere. Ver `ContaAberta`.
  */
 import { useState } from 'react';
+import { useT, useIdioma, t, type Chave } from '../../i18n';
 import type { DeteccaoTom, CandidatoTom, PapelDeAcorde } from '../../engine/detectKey';
 
 /**
@@ -24,13 +25,13 @@ import type { DeteccaoTom, CandidatoTom, PapelDeAcorde } from '../../engine/dete
  * roxo é o acorde que a música explica FORA daqui — num tom de passagem — e cinza é o que
  * ninguém dá conta. Lendo só as cores já se sabe a qualidade da leitura.
  */
-const PAPEL: Record<PapelDeAcorde, { rotulo: string; cor: string; fundo: string }> = {
-  campo: { rotulo: 'do campo harmônico', cor: '#002fa7', fundo: '#dce6f7' },
-  dominante: { rotulo: 'dominante de passagem', cor: '#157a3d', fundo: '#dcefe2' },
-  preparacao: { rotulo: 'ii de um ii-V', cor: '#0e6f74', fundo: '#d9eff0' },
-  emprestado: { rotulo: 'emprestado de outro modo', cor: '#8a5a00', fundo: '#f5ead2' },
-  tonicizacao: { rotulo: 'passa por outro tom', cor: '#6b21a8', fundo: '#ece0f5' },
-  estranho: { rotulo: 'sem explicação neste tom', cor: '#6b7280', fundo: '#eceaea' },
+const PAPEL: Record<PapelDeAcorde, { rotulo: Chave; cor: string; fundo: string }> = {
+  campo: { rotulo: 'tom.papelCampo', cor: '#002fa7', fundo: '#dce6f7' },
+  dominante: { rotulo: 'tom.papelDominante', cor: '#157a3d', fundo: '#dcefe2' },
+  preparacao: { rotulo: 'tom.papelPreparacao', cor: '#0e6f74', fundo: '#d9eff0' },
+  emprestado: { rotulo: 'tom.papelEmprestado', cor: '#8a5a00', fundo: '#f5ead2' },
+  tonicizacao: { rotulo: 'tom.papelTonicizacao', cor: '#6b21a8', fundo: '#ece0f5' },
+  estranho: { rotulo: 'tom.papelEstranho', cor: '#6b7280', fundo: '#eceaea' },
 };
 
 const ORDEM_PAPEL: PapelDeAcorde[] = [
@@ -42,14 +43,17 @@ const ORDEM_PAPEL: PapelDeAcorde[] = [
   'estranho',
 ];
 
-function num(n: number): string {
-  return n.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
+/* O separador decimal segue o idioma da interface: «2,4» e «2.4» são o mesmo número
+   escrito para leitores diferentes, e misturar os dois numa tabela é o que faz alguém
+   ler mil onde havia um. */
+function num(n: number, idioma: string): string {
+  return n.toLocaleString(idioma, { maximumFractionDigits: 1 });
 }
 
-const ROTULO: Record<DeteccaoTom['confidence'], string> = {
-  alta: 'alta',
-  media: 'média',
-  baixa: 'baixa',
+const ROTULO: Record<DeteccaoTom['confidence'], Chave> = {
+  alta: 'tom.confiancaAlta',
+  media: 'tom.confiancaMedia',
+  baixa: 'tom.confiancaBaixa',
 };
 
 /** Quantas barrinhas acendem. A margem é contínua; a barra só a torna legível de relance. */
@@ -77,6 +81,8 @@ function Secao({ children }: { children: React.ReactNode }) {
  * sem precisar explicar.
  */
 function BarraDaPontuacao({ candidato }: { candidato: CandidatoTom }) {
+  const t = useT();
+  const idioma = useIdioma();
   const a = candidato.analise!;
   const positivo = Math.max(0.001, a.encaixe + a.repouso);
   const pctEncaixe = (a.encaixe / positivo) * 100;
@@ -87,30 +93,30 @@ function BarraDaPontuacao({ candidato }: { candidato: CandidatoTom }) {
         <div
           className="bg-[#316ac5]"
           style={{ width: `${pctEncaixe}%` }}
-          title={`Encaixe da coleção: ${num(a.encaixe)}`}
+          title={t('tom.encaixeDica', { valor: num(a.encaixe, idioma) })}
         />
         <div
           className="bg-[#7ba7e3]"
           style={{ width: `${100 - pctEncaixe}%` }}
-          title={`Repouso: ${num(a.repouso)}`}
+          title={t('tom.repousoDica', { valor: num(a.repouso, idioma) })}
         />
       </div>
       <div className="flex flex-wrap gap-x-3 gap-y-0.5 pt-1 text-[10px] leading-tight">
         <span className="flex items-center gap-1">
           <span className="block h-2.5 w-2.5 bg-[#316ac5]" />
-          <span className="text-gray-700">encaixe das notas</span>
-          <span className="font-mono font-bold">{num(a.encaixe)}</span>
+          <span className="text-gray-700">{t('tom.encaixeDasNotas')}</span>
+          <span className="font-mono font-bold">{num(a.encaixe, idioma)}</span>
         </span>
         <span className="flex items-center gap-1">
           <span className="block h-2.5 w-2.5 bg-[#7ba7e3]" />
-          <span className="text-gray-700">repouso</span>
-          <span className="font-mono font-bold">{num(a.repouso)}</span>
+          <span className="text-gray-700">{t('tom.repouso')}</span>
+          <span className="font-mono font-bold">{num(a.repouso, idioma)}</span>
         </span>
         {a.penalidadeModo !== 0 && (
           <span className="flex items-center gap-1">
             <span className="block h-2.5 w-2.5 border border-gray-400 bg-white" />
-            <span className="text-gray-700">modo raro</span>
-            <span className="font-mono font-bold text-[#cc3300]">{num(a.penalidadeModo)}</span>
+            <span className="text-gray-700">{t('tom.modoRaro')}</span>
+            <span className="font-mono font-bold text-[#cc3300]">{num(a.penalidadeModo, idioma)}</span>
           </span>
         )}
       </div>
@@ -127,12 +133,13 @@ function BarraDaPontuacao({ candidato }: { candidato: CandidatoTom }) {
  * final estranho.
  */
 function SinaisDeRepouso({ candidato }: { candidato: CandidatoTom }) {
+  const t = useT();
+  const idioma = useIdioma();
   const sinais = candidato.analise!.sinais;
   if (sinais.length === 0) {
     return (
       <p className="text-[11px] leading-snug text-gray-500">
-        Nenhum sinal de repouso apontou para este tom — ele está aqui só pelo encaixe das
-        notas, que não sabe dizer onde a música pousa.
+        {t('tom.semSinalDeRepouso')}
       </p>
     );
   }
@@ -146,7 +153,7 @@ function SinaisDeRepouso({ candidato }: { candidato: CandidatoTom }) {
             <td className="pr-1.5 align-middle" style={{ width: '38%' }}>
               <span className="flex items-center gap-1">
                 <span className="w-6 shrink-0 text-right font-mono font-bold text-[#002fa7]">
-                  +{num(s.pontos)}
+                  +{num(s.pontos, idioma)}
                 </span>
                 <span className="h-2.5 flex-1 bg-gray-200">
                   <span
@@ -172,6 +179,7 @@ function SinaisDeRepouso({ candidato }: { candidato: CandidatoTom }) {
  * repete a do resto do painel, então a leitura é a mesma em qualquer lugar.
  */
 function TabelaDeAcordes({ candidato }: { candidato: CandidatoTom }) {
+  const t = useT();
   const acordes = candidato.analise!.acordes;
   const grupos = ORDEM_PAPEL.map(papel => ({
     papel,
@@ -196,10 +204,10 @@ function TabelaDeAcordes({ candidato }: { candidato: CandidatoTom }) {
                   />
                   <span>
                     <span className="font-bold" style={{ color: estilo.cor }}>
-                      {estilo.rotulo}
+                      {t(estilo.rotulo)}
                     </span>
                     <span className="block text-[10px] text-gray-500">
-                      {g.itens.length} de {acordes.length}
+                      {t('tom.deTotal', { n: g.itens.length, total: acordes.length })}
                     </span>
                   </span>
                 </span>
@@ -211,7 +219,7 @@ function TabelaDeAcordes({ candidato }: { candidato: CandidatoTom }) {
                       key={x.chord}
                       className="inline-flex items-baseline gap-1 border px-1 py-0.5 leading-none"
                       style={{ background: estilo.fundo, borderColor: estilo.cor }}
-                      title={x.detalhe ? `${x.chord} — ${x.detalhe}` : x.chord}
+                      title={x.detalhe ? t('tom.acordeComDetalhe', { acorde: x.chord, detalhe: x.detalhe }) : x.chord}
                     >
                       <span className="font-mono font-bold text-black">{x.chord}</span>
                       {x.detalhe && (
@@ -239,6 +247,8 @@ function TabelaDeAcordes({ candidato }: { candidato: CandidatoTom }) {
  * acordes", e afirmação sem como conferir é pedir fé.
  */
 function ContaAberta({ candidato, principal }: { candidato: CandidatoTom; principal: boolean }) {
+  const t = useT();
+  const idioma = useIdioma();
   if (!candidato.analise) return null;
 
   return (
@@ -247,11 +257,11 @@ function ContaAberta({ candidato, principal }: { candidato: CandidatoTom; princi
         <span className="text-[12px] font-bold text-black">
           {candidato.nome}
           {!principal && (
-            <span className="ml-1 text-[10px] font-normal text-gray-500">alternativa</span>
+            <span className="ml-1 text-[10px] font-normal text-gray-500">{t('tom.alternativa')}</span>
           )}
         </span>
         <span className="shrink-0 font-mono text-[11px] font-bold text-gray-700">
-          {num(candidato.score)} pts
+          {t('tom.pontos', { n: num(candidato.score, idioma) })}
         </span>
       </div>
 
@@ -259,10 +269,10 @@ function ContaAberta({ candidato, principal }: { candidato: CandidatoTom; princi
         <BarraDaPontuacao candidato={candidato} />
       </div>
 
-      <Secao>Por que a música pousa aqui</Secao>
+      <Secao>{t('tom.porQuePousa')}</Secao>
       <SinaisDeRepouso candidato={candidato} />
 
-      <Secao>Os {candidato.analise.acordes.length} acordes distintos da cifra</Secao>
+      <Secao>{t('tom.acordesDistintos', { n: candidato.analise.acordes.length })}</Secao>
       <TabelaDeAcordes candidato={candidato} />
     </div>
   );
@@ -277,21 +287,22 @@ function ContaAberta({ candidato, principal }: { candidato: CandidatoTom; princi
  */
 function detalhe(c: CandidatoTom): string {
   const doCampo = c.fits - c.dominantes - c.emprestados - c.preparacoes;
-  const partes = [`${doCampo} do campo harmônico`];
-  if (c.dominantes > 0) partes.push(`${c.dominantes} dominante(s) de passagem`);
-  if (c.preparacoes > 0) partes.push(`${c.preparacoes} preparando um ii-V`);
-  if (c.emprestados > 0) partes.push(`${c.emprestados} emprestado(s) de outro modo`);
+  const partes = [t('tom.detalheDoCampo', { n: doCampo })];
+  if (c.dominantes > 0) partes.push(t('tom.detalheDominantes', { n: c.dominantes }));
+  if (c.preparacoes > 0) partes.push(t('tom.detalhePreparacoes', { n: c.preparacoes }));
+  if (c.emprestados > 0) partes.push(t('tom.detalheEmprestados', { n: c.emprestados }));
   // Os que ficaram de fora se dividem em dois: os que têm explicação NOUTRO tom — um trecho
   // que a música tonicizou — e os que não têm nenhuma. Somá-los cobraria do tom de casa uma
   // falha que não é dele, e apagaria justamente a informação mais interessante da leitura.
   const tonicizados = c.analise?.acordes.filter(a => a.papel === 'tonicizacao').length ?? 0;
-  if (tonicizados > 0) partes.push(`${tonicizados} num trecho que passa por outro tom`);
+  if (tonicizados > 0) partes.push(t('tom.detalheTonicizados', { n: tonicizados }));
   const semNome = c.total - c.fits - tonicizados;
-  if (semNome > 0) partes.push(`${semNome} sem explicação neste tom`);
+  if (semNome > 0) partes.push(t('tom.detalheSemNome', { n: semNome }));
   return partes.join(' · ');
 }
 
 function CampoDoTom({ candidato, principal }: { candidato: CandidatoTom; principal: boolean }) {
+  const t = useT();
   const fora = candidato.total - candidato.fits;
   return (
     <div className="border-b border-[#d4d0c8] px-1.5 py-1.5 last:border-b-0">
@@ -299,7 +310,7 @@ function CampoDoTom({ candidato, principal }: { candidato: CandidatoTom; princip
         <span className={`text-[11px] font-bold ${principal ? 'text-[#002fa7]' : 'text-black'}`}>
           {candidato.nome}
           {principal && (
-            <span className="ml-1 text-[9px] font-normal text-gray-500">mais provável</span>
+            <span className="ml-1 text-[9px] font-normal text-gray-500">{t('tom.maisProvavel')}</span>
           )}
         </span>
         {/* Mostrar quantos ficaram DE FORA é o que impede o número de parecer melhor do que
@@ -307,7 +318,7 @@ function CampoDoTom({ candidato, principal }: { candidato: CandidatoTom; princip
             tom não dá conta, e o title abre a conta inteira para quem quiser conferir. */}
         <span className="shrink-0 text-[10px] text-gray-500" title={detalhe(candidato)}>
           {candidato.fits} de {candidato.total} acordes
-          {fora > 0 && <span className="text-gray-400"> · {fora} de fora</span>}
+          {fora > 0 && <span className="text-gray-400"> · {t('tom.deFora', { n: fora })}</span>}
         </span>
       </div>
       {/* Mesma repartição da fita de tons: flex-1 + min-w-0 para caber em 296px sem estourar. */}
@@ -315,7 +326,7 @@ function CampoDoTom({ candidato, principal }: { candidato: CandidatoTom; princip
         {candidato.campo.map(g => (
           <div
             key={g.grau}
-            title={`${g.grau} — ${g.chord}${g.usado ? ' (a música usa)' : ' (não aparece)'}`}
+            title={t(g.usado ? 'tom.grauUsado' : 'tom.grauNaoUsado', { grau: g.grau, acorde: g.chord })}
             className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 border py-1 leading-none ${
               g.usado
                 ? 'border-[#002fa7] bg-white text-black'
@@ -332,6 +343,7 @@ function CampoDoTom({ candidato, principal }: { candidato: CandidatoTom; princip
 }
 
 export function TonsPossiveis({ deteccao }: { deteccao: DeteccaoTom | null }) {
+  const t = useT();
   // O hook vem antes de qualquer saída antecipada: a ordem dos hooks tem que ser a mesma
   // em toda renderização, e `deteccao` é nula enquanto a cifra carrega.
   const [avancado, setAvancado] = useState(false);
@@ -347,15 +359,15 @@ export function TonsPossiveis({ deteccao }: { deteccao: DeteccaoTom | null }) {
       <div className="flex items-center justify-between gap-2 px-1.5 pb-1">
         <span className="flex items-center gap-1.5">
           <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
-            Confiança
+            {t('tom.confianca')}
           </span>
           <button
             onClick={() => setAvancado(v => !v)}
             aria-expanded={avancado}
             className="bevel-out cursor-pointer bg-[var(--color-winxp-panel)] px-1.5 py-0.5 text-[10px] font-bold leading-tight text-black hover:bg-white active:border-b-white active:border-l-gray-500 active:border-r-white active:border-t-gray-500"
-            title="Ver a conta inteira: de onde saiu a pontuação e o papel de cada acorde"
+            title={t('tom.avancadoDica')}
           >
-            avançado {avancado ? '▴' : '▾'}
+            {t('tom.avancado')} {avancado ? '▴' : '▾'}
           </button>
         </span>
         <span className="flex items-center gap-1">
@@ -369,7 +381,7 @@ export function TonsPossiveis({ deteccao }: { deteccao: DeteccaoTom | null }) {
               />
             ))}
           </span>
-          <span className="text-[10px] text-gray-600">{ROTULO[deteccao.confidence]}</span>
+          <span className="text-[10px] text-gray-600">{t(ROTULO[deteccao.confidence])}</span>
         </span>
       </div>
 
@@ -403,7 +415,7 @@ export function TonsPossiveis({ deteccao }: { deteccao: DeteccaoTom | null }) {
 
       <div className="bevel-in bg-white">
         <div className="px-1.5 pt-1 text-[9px] font-bold uppercase tracking-wider text-gray-500">
-          {mostrar > 1 ? 'Tons possíveis — campo harmônico' : 'Campo harmônico'}
+          {mostrar > 1 ? t('tom.tonsPossiveis') : t('tom.campoHarmonico')}
         </div>
         {deteccao.candidates.slice(0, mostrar).map((c, i) => (
           /* `nome` e não `key`: com os modos, "G" e "G mixolídio" têm o mesmo `key` e
@@ -413,15 +425,13 @@ export function TonsPossiveis({ deteccao }: { deteccao: DeteccaoTom | null }) {
       </div>
 
       <p className="px-1.5 pt-1 text-[9px] leading-snug text-gray-500">
-        Em azul, os graus que aparecem na cifra. Dominante de passagem e acorde emprestado de
-        outro modo contam na conta acima, mas não marcam grau — não são do campo. Trecho que
-        passa por outro tom não conta: ele tem nome, mas não é deste tom.
+        {t('tom.legendaCampo')}
       </p>
 
       {avancado && (
         <div className="mt-2">
           <div className="px-1.5 pb-1 text-[10px] font-bold uppercase tracking-wider text-gray-500">
-            Como esta leitura foi feita
+            {t('tom.comoFoiFeita')}
           </div>
           <div className="bevel-in bg-white">
             {deteccao.candidates.slice(0, mostrar).map((c, i) => (
@@ -429,15 +439,10 @@ export function TonsPossiveis({ deteccao }: { deteccao: DeteccaoTom | null }) {
             ))}
           </div>
           <p className="px-1.5 pt-1.5 text-[10px] leading-snug text-gray-600">
-            A pontuação só compara candidatos entre si — não tem unidade. A confiança sai da
-            margem sobre o melhor rival de <strong>outro tom</strong>
-            {deteccao.margin > 0 && `, aqui ${Math.round(deteccao.margin * 100)}%`}: rival que
-            chega ao mesmo tom por outro modo não conta, porque aí a dúvida é de campo e não
-            de tom.
-            {deteccao.modulates && deteccao.regions.length === 0 && (
-              <> A música não firma um tom só, e os trechos não têm fronteira nítida para
-              apontar.</>
-            )}
+            {t('tom.contaParte1')} <strong>{t('tom.contaOutroTom')}</strong>
+            {deteccao.margin > 0 && t('tom.contaMargem', { pct: Math.round(deteccao.margin * 100) })}
+            {t('tom.contaParte2')}
+            {deteccao.modulates && deteccao.regions.length === 0 && t('tom.contaModula')}
           </p>
         </div>
       )}

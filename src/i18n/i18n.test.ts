@@ -74,16 +74,35 @@ describe('dicionários', () => {
       'seo.desktop.title',
       'sobre.nome',
       'sobre.linkLicenca',
-      'sobre.licenca',
       'barraTarefas.editor',
-      'abasCurtas.privacidade',
       // Estrangeirismo que a UI em português já usa cru: traduzir "+ Views" para
       // "+ Visualizações" seria trocar o rótulo curto por um que não cabe no botão.
       'explorador.rankingViews',
       'explorador.rankingLikes',
+      // Palavras que os dois idiomas escrevem igual: termo técnico de música, sigla,
+      // ou rótulo que já era estrangeirismo no português.
+      'cifra.loop',
+      'cifra.rotuloLoop',
+      'cifra.rotuloBpm',
+      'cifra.timing',
+      'cifra.folhaTabs',
+      'cifra.folhaInstrumentoCurto',
+      'cifra.folhaApiBpm',
+      'tom.pontos',
+      // Exemplo de cifra: é uma letra brasileira, e traduzir a letra de exemplo
+      // ensinaria a sintaxe com um dado que o acervo não tem.
+      'minhasCifras.colchetesExemplo',
+      'minhasCifras.conteudoExemplo',
+      'minhasCifras.campoTituloExemplo',
+      'favoritos.categoriasCurto',
     ]);
     for (const chave of Object.keys(PT)) {
       if (iguaisDePropósito.has(chave)) continue;
+      // Texto que é só forma: «{secao} · {tempo}», «{n} pts». Tirando as variáveis não
+      // sobra palavra nenhuma para traduzir, e exigir diferença aqui obrigaria a inventar
+      // uma. A regra é automática de propósito: uma lista de exceções cresceria a cada
+      // chave de formato nova e viraria o lugar onde uma tradução esquecida se esconde.
+      if (!/\p{L}{2}/u.test(PT[chave].replace(/\{\w+\}/g, ''))) continue;
       expect(EN[chave], chave).not.toBe(PT[chave]);
     }
   });

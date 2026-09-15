@@ -201,11 +201,11 @@ describe('parseImportedFile', () => {
   it('distingue arquivo de outro app de backup corrompido', () => {
     const alheio = parseImportedFile(JSON.stringify({ app: 'outro-app', entries: [] }));
     expect(alheio.ok).toBe(false);
-    expect(alheio.error).toMatch(/não é um backup/i);
+    expect(alheio.error).toBe('erros.naoEhBackup');
 
     const corrompido = parseImportedFile(valid({ version: 99 }));
     expect(corrompido.ok).toBe(false);
-    expect(corrompido.error).toMatch(/corrompido|incompat/i);
+    expect(corrompido.error).toBe('erros.backupCorrompido');
   });
 
   it('descarta entrada com slug inválido sem derrubar o resto do arquivo', () => {
@@ -286,20 +286,20 @@ describe('tetos do arquivo importado', () => {
   it('recusa arquivo acima do limite de bytes sem nem chamar o parser', () => {
     const out = parseImportedFile('x'.repeat(MAX_FILE_BYTES + 1));
     expect(out.ok).toBe(false);
-    expect(out.error).toMatch(/grande demais/i);
+    expect(out.error).toBe('erros.arquivoGrande');
   });
 
   it('recusa lista com músicas demais', () => {
     const out = parseImportedFile(arquivo({ entries: muitasEntradas(MAX_ENTRIES + 1) }));
     expect(out.ok).toBe(false);
-    expect(out.error).toMatch(/músicas demais/i);
+    expect(out.error).toBe('erros.musicasDemais');
   });
 
   it('recusa lista com categorias demais', () => {
     const cats = Array.from({ length: MAX_CATEGORIES + 1 }, (_, i) => ({ id: 'c' + i, name: 'n' + i, createdAt: 'x' }));
     const out = parseImportedFile(arquivo({ categories: cats }));
     expect(out.ok).toBe(false);
-    expect(out.error).toMatch(/categorias demais/i);
+    expect(out.error).toBe('erros.categoriasDemais');
   });
 
   it('o merge não passa do teto mesmo com a estante já cheia', () => {

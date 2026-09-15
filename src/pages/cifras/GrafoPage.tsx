@@ -10,6 +10,7 @@
  * saída para o papel.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useT, type Chave } from '../../i18n';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Maximize2, Minus, Music2, Plus } from 'lucide-react';
 import { getCifra } from '../../services/api';
@@ -23,13 +24,16 @@ import { prettifySlug } from '../../services/cifraFavorites';
 import { useSeo } from '../../hooks/useSeo';
 
 /** Mesma paleta do painel de tom: quem viu lá reconhece aqui sem reaprender. */
-const PAPEL: Record<PapelDeAcorde, { rotulo: string; cor: string; fundo: string }> = {
-  campo: { rotulo: 'do campo harmônico', cor: '#002fa7', fundo: '#dce6f7' },
-  dominante: { rotulo: 'dominante de passagem', cor: '#157a3d', fundo: '#dcefe2' },
-  preparacao: { rotulo: 'ii de um ii-V', cor: '#0e6f74', fundo: '#d9eff0' },
-  emprestado: { rotulo: 'emprestado de outro modo', cor: '#8a5a00', fundo: '#f5ead2' },
-  tonicizacao: { rotulo: 'passa por outro tom', cor: '#6b21a8', fundo: '#ece0f5' },
-  estranho: { rotulo: 'sem explicação no tom', cor: '#6b7280', fundo: '#eceaea' },
+/* As mesmas cores e os mesmos papéis do painel de tom (`TonsPossiveis`): o leitor que
+   aprendeu a ler um não precisa reaprender no outro. Só a legenda do «estranho» muda,
+   porque ali o texto convive com o nome do tom e aqui não. */
+const PAPEL: Record<PapelDeAcorde, { rotulo: Chave; cor: string; fundo: string }> = {
+  campo: { rotulo: 'tom.papelCampo', cor: '#002fa7', fundo: '#dce6f7' },
+  dominante: { rotulo: 'tom.papelDominante', cor: '#157a3d', fundo: '#dcefe2' },
+  preparacao: { rotulo: 'tom.papelPreparacao', cor: '#0e6f74', fundo: '#d9eff0' },
+  emprestado: { rotulo: 'tom.papelEmprestado', cor: '#8a5a00', fundo: '#f5ead2' },
+  tonicizacao: { rotulo: 'tom.papelTonicizacao', cor: '#6b21a8', fundo: '#ece0f5' },
+  estranho: { rotulo: 'grafo.papelEstranho', cor: '#6b7280', fundo: '#eceaea' },
 };
 
 /**
@@ -39,13 +43,20 @@ const PAPEL: Record<PapelDeAcorde, { rotulo: string; cor: string; fundo: string 
  * sensação de resolução. Os demais vão perdendo peso conforme se afastam disso, e o
  * cromático fica pontilhado porque quase sempre é condução de voz, não harmonia.
  */
-const MOVIMENTO: Record<MovimentoDaRaiz, { cor: string; traco?: string; rotulo: string }> = {
-  quarta: { cor: '#002fa7', rotulo: 'quarta (cadência)' },
-  segunda: { cor: '#157a3d', rotulo: 'segunda' },
-  terca: { cor: '#8a5a00', rotulo: 'terça' },
-  cromatico: { cor: '#a33', traco: '4 3', rotulo: 'cromático' },
-  tritono: { cor: '#7a3ea3', traco: '1 3', rotulo: 'trítono' },
-  nenhum: { cor: '#999', rotulo: 'mesma fundamental' },
+/** Nível de confiança do motor, no idioma da interface. */
+const CONFIANCA: Record<'alta' | 'media' | 'baixa', Chave> = {
+  alta: 'tom.confiancaAlta',
+  media: 'tom.confiancaMedia',
+  baixa: 'tom.confiancaBaixa',
+};
+
+const MOVIMENTO: Record<MovimentoDaRaiz, { cor: string; traco?: string; rotulo: Chave }> = {
+  quarta: { cor: '#002fa7', rotulo: 'grafo.movQuarta' },
+  segunda: { cor: '#157a3d', rotulo: 'grafo.movSegunda' },
+  terca: { cor: '#8a5a00', rotulo: 'grafo.movTerca' },
+  cromatico: { cor: '#a33', traco: '4 3', rotulo: 'grafo.movCromatico' },
+  tritono: { cor: '#7a3ea3', traco: '1 3', rotulo: 'grafo.movTritono' },
+  nenhum: { cor: '#999', rotulo: 'grafo.movNenhum' },
 };
 
 /** Estado da câmera: escala e deslocamento, em unidades do próprio SVG. */
@@ -64,6 +75,7 @@ function limitar(k: number): number {
 }
 
 export function GrafoPage() {
+  const t = useT();
   const { artistSlug, songSlug } = useParams<{ artistSlug: string; songSlug: string }>();
   const navigate = useNavigate();
   const [cifra, setCifra] = useState<CifraDetail | null>(null);
@@ -299,8 +311,8 @@ export function GrafoPage() {
 
   const titulo = cifra?.title ?? prettifySlug(songSlug ?? '');
   useSeo({
-    title: `Grafo harmônico de ${titulo}`,
-    description: `As transições de acordes de ${titulo} desenhadas como rede, sobre o ciclo de quintas.`,
+    title: t('grafo.seoTitle', { musica: titulo }),
+    description: t('grafo.seoDescription', { musica: titulo }),
     path: `/cifras/${artistSlug}/${songSlug}/grafo`,
   });
 
@@ -310,13 +322,13 @@ export function GrafoPage() {
   if (erro) {
     return (
       <div className="p-6 text-sm">
-        Não deu para carregar esta cifra.{' '}
-        <Link to={cifraPath} className="text-[#002fa7] underline">Voltar</Link>
+        {t('grafo.erroCarregar')}{' '}
+        <Link to={cifraPath} className="text-[#002fa7] underline">{t('comum.voltar')}</Link>
       </div>
     );
   }
   if (!dados || !cena) {
-    return <div className="p-6 text-sm text-gray-600">Montando o grafo…</div>;
+    return <div className="p-6 text-sm text-gray-600">{t('grafo.montando')}</div>;
   }
 
   const { deteccao, grafo } = dados;
@@ -334,29 +346,26 @@ export function GrafoPage() {
             onClick={() => navigate(cifraPath)}
             className="bevel-out flex cursor-pointer items-center gap-1 bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold hover:bg-white active:border-b-white active:border-l-gray-500 active:border-r-white active:border-t-gray-500"
           >
-            <ArrowLeft size={13} /> Voltar à cifra
+            <ArrowLeft size={13} /> {t('grafo.voltarACifra')}
           </button>
           <span className="flex items-center gap-1 text-sm font-bold">
             <Music2 size={15} /> {titulo}
           </span>
         </span>
         <span className="text-xs">
-          Tom <strong className="text-[#002fa7]">{deteccao.nome}</strong>
-          <span className="text-gray-500"> · confiança {deteccao.confidence}</span>
+          {t('grafo.tomLabel')} <strong className="text-[#002fa7]">{deteccao.nome}</strong>
+          <span className="text-gray-500"> · {t('grafo.confianca', { nivel: t(CONFIANCA[deteccao.confidence]) })}</span>
         </span>
       </div>
 
       <p className="px-1 text-[11px] leading-snug text-gray-600">
-        Cada disco é um acorde da cifra; cada seta, uma passagem realmente tocada — mais
-        grossa quanto mais vezes acontece. Os acordes estão dispostos pelo{' '}
-        <strong>ciclo de quintas</strong>, e não pela ordem em que aparecem: assim os sete
-        graus do tom formam um arco contínuo, e tudo que a música pega de fora cai visivelmente
-        para fora dele.
+        {t('grafo.explicacaoAntes')}{' '}
+        <strong>{t('grafo.cicloDeQuintas')}</strong>{t('grafo.explicacaoDepois')}
       </p>
 
       <div className="flex flex-wrap items-center gap-3 px-1 text-[11px]">
         <label className="flex items-center gap-1.5">
-          <span className="text-gray-600">mostrar passagens repetidas ao menos</span>
+          <span className="text-gray-600">{t('grafo.mostrarAoMenos')}</span>
           <input
             type="range"
             min={1}
@@ -366,30 +375,30 @@ export function GrafoPage() {
             className="w-24"
           />
           <strong className="w-3">{minimo}</strong>
-          <span className="text-gray-600">vez(es)</span>
+          <span className="text-gray-600">{t('grafo.vezes')}</span>
         </label>
         <span className="text-gray-500">
-          {cena.mostradas} de {cena.total} passagens · {grafo.nos.length} acordes
+          {t('grafo.contagem', { mostradas: cena.mostradas, total: cena.total, acordes: grafo.nos.length })}
         </span>
         {fixado && (
           <button
             onClick={() => setFixado(null)}
             className="bevel-out cursor-pointer bg-[var(--color-winxp-panel)] px-1.5 py-0.5 font-bold hover:bg-white"
           >
-            soltar {fixado}
+            {t('grafo.soltar', { acorde: fixado })}
           </button>
         )}
       </div>
 
       <div className="bevel-in relative overflow-hidden bg-white">
         <div className="absolute right-1.5 top-1.5 z-10 flex flex-col gap-0.5">
-          <BotaoVista aoClicar={() => aproximar(1.3)} titulo="Aproximar">
+          <BotaoVista aoClicar={() => aproximar(1.3)} titulo={t('grafo.aproximar')}>
             <Plus size={13} />
           </BotaoVista>
-          <BotaoVista aoClicar={() => aproximar(1 / 1.3)} titulo="Afastar">
+          <BotaoVista aoClicar={() => aproximar(1 / 1.3)} titulo={t('grafo.afastar')}>
             <Minus size={13} />
           </BotaoVista>
-          <BotaoVista aoClicar={enquadrar} titulo="Enquadrar tudo de novo">
+          <BotaoVista aoClicar={enquadrar} titulo={t('grafo.enquadrar')}>
             <Maximize2 size={13} />
           </BotaoVista>
         </div>
@@ -488,7 +497,7 @@ export function GrafoPage() {
               return (
                 <g key={`${a.de}->${a.para}`} opacity={destacada ? 0.75 : 0.07}>
                   <title>
-                    {a.de} → {a.para} · {a.vezes}× · {m.rotulo}
+                    {t('grafo.arestaTitulo', { de: a.de, para: a.para, vezes: a.vezes, movimento: t(m.rotulo) })}
                   </title>
                   <path
                     d={a.d}
@@ -524,19 +533,19 @@ export function GrafoPage() {
 
       <div className="flex flex-wrap gap-x-4 gap-y-1 px-1 text-[11px]">
         <span className="flex flex-wrap items-center gap-2">
-          <strong className="text-gray-600">acordes:</strong>
+          <strong className="text-gray-600">{t('grafo.legendaAcordes')}</strong>
           {cena.papeisUsados.map(p => (
             <span key={p} className="flex items-center gap-1">
               <span
                 className="block h-2.5 w-2.5 rounded-full"
                 style={{ background: PAPEL[p].cor }}
               />
-              {PAPEL[p].rotulo}
+              {t(PAPEL[p].rotulo)}
             </span>
           ))}
         </span>
         <span className="flex flex-wrap items-center gap-2">
-          <strong className="text-gray-600">passagens:</strong>
+          <strong className="text-gray-600">{t('grafo.legendaPassagens')}</strong>
           {(Object.keys(MOVIMENTO) as MovimentoDaRaiz[])
             .filter(m => cena.movimentosUsados.has(m))
             .map(m => (
@@ -549,7 +558,7 @@ export function GrafoPage() {
                     strokeDasharray={MOVIMENTO[m].traco}
                   />
                 </svg>
-                {MOVIMENTO[m].rotulo}
+                {t(MOVIMENTO[m].rotulo)}
               </span>
             ))}
         </span>
@@ -587,6 +596,7 @@ function NoDesenhado({
   onHover(id: string | null): void;
   onClick(): void;
 }) {
+  const t = useT();
   const estilo = PAPEL[no.papel];
   // O raio vem do motor, que é quem também reservou o espaço no empilhamento. Recalculá-lo
   // aqui seria o caminho curto para desenhar um tamanho e ter reservado outro.
@@ -602,7 +612,11 @@ function NoDesenhado({
       className="cursor-pointer"
     >
       <title>
-        {no.id} · {no.grau ? `grau ${no.grau}` : no.detalhe ?? estilo.rotulo} · {no.ocorrencias}×
+        {t('grafo.noTitulo', {
+          acorde: no.id,
+          papel: no.grau ? t('grafo.noGrau', { grau: no.grau }) : no.detalhe ?? t(estilo.rotulo),
+          vezes: no.ocorrencias,
+        })}
       </title>
       <circle
         r={r}

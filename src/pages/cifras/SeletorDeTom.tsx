@@ -9,6 +9,7 @@
  * são Em, Fm, F#m…, não E, F, F#. Tom maior e tom menor não são a mesma lista.
  */
 import { useEffect, type ReactNode } from 'react';
+import { useT } from '../../i18n';
 import { Heart } from 'lucide-react';
 import { transposeChordString } from '../../engine/chordCalculator';
 import { shortestTranspose } from '../../engine/transposeKey';
@@ -32,16 +33,17 @@ export function SalvarTom({ estado, songKey, offsetAtual, onSalvar, className = 
   onSalvar(): void;
   className?: string;
 }) {
+  const t = useT();
   if (estado === null) return null;
 
   if (estado === 'guardado') {
     return (
       <span
         className={`inline-flex items-center gap-1 text-[9px] text-gray-500 leading-none ${className}`}
-        title="Esta cifra abre neste tom porque é o que está guardado nos seus favoritos"
+        title={t('cifra.tomGuardadoDica')}
       >
         <Heart size={9} className="fill-red-500 text-red-500 shrink-0" />
-        seu tom
+        {t('cifra.tomGuardadoRotulo')}
       </span>
     );
   }
@@ -51,10 +53,10 @@ export function SalvarTom({ estado, songKey, offsetAtual, onSalvar, className = 
     <button
       onClick={onSalvar}
       className={`inline-flex items-center gap-1 bevel-out bg-[var(--color-winxp-panel)] px-1.5 py-0.5 text-[10px] font-bold text-black leading-tight hover:bg-white cursor-pointer active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${className}`}
-      title={`Guardar ${alvo || 'este tom'} nos favoritos — a cifra passa a abrir assim`}
+      title={t('cifra.tomSalvarDica', { tom: alvo || t('cifra.tomEsteTom') })}
     >
       <Heart size={10} className="fill-red-500 text-red-500 shrink-0" />
-      <span className="truncate">Salvar tom{alvo ? ` ${alvo}` : ''}</span>
+      <span className="truncate">{t('cifra.tomSalvarBotao')}{alvo ? ` ${alvo}` : ''}</span>
     </button>
   );
 }

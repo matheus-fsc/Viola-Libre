@@ -17,6 +17,7 @@
 // músicas favoritadas, e organizar é um gesto pessoal que não precisa de round-trip.
 
 import { z } from 'zod';
+import type { Chave, Variaveis } from '../i18n';
 import {
   favoriteCifra,
   getUserFavorites,
@@ -680,7 +681,10 @@ export const buildExportFile = (
 export interface ParseResult {
   ok: boolean;
   file?: FavoritesFile;
-  error?: string;
+  /* Chave do dicionário. Ver a nota em `favoritesShare.ts`: o serviço não escolhe idioma. */
+  error?: Chave;
+  /** Valores a interpolar na mensagem, quando ela tem `{limite}` e coisas do tipo. */
+  errorVars?: Variaveis;
 }
 
 /**
@@ -694,33 +698,33 @@ export const parseImportedFile = (raw: string): ParseResult => {
   // Antes de `JSON.parse`: um arquivo de centenas de MB não deve nem chegar ao parser,
   // que aloca a árvore inteira em memória antes de qualquer validação.
   if (raw.length > MAX_FILE_BYTES) {
-    return { ok: false, error: 'Arquivo grande demais para ser uma lista de favoritos.' };
+    return { ok: false, error: 'erros.arquivoGrande' };
   }
 
   let json: unknown;
   try {
     json = JSON.parse(raw);
   } catch {
-    return { ok: false, error: 'O arquivo não é um JSON válido.' };
+    return { ok: false, error: 'erros.jsonInvalido' };
   }
 
   // Corta pelo tamanho declarado antes de validar item a item: validar 2 milhões de
   // entradas para depois descartá-las já é o trabalho que se quer evitar.
   const bruto = json as { entries?: unknown; categories?: unknown } | null;
   if (Array.isArray(bruto?.entries) && bruto.entries.length > MAX_ENTRIES) {
-    return { ok: false, error: `Backup com músicas demais (limite de ${MAX_ENTRIES}).` };
+    return { ok: false, error: 'erros.musicasDemais', errorVars: { limite: MAX_ENTRIES } };
   }
   if (Array.isArray(bruto?.categories) && bruto.categories.length > MAX_CATEGORIES) {
-    return { ok: false, error: `Backup com categorias demais (limite de ${MAX_CATEGORIES}).` };
+    return { ok: false, error: 'erros.categoriasDemais', errorVars: { limite: MAX_CATEGORIES } };
   }
 
   const parsed = favoritesFileSchema.safeParse(json);
   if (!parsed.success) {
     const shape = json as { app?: unknown; kind?: unknown } | null;
     if (shape?.app !== 'viola-libre' || shape?.kind !== 'favoritos') {
-      return { ok: false, error: 'Este arquivo não é um backup de favoritos do Viola Libre.' };
+      return { ok: false, error: 'erros.naoEhBackup' };
     }
-    return { ok: false, error: 'O backup está corrompido ou é de uma versão incompatível.' };
+    return { ok: false, error: 'erros.backupCorrompido' };
   }
 
   return { ok: true, file: parsed.data };
@@ -928,7 +932,8 @@ export function downloadFavoritesBackup(includeIdentity = true): void {
 
 export interface ImportOutcome {
   ok: boolean;
-  error?: string;
+  error?: Chave;
+  errorVars?: Variaveis;
   added: number;
   identityRestored: boolean;
 }

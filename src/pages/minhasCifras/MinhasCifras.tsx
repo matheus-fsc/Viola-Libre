@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useT } from '../../i18n';
 import { buildChord, calculateVoicings, parseChordString } from '../../engine/chordCalculator';
 import { AudioEngine } from '../../engine/AudioEngine';
 import { PRESET_INSTRUMENTS } from '../../engine/tunings';
@@ -22,7 +23,9 @@ export interface CustomCifra {
 
 const STORAGE_KEY = 'viola_libre_custom_cifras_v2';
 
-const GENRES = ['MPB', 'Sertanejo & Viola', 'Rock', 'Forró', 'Pagode', 'Bossa Nova', 'Gospel', 'Outro'];
+/* Gêneros do acervo brasileiro: nomes próprios de estilo, que não se traduzem. Só o
+   «Outro» é palavra comum, e essa vem do dicionário. */
+const GENRES = ['MPB', 'Sertanejo & Viola', 'Rock', 'Forró', 'Pagode', 'Bossa Nova', 'Gospel'];
 
 const NOTE_KEYS = [
   'C', 'C#', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B',
@@ -146,6 +149,7 @@ function CifraCard({ cifra, onView, onEdit, onDelete }: {
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const t = useT();
   return (
     <div className="bg-[#ece9d8] border-2 border-white border-r-[#808080] border-b-[#808080] p-3 flex flex-col gap-2 shadow-md">
       <div className="flex justify-between items-start gap-2">
@@ -175,18 +179,18 @@ function CifraCard({ cifra, onView, onEdit, onDelete }: {
           onClick={onView}
           className="flex-1 py-1 bg-[#0058e6] text-white text-[10px] font-bold font-mono border border-[#002fa7] hover:bg-blue-600 cursor-pointer"
         >
-          Ver Cifra
+          {t('minhasCifras.verCifra')}
         </button>
         <button
           onClick={onEdit}
           className="px-3 py-1 bg-[#ece9d8] text-black text-[10px] font-bold font-mono border border-white border-r-[#808080] border-b-[#808080] active:border-t-[#808080] active:border-l-[#808080] hover:bg-white cursor-pointer"
         >
-          Editar
+          {t('minhasCifras.editar')}
         </button>
         <button
           onClick={onDelete}
           className="px-2 py-1 bg-[#cc3300] text-white text-[10px] font-bold font-mono border border-[#992200] hover:bg-red-700 cursor-pointer"
-          title="Excluir cifra"
+          title={t('minhasCifras.excluirDica')}
         >
           ✕
         </button>
@@ -198,19 +202,19 @@ function CifraCard({ cifra, onView, onEdit, onDelete }: {
 // ─── EmptyState ───────────────────────────────────────────────────────────────
 
 function EmptyState({ onNew }: { onNew: () => void }) {
+  const t = useT();
   return (
     <div className="flex flex-col items-center justify-center py-20 gap-4 text-center select-none">
       <div className="text-5xl font-mono">♪</div>
-      <h3 className="font-bold text-gray-700 font-mono text-sm">Nenhuma cifra criada ainda</h3>
+      <h3 className="font-bold text-gray-700 font-mono text-sm">{t('minhasCifras.vazioTitulo')}</h3>
       <p className="text-xs text-gray-500 font-mono max-w-xs leading-relaxed">
-        Crie suas próprias cifras com letras, acordes, tom e BPM.
-        A rolagem automática acompanha o ritmo da música.
+        {t('minhasCifras.vazioTexto')}
       </p>
       <button
         onClick={onNew}
         className="px-5 py-2 bg-[#0058e6] text-white font-bold text-xs font-mono border border-[#002fa7] hover:bg-blue-600 cursor-pointer"
       >
-        + Nova Cifra
+        {t('minhasCifras.novaCifra')}
       </button>
     </div>
   );
@@ -223,6 +227,7 @@ function CifraViewer({ cifra, onEdit, onBack }: {
   onEdit: () => void;
   onBack: () => void;
 }) {
+  const t = useT();
   const [isScrolling, setIsScrolling] = useState(false);
   const [bpm, setBpm] = useState(cifra.bpm);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -253,12 +258,12 @@ function CifraViewer({ cifra, onEdit, onBack }: {
             onClick={onBack}
             className="shrink-0 text-white text-xs font-bold bg-white/20 hover:bg-white/30 border border-white/40 px-2 py-0.5 cursor-pointer font-mono"
           >
-            ← Voltar
+            ← {t('comum.voltar')}
           </button>
           <div className="min-w-0">
             <div className="font-bold text-sm font-mono truncate">{cifra.title}</div>
             <div className="text-[10px] opacity-80 font-mono truncate">
-              {cifra.artist} · Tom: {cifra.key}
+              {t('minhasCifras.tomDe', { artista: cifra.artist, tom: cifra.key })}
             </div>
           </div>
         </div>
@@ -266,7 +271,7 @@ function CifraViewer({ cifra, onEdit, onBack }: {
           onClick={onEdit}
           className="shrink-0 ml-2 px-3 py-0.5 bg-[#ece9d8] text-black text-xs font-bold font-mono border border-white border-r-[#808080] border-b-[#808080] hover:bg-white cursor-pointer"
         >
-          Editar
+          {t('minhasCifras.editar')}
         </button>
       </div>
 
@@ -334,6 +339,7 @@ function CifraEditor({ initial, onSave, onCancel, onDelete }: {
   onCancel: () => void;
   onDelete?: () => void;
 }) {
+  const t = useT();
   const [title, setTitle] = useState(initial?.title ?? '');
   const [artist, setArtist] = useState(initial?.artist ?? '');
   const [genre, setGenre] = useState(initial?.genre ?? 'MPB');
@@ -381,7 +387,7 @@ function CifraEditor({ initial, onSave, onCancel, onDelete }: {
       {/* Title bar */}
       <div className="winxp-gradient-blue text-white px-3 py-1.5 flex items-center justify-between select-none shrink-0">
         <span className="font-bold text-sm font-mono">
-          {initial ? 'Editar Cifra' : 'Nova Cifra'}
+          {initial ? t('minhasCifras.editarCifra') : t('minhasCifras.novaCifraTitulo')}
         </span>
         <div className="flex gap-1.5">
           {onDelete && (
@@ -389,21 +395,21 @@ function CifraEditor({ initial, onSave, onCancel, onDelete }: {
               onClick={onDelete}
               className="px-2 py-0.5 bg-[#cc3300] text-white text-xs font-bold font-mono border border-[#992200] hover:bg-red-700 cursor-pointer"
             >
-              Excluir
+              {t('minhasCifras.excluir')}
             </button>
           )}
           <button
             onClick={onCancel}
             className="px-2 py-0.5 bg-[#ece9d8] text-black text-xs font-bold font-mono border border-white border-r-[#808080] border-b-[#808080] hover:bg-white cursor-pointer"
           >
-            Cancelar
+            {t('comum.cancelar')}
           </button>
           <button
             onClick={handleSave}
             disabled={!canSave}
             className="px-3 py-0.5 bg-[#228b22] text-white text-xs font-bold font-mono border border-[#1a6b1a] hover:bg-green-700 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Salvar
+            {t('minhasCifras.salvar')}
           </button>
         </div>
       </div>
@@ -417,44 +423,45 @@ function CifraEditor({ initial, onSave, onCancel, onDelete }: {
           {/* Metadata block */}
           <div className="bg-[#d4d0c8] border border-white border-r-[#808080] border-b-[#808080] flex flex-col">
             <div className="winxp-gradient-blue text-white px-2 py-0.5 text-[10px] font-bold font-mono uppercase tracking-wide">
-              Informações da Música
+              {t('minhasCifras.informacoes')}
             </div>
             <div className="p-3 flex flex-col gap-2.5">
               <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-bold font-mono text-gray-700">Título *</label>
+                <label className="text-[10px] font-bold font-mono text-gray-700">{t('minhasCifras.campoTitulo')}</label>
                 <input
                   type="text"
                   value={title}
                   onChange={e => setTitle(e.target.value)}
-                  placeholder="Ex: Tocando em Frente"
+                  placeholder={t('minhasCifras.campoTituloExemplo')}
                   className="bg-white border-2 border-r-white border-b-white border-[#808080] px-2 py-1 text-xs font-mono focus:outline-none shadow-inner"
                 />
               </div>
 
               <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-bold font-mono text-gray-700">Artista / Autor *</label>
+                <label className="text-[10px] font-bold font-mono text-gray-700">{t('minhasCifras.campoArtista')}</label>
                 <input
                   type="text"
                   value={artist}
                   onChange={e => setArtist(e.target.value)}
-                  placeholder="Ex: Almir Sater"
+                  placeholder={t('minhasCifras.campoArtistaExemplo')}
                   className="bg-white border-2 border-r-white border-b-white border-[#808080] px-2 py-1 text-xs font-mono focus:outline-none shadow-inner"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold font-mono text-gray-700">Gênero</label>
+                  <label className="text-[10px] font-bold font-mono text-gray-700">{t('minhasCifras.campoGenero')}</label>
                   <select
                     value={genre}
                     onChange={e => setGenre(e.target.value)}
                     className="bg-white border-2 border-r-white border-b-white border-[#808080] px-1 py-1 text-xs font-mono focus:outline-none shadow-inner cursor-pointer"
                   >
                     {GENRES.map(g => <option key={g} value={g}>{g}</option>)}
+                    <option value="Outro">{t('minhasCifras.generoOutro')}</option>
                   </select>
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold font-mono text-gray-700">Tom</label>
+                  <label className="text-[10px] font-bold font-mono text-gray-700">{t('minhasCifras.campoTom')}</label>
                   <select
                     value={key}
                     onChange={e => setKey(e.target.value)}
@@ -476,7 +483,7 @@ function CifraEditor({ initial, onSave, onCancel, onDelete }: {
               <div className="flex items-center gap-2">
                 <input
                   type="range"
-                  aria-label="Andamento em BPM"
+                  aria-label={t('minhasCifras.bpmAria')}
                   min={40} max={220} value={bpm}
                   onChange={e => setBpm(Number(e.target.value))}
                   className="flex-1 cursor-pointer"
@@ -491,20 +498,19 @@ function CifraEditor({ initial, onSave, onCancel, onDelete }: {
 
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[10px] font-mono text-gray-600 leading-tight">
-                  40 (Lento) — 220 (Rápido)
+                  {t('minhasCifras.bpmFaixa')}
                 </span>
                 <button
                   onClick={handleTapTempo}
                   className="px-2 py-1 bg-[#ece9d8] border border-white border-r-[#808080] border-b-[#808080] active:border-t-[#808080] active:border-l-[#808080] text-[10px] font-bold font-mono cursor-pointer hover:bg-white select-none shrink-0"
-                  title="Toque no ritmo da música para detectar o BPM automaticamente"
+                  title={t('minhasCifras.tapTempoDica')}
                 >
-                  Tap Tempo
+                  {t('minhasCifras.tapTempo')}
                 </button>
               </div>
 
               <div className="text-[10px] font-mono text-gray-600 bg-[#ece9d8] border border-[#808080] p-1.5 leading-relaxed">
-                A rolagem automática no visualizador é sincronizada com este BPM.
-                Ajuste até acompanhar a música real.
+                {t('minhasCifras.bpmExplicacao')}
               </div>
             </div>
           </div>
@@ -512,17 +518,17 @@ function CifraEditor({ initial, onSave, onCancel, onDelete }: {
           {/* Content block */}
           <div className="bg-[#d4d0c8] border border-white border-r-[#808080] border-b-[#808080] flex flex-col flex-1">
             <div className="winxp-gradient-blue text-white px-2 py-0.5 text-[10px] font-bold font-mono uppercase tracking-wide">
-              Letra e Acordes
+              {t('minhasCifras.letraEAcordes')}
             </div>
             <div className="p-3 flex flex-col gap-2 flex-1">
               <div className="text-[10px] font-mono text-gray-600 leading-relaxed bg-[#ece9d8] border border-[#808080] p-1.5">
-                Coloque acordes entre <code className="font-bold">[colchetes]</code> antes da sílaba:<br />
-                <code>[G]Tocando em fren[D7]te</code>
+                {t('minhasCifras.colchetesAntes')} <code className="font-bold">{t('minhasCifras.colchetes')}</code> {t('minhasCifras.colchetesDepois')}<br />
+                <code>{t('minhasCifras.colchetesExemplo')}</code>
               </div>
               <textarea
                 value={content}
                 onChange={e => setContent(e.target.value)}
-                placeholder={"[G]Tocando em frente\n[D7]como um velho boia[G]deiro\n\n[G]E estrada eu [D7]sou"}
+                placeholder={t('minhasCifras.conteudoExemplo')}
                 rows={16}
                 className="bg-white border-2 border-r-white border-b-white border-[#808080] p-2 text-xs font-mono focus:outline-none shadow-inner resize-none leading-relaxed flex-1 min-h-[200px]"
               />
@@ -534,7 +540,7 @@ function CifraEditor({ initial, onSave, onCancel, onDelete }: {
         <div className="flex-1 flex flex-col overflow-hidden min-h-0 bg-white">
           <div className="bg-[#d4d0c8] border-b border-[#808080] px-3 py-1.5 shrink-0 flex items-center justify-between gap-2">
             <span className="text-[10px] font-bold font-mono text-gray-700 uppercase tracking-wide shrink-0">
-              Pré-visualização ao Vivo
+              {t('minhasCifras.preVisualizacao')}
             </span>
             {liveChords.length > 0 && (
               <div className="flex gap-1 flex-wrap justify-end">
@@ -555,7 +561,7 @@ function CifraEditor({ initial, onSave, onCancel, onDelete }: {
           <div className="flex-1 overflow-y-auto p-4 retro-scrollbar">
             {!title && !content ? (
               <div className="text-center text-gray-600 italic text-xs font-mono py-16 select-none">
-                A pré-visualização aparece aqui enquanto você digita...
+                {t('minhasCifras.preVisualizacaoVazia')}
               </div>
             ) : (
               <div className="max-w-2xl mx-auto">
@@ -587,6 +593,7 @@ function CifraEditor({ initial, onSave, onCancel, onDelete }: {
 type View = 'list' | 'edit' | 'view';
 
 export const MinhasCifras: React.FC = () => {
+  const t = useT();
   const [cifras, setCifras] = useState<CustomCifra[]>(loadCifras);
   const [view, setView] = useState<View>('list');
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -604,7 +611,7 @@ export const MinhasCifras: React.FC = () => {
   };
 
   const handleDelete = (id: string) => {
-    if (!confirm('Excluir esta cifra permanentemente?')) return;
+    if (!confirm(t('minhasCifras.confirmarExcluir'))) return;
     const updated = cifras.filter(c => c.id !== id);
     setCifras(updated);
     saveCifras(updated);
@@ -638,12 +645,12 @@ export const MinhasCifras: React.FC = () => {
   return (
     <div className="flex flex-col h-full">
       <div className="winxp-gradient-blue text-white px-3 py-1.5 flex items-center justify-between select-none shrink-0">
-        <span className="font-bold text-sm font-mono">Minhas Cifras</span>
+        <span className="font-bold text-sm font-mono">{t('minhasCifras.titulo')}</span>
         <button
           onClick={openNew}
           className="px-3 py-0.5 bg-[#228b22] text-white text-xs font-bold font-mono border border-[#1a6b1a] hover:bg-green-700 cursor-pointer"
         >
-          + Nova Cifra
+          {t('minhasCifras.novaCifra')}
         </button>
       </div>
 

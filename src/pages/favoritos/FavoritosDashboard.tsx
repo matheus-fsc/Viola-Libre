@@ -7,6 +7,7 @@
  * está lá e nunca remove o que é local.
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useT, t, type Chave } from '../../i18n';
 import { useNavigate } from 'react-router-dom';
 import { Heart, Download, Upload, RefreshCw, Search, FolderPlus, Trash2, Pencil, X, ShieldAlert, Share2, Copy, Check, Link2, HardDrive } from 'lucide-react';
 import { transposeChordString } from '../../engine/chordCalculator';
@@ -60,7 +61,7 @@ type Selection = { kind: 'all' } | { kind: 'loose' } | { kind: 'category'; id: s
 type ListaRecebida =
   | { estado: 'lendo' }
   | { estado: 'pronta'; file: FavoritesFile }
-  | { estado: 'erro'; error: string };
+  | { estado: 'erro'; error: Chave };
 
 /**
  * O tom da entrada, como texto para a lista.
@@ -88,11 +89,11 @@ function tomDaEntrada(entry: FavoriteEntry): { texto: string; original: boolean 
  */
 type SortMode = 'recentes' | 'titulo' | 'artista' | 'manual';
 
-const SORT_LABEL: Record<SortMode, string> = {
-  recentes: 'Mais recentes',
-  titulo: 'Título (A-Z)',
-  artista: 'Artista (A-Z)',
-  manual: 'Minha ordem',
+const SORT_LABEL: Record<SortMode, Chave> = {
+  recentes: 'favoritos.ordemRecentes',
+  titulo: 'favoritos.ordemTitulo',
+  artista: 'favoritos.ordemArtista',
+  manual: 'favoritos.ordemManual',
 };
 
 const displayArtist = (entry: FavoriteEntry): string => entry.artistName ?? prettifySlug(entry.artistSlug);
@@ -107,7 +108,7 @@ const podeCompartilharNativo = typeof navigator !== 'undefined' && typeof naviga
 
 async function compartilharNativo(url: string): Promise<void> {
   try {
-    await navigator.share({ title: 'Meus favoritos no Viola Libre', url });
+    await navigator.share({ title: t('favoritos.meusFavoritosTitulo'), url });
   } catch {
     // Fechar a folha do sistema rejeita a promessa. Desistir não é erro e não merece aviso.
   }
@@ -116,6 +117,7 @@ async function compartilharNativo(url: string): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export function FavoritosDashboard() {
+  const t = useT();
   const navigate = useNavigate();
   const store = useCifraFavorites();
 
@@ -171,9 +173,9 @@ export function FavoritosDashboard() {
 
   /** Como a seleção atual se chama — serve de rótulo à barra de navegação da cifra. */
   const escopoAtual =
-    selection.kind === 'all' ? 'Todos os favoritos'
-      : selection.kind === 'loose' ? 'Sem categoria'
-        : categoriaAtiva?.name ?? 'Categoria';
+    selection.kind === 'all' ? t('favoritos.todosOsFavoritos')
+      : selection.kind === 'loose' ? t('favoritos.semCategoria')
+        : categoriaAtiva?.name ?? t('favoritos.categoria');
 
   // "Minha ordem" fica pendurada no `sort` mesmo depois de sair da gaveta que a tinha; aqui
   // ela só VALE dentro de uma categoria, e fora dela o critério volta a ser o padrão.
@@ -314,12 +316,12 @@ export function FavoritosDashboard() {
     const next = await syncFavoritesFromServer();
     setSyncing(false);
     const added = next.entries.length - before;
-    flash('ok', added > 0 ? `${added} cifra(s) recuperada(s) do servidor.` : 'Tudo já estava sincronizado.');
+    flash('ok', added > 0 ? t('favoritos.syncRecuperadas', { n: added }) : t('favoritos.syncJaSincronizado'));
   };
 
   const handleExport = (includeIdentity: boolean) => {
     if (store.entries.length === 0) {
-      flash('erro', 'Não há favoritos para exportar.');
+      flash('erro', t('favoritos.semFavoritosParaExportar'));
       return;
     }
     setExportOpen(false);
@@ -327,8 +329,8 @@ export function FavoritosDashboard() {
     flash(
       'ok',
       includeIdentity
-        ? 'Backup pessoal baixado. Guarde o arquivo e não compartilhe: quem o importar assume sua identidade.'
-        : 'Lista baixada sem identidade — pode compartilhar à vontade.'
+        ? t('favoritos.backupBaixado')
+        : t('favoritos.listaBaixada')
     );
   };
 
@@ -341,14 +343,14 @@ export function FavoritosDashboard() {
    */
   const handleImportFile = async (file: File) => {
     if (file.size > MAX_FILE_BYTES) {
-      flash('erro', 'Arquivo grande demais para ser uma lista de favoritos.');
+      flash('erro', t('favoritos.arquivoGrande'));
       return;
     }
 
     const raw = await file.text();
     const parsed = parseImportedFile(raw);
     if (!parsed.ok || !parsed.file) {
-      flash('erro', parsed.error ?? 'Não foi possível ler o backup.');
+      flash('erro', parsed.error ? t(parsed.error, parsed.errorVars) : t('favoritos.erroLerBackup'));
       return;
     }
 
@@ -451,7 +453,7 @@ export function FavoritosDashboard() {
     } catch {
       // Sem permissão ou fora de contexto seguro. O link está à vista no campo ao lado,
       // então dá para copiar à mão — é isso que a mensagem manda fazer.
-      flash('erro', 'O navegador não deixou copiar. Selecione o link e copie à mão.');
+      flash('erro', t('favoritos.erroCopiar'));
     }
   };
 
@@ -507,8 +509,8 @@ export function FavoritosDashboard() {
     flash(
       outcome.ok ? 'ok' : 'erro',
       outcome.ok
-        ? `${outcome.added} cifra(s) adicionada(s) à sua estante.`
-        : outcome.error ?? 'Não foi possível ler a lista.'
+        ? t('favoritos.adicionadasAEstante', { n: outcome.added })
+        : outcome.error ? t(outcome.error, outcome.errorVars) : t('favoritos.erroLerLista')
     );
   };
 
@@ -521,13 +523,13 @@ export function FavoritosDashboard() {
     setPendingImport(null);
     const outcome = await importFavoritesBackup(raw, { adoptIdentity });
     if (!outcome.ok) {
-      flash('erro', outcome.error ?? 'Não foi possível ler o backup.');
+      flash('erro', outcome.error ? t(outcome.error, outcome.errorVars) : t('favoritos.erroLerBackup'));
       return;
     }
     flash(
       'ok',
-      `${outcome.added} cifra(s) adicionada(s).` +
-        (outcome.identityRestored ? ' Identidade do backup adotada e sincronizada com o servidor.' : '')
+      t('favoritos.adicionadas', { n: outcome.added }) +
+        (outcome.identityRestored ? t('favoritos.identidadeAdotada') : '')
     );
   };
 
@@ -541,7 +543,7 @@ export function FavoritosDashboard() {
         </span>
         <div className="flex gap-1.5">
           <ToolbarButton onClick={handleSync} disabled={syncing} icon={<RefreshCw size={11} className={syncing ? 'animate-spin' : ''} />}>
-            Sincronizar
+            {t('favoritos.sincronizar')}
           </ToolbarButton>
           <ToolbarButton
             onClick={() => { setOfflineOpen(v => !v); setShareOpen(false); setExportOpen(false); }}
@@ -549,9 +551,9 @@ export function FavoritosDashboard() {
           >
             No aparelho
           </ToolbarButton>
-          <ToolbarButton onClick={abrirCompartilhar} icon={<Share2 size={11} />}>Compartilhar</ToolbarButton>
-          <ToolbarButton onClick={() => { setExportOpen(v => !v); setShareOpen(false); setOfflineOpen(false); }} icon={<Download size={11} />}>Exportar</ToolbarButton>
-          <ToolbarButton onClick={() => fileInputRef.current?.click()} icon={<Upload size={11} />}>Importar</ToolbarButton>
+          <ToolbarButton onClick={abrirCompartilhar} icon={<Share2 size={11} />}>{t('favoritos.compartilhar')}</ToolbarButton>
+          <ToolbarButton onClick={() => { setExportOpen(v => !v); setShareOpen(false); setOfflineOpen(false); }} icon={<Download size={11} />}>{t('favoritos.exportar')}</ToolbarButton>
+          <ToolbarButton onClick={() => fileInputRef.current?.click()} icon={<Upload size={11} />}>{t('favoritos.importar')}</ToolbarButton>
         </div>
       </div>
 
@@ -570,20 +572,18 @@ export function FavoritosDashboard() {
         <div className="bg-[#fff8e1] border-2 border-[#ff7f27] p-3 flex flex-col gap-2">
           <div className="text-xs font-bold text-[#992200] flex items-center gap-1.5 min-w-0">
             <Trash2 size={13} className="shrink-0" />
-            <span className="truncate">Descartar a lista “{listaADescartar.name}”?</span>
+            <span className="truncate">{t('favoritos.descartarPergunta', { nome: listaADescartar.name })}</span>
           </div>
           {(() => {
             const plano = planoDeDescarteDaLista(store, listaADescartar.id);
             return (
               <ul className="text-[11px] text-gray-800 leading-relaxed list-disc pl-5">
                 <li>
-                  <strong>{plano.removidas} cifra{plano.removidas === 1 ? '' : 's'}</strong> saem dos
-                  seus favoritos — vieram nesta lista e não estão em mais nenhuma.
+                  {t('favoritos.descarteRemovidas', { n: plano.removidas })}
                 </li>
                 {plano.mantidas > 0 && (
                   <li>
-                    <strong>{plano.mantidas}</strong> continuam na estante: já eram suas antes do
-                    link, ou você as guardou em outra categoria.
+                    {t('favoritos.descarteMantidas', { n: plano.mantidas })}
                   </li>
                 )}
               </ul>
@@ -594,13 +594,13 @@ export function FavoritosDashboard() {
               onClick={confirmarDescarte}
               className="bevel-out bg-[#ece9d8] px-3 py-2 sm:py-1.5 text-xs font-bold text-[#992200] hover:bg-white cursor-pointer active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
             >
-              Descartar a lista
+              {t('favoritos.descartarLista')}
             </button>
             <button
               onClick={() => setDescartando(null)}
               className="px-3 py-2 sm:py-1.5 text-xs text-gray-600 hover:text-black cursor-pointer"
             >
-              Cancelar
+              {t('comum.cancelar')}
             </button>
           </div>
         </div>
@@ -623,23 +623,23 @@ export function FavoritosDashboard() {
       {shareOpen && (
         <div className="bg-[#ece9d8] border-2 border-white border-r-[#808080] border-b-[#808080] p-3 flex flex-col gap-2">
           <div className="text-xs font-bold text-[#002fa7] flex items-center gap-1.5">
-            <Link2 size={12} /> Link desta lista
+            <Link2 size={12} /> {t('favoritos.linkDestaLista')}
           </div>
           <label className="flex flex-col gap-1">
             <span className="text-[10px] font-bold text-gray-700">
-              Nome da lista <span className="font-normal text-gray-500">— é o que a pessoa vê antes de importar</span>
+              {t('favoritos.nomeDaLista')} <span className="font-normal text-gray-500">{t('favoritos.nomeDaListaNota')}</span>
             </span>
             <input
               value={shareNome}
               onChange={e => setShareNome(e.target.value)}
               maxLength={60}
-              placeholder="Ex.: Roda de terça"
+              placeholder={t('favoritos.nomeDaListaExemplo')}
               className="bevel-in bg-white px-2 py-1.5 text-xs outline-none"
             />
           </label>
 
           <fieldset className="flex flex-col gap-1">
-            <legend className="text-[10px] font-bold text-gray-700 mb-1">O que vai no link</legend>
+            <legend className="text-[10px] font-bold text-gray-700 mb-1">{t('favoritos.oQueVaiNoLink')}</legend>
             <div className="bevel-in bg-white p-2 max-h-32 overflow-y-auto retro-scrollbar flex flex-col gap-1">
               {store.categories.map(cat => (
                 <label key={cat.id} className="flex items-center gap-2 text-xs cursor-pointer hover:text-[#002fa7]">
@@ -660,7 +660,7 @@ export function FavoritosDashboard() {
                   onChange={() => setShareSoltas(v => !v)}
                   className="cursor-pointer"
                 />
-                <span className="truncate italic text-gray-600">Cifras sem categoria</span>
+                <span className="truncate italic text-gray-600">{t('favoritos.cifrasSemCategoria')}</span>
                 <span className="text-[10px] text-gray-500 ml-auto shrink-0">{looseCount}</span>
               </label>
             </div>
@@ -669,13 +669,13 @@ export function FavoritosDashboard() {
                 onClick={() => { setShareCats(new Set(store.categories.map(c => c.id))); setShareSoltas(true); }}
                 className="text-[#002fa7] hover:underline cursor-pointer"
               >
-                Marcar tudo
+                {t('favoritos.marcarTudo')}
               </button>
               <button
                 onClick={() => { setShareCats(new Set()); setShareSoltas(false); }}
                 className="text-gray-600 hover:underline cursor-pointer"
               >
-                Limpar
+                {t('favoritos.limpar')}
               </button>
             </div>
           </fieldset>
@@ -689,7 +689,7 @@ export function FavoritosDashboard() {
 
           {paraCompartilhar.length === 0 ? (
             <p className="text-[11px] text-[#992200]">
-              Nada marcado — escolha ao menos uma categoria acima.
+              {t('favoritos.nadaMarcado')}
             </p>
           ) : shareError ? (
             <p className="text-[11px] text-[#992200] leading-relaxed">{shareError}</p>
@@ -703,7 +703,7 @@ export function FavoritosDashboard() {
                 <input
                   readOnly
                   value={shareUrl}
-                  aria-label="Link da lista compartilhada"
+                  aria-label={t('favoritos.linkAria')}
                   onFocus={e => e.currentTarget.select()}
                   className="flex-1 min-w-0 bevel-in bg-white px-2 py-1.5 text-[10px] font-mono outline-none"
                 />
@@ -713,14 +713,14 @@ export function FavoritosDashboard() {
                     className="flex-1 sm:flex-none bevel-out bg-[#ece9d8] px-3 py-2 sm:py-1.5 text-xs font-bold text-black hover:bg-white cursor-pointer flex items-center justify-center gap-1.5 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
                   >
                     {copiado ? <Check size={12} className="text-green-700" /> : <Copy size={12} />}
-                    {copiado ? 'Copiado' : 'Copiar'}
+                    {copiado ? t('favoritos.copiado') : t('favoritos.copiar')}
                   </button>
                   {podeCompartilharNativo && (
                     <button
                       onClick={() => void compartilharNativo(shareUrl)}
                       className="flex-1 sm:flex-none bevel-out bg-[#ece9d8] px-3 py-2 sm:py-1.5 text-xs font-bold text-black hover:bg-white cursor-pointer flex items-center justify-center gap-1.5 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
                     >
-                      <Share2 size={12} /> Enviar
+                      <Share2 size={12} /> {t('favoritos.enviar')}
                     </button>
                   )}
                 </div>
@@ -728,9 +728,7 @@ export function FavoritosDashboard() {
 
               {shareUrl.length > AVISO_LINK_CHARS && (
                 <p className="text-[10px] text-[#992200] leading-relaxed">
-                  Link longo ({shareUrl.length} caracteres) — alguns aplicativos de mensagem cortam
-                  endereços grandes. Se chegar quebrado do outro lado, mande uma categoria por vez ou
-                  use o arquivo de exportar.
+                  {t('favoritos.linkLongo', { n: shareUrl.length })}
                 </p>
               )}
             </>
@@ -740,26 +738,26 @@ export function FavoritosDashboard() {
 
       {exportOpen && (
         <div className="bg-[#ece9d8] border-2 border-white border-r-[#808080] border-b-[#808080] p-3 flex flex-col gap-2">
-          <div className="text-xs font-bold text-[#002fa7]">Como quer exportar?</div>
+          <div className="text-xs font-bold text-[#002fa7]">{t('favoritos.comoExportar')}</div>
           <button
             onClick={() => handleExport(true)}
             className="text-left px-3 py-2 bg-white border border-[#808080] hover:bg-[#c2d7f2] cursor-pointer"
           >
             <div className="text-xs font-bold flex items-center gap-1.5">
-              <ShieldAlert size={12} className="text-[#cc3300]" /> Backup pessoal (com identidade)
+              <ShieldAlert size={12} className="text-[#cc3300]" /> {t('favoritos.backupPessoal')}
             </div>
             <div className="text-[10px] text-gray-600 mt-0.5">
-              Recupera tudo, inclusive o que está no servidor. <strong>Não compartilhe:</strong> quem
-              importar este arquivo passa a ser você para o site.
+              {t('favoritos.backupPessoalNota1')} <strong>{t('favoritos.backupPessoalNaoCompartilhe')}</strong>{' '}
+              {t('favoritos.backupPessoalNota2')}
             </div>
           </button>
           <button
             onClick={() => handleExport(false)}
             className="text-left px-3 py-2 bg-white border border-[#808080] hover:bg-[#c2d7f2] cursor-pointer"
           >
-            <div className="text-xs font-bold">Lista para compartilhar (sem identidade)</div>
+            <div className="text-xs font-bold">{t('favoritos.listaParaCompartilhar')}</div>
             <div className="text-[10px] text-gray-600 mt-0.5">
-              Só as músicas e categorias. Seguro de mandar para um amigo.
+              {t('favoritos.listaParaCompartilharNota')}
             </div>
           </button>
         </div>
@@ -768,32 +766,31 @@ export function FavoritosDashboard() {
       {pendingImport && (
         <div className="bg-[#fff8e1] border-2 border-[#ff7f27] p-3 flex flex-col gap-2">
           <div className="text-xs font-bold text-[#992200] flex items-center gap-1.5">
-            <ShieldAlert size={13} /> Este backup traz uma identidade diferente
+            <ShieldAlert size={13} /> {t('favoritos.identidadeDiferente')}
           </div>
           <p className="text-[11px] text-gray-800 leading-relaxed">
-            As músicas serão adicionadas de qualquer forma. A pergunta é sobre a identidade:
-            adotá-la <strong>desliga este navegador dos seus favoritos atuais no servidor</strong> (sem
-            login, não há como recuperá-los depois) e o liga aos do dono do arquivo. Só adote se o
-            backup for <strong>seu</strong>.
+            {t('favoritos.identidadeTexto1')}{' '}
+            <strong>{t('favoritos.identidadeForte')}</strong>{' '}
+            {t('favoritos.identidadeTexto2')} <strong>{t('favoritos.identidadeSeu')}</strong>.
           </p>
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => void runImport(pendingImport, false)}
               className="bevel-out bg-[#ece9d8] px-3 py-1.5 text-xs font-bold text-black hover:bg-white cursor-pointer"
             >
-              Só as músicas (recomendado)
+              {t('favoritos.soAsMusicas')}
             </button>
             <button
               onClick={() => void runImport(pendingImport, true)}
               className="bevel-out bg-[#ece9d8] px-3 py-1.5 text-xs font-bold text-[#992200] hover:bg-white cursor-pointer"
             >
-              É meu backup — adotar a identidade
+              {t('favoritos.adotarIdentidade')}
             </button>
             <button
               onClick={() => setPendingImport(null)}
               className="px-3 py-1.5 text-xs text-gray-600 hover:text-black cursor-pointer"
             >
-              Cancelar
+              {t('comum.cancelar')}
             </button>
           </div>
         </div>
@@ -835,24 +832,24 @@ export function FavoritosDashboard() {
             aria-expanded={categoriesOpen}
             className="lg:hidden flex items-center justify-between gap-2 text-xs font-bold text-[#002fa7] py-1.5 cursor-pointer select-none"
           >
-            <span>Categorias ({store.categories.length})</span>
+            <span>{t('favoritos.categoriasContagem', { n: store.categories.length })}</span>
             <span className="text-[10px]">{categoriesOpen ? '▲' : '▼'}</span>
           </button>
 
           <div className="hidden lg:block text-xs font-bold text-[#002fa7] border-b border-dashed border-[#808080] pb-1.5 select-none">
-            Categorias
+            {t('favoritos.categorias')}
           </div>
 
           <div className={`${categoriesOpen ? 'flex' : 'hidden'} lg:flex flex-col gap-2 border-t border-dashed border-[#808080] pt-2 lg:border-t-0 lg:pt-0`}>
 
           <SidebarItem
-            label="Todos"
+            label={t('favoritos.todos')}
             count={store.entries.length}
             active={selection.kind === 'all'}
             onClick={() => setSelection({ kind: 'all' })}
           />
           <SidebarItem
-            label="Sem categoria"
+            label={t('favoritos.semCategoria')}
             count={looseCount}
             active={selection.kind === 'loose'}
             onClick={() => setSelection({ kind: 'loose' })}
@@ -865,7 +862,7 @@ export function FavoritosDashboard() {
               {editingCategory === cat.id ? (
                 <input
                   autoFocus
-                  aria-label={`Renomear a categoria ${cat.name}`}
+                  aria-label={t('favoritos.renomearCategoria', { nome: cat.name })}
                   defaultValue={cat.name}
                   onBlur={e => {
                     const name = e.target.value.trim();
@@ -885,13 +882,13 @@ export function FavoritosDashboard() {
                   active={selection.kind === 'category' && selection.id === cat.id}
                   onClick={() => setSelection({ kind: 'category', id: cat.id })}
                   icon={isImportedList(cat)
-                    ? <Link2 size={10} className="shrink-0 opacity-70" aria-label="Lista recebida por link" />
+                    ? <Link2 size={10} className="shrink-0 opacity-70" aria-label={t('favoritos.listaRecebidaAria')} />
                     : undefined}
                 />
               )}
               <button
                 onClick={() => setEditingCategory(cat.id)}
-                title="Renomear categoria"
+                title={t('favoritos.renomearCategoriaDica')}
                 className="p-2 lg:p-1 text-gray-600 hover:text-[#002fa7] cursor-pointer shrink-0"
               >
                 <Pencil size={11} />
@@ -903,7 +900,7 @@ export function FavoritosDashboard() {
               {isImportedList(cat) ? (
                 <button
                   onClick={() => setDescartando(cat.id)}
-                  title="Descartar a lista e as cifras que vieram com ela"
+                  title={t('favoritos.descartarListaDica')}
                   aria-label={`Descartar a lista ${cat.name}`}
                   className="p-2 lg:p-1 text-[#cc3300] hover:bg-[#fdecea] cursor-pointer shrink-0"
                 >
@@ -915,7 +912,7 @@ export function FavoritosDashboard() {
                     updateStore(s => deleteCategory(s, cat.id));
                     setSelection(sel => (sel.kind === 'category' && sel.id === cat.id ? { kind: 'all' } : sel));
                   }}
-                  title="Apagar categoria (as cifras continuam nos favoritos)"
+                  title={t('favoritos.apagarCategoriaDica')}
                   aria-label={`Apagar a categoria ${cat.name}`}
                   className="p-2 lg:p-1 text-gray-600 hover:text-[#cc3300] cursor-pointer shrink-0"
                 >
@@ -927,17 +924,17 @@ export function FavoritosDashboard() {
 
           <div className="flex gap-1 mt-1 pt-2 border-t border-dashed border-[#808080]">
             <input
-              aria-label="Nome da nova categoria"
+              aria-label={t('favoritos.novaCategoriaAria')}
               value={newCategory}
               onChange={e => setNewCategory(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') handleCreateCategory(); }}
-              placeholder="Nova categoria"
+              placeholder={t('favoritos.novaCategoriaPlaceholder')}
               maxLength={60}
               className="flex-1 min-w-0 px-1.5 py-1 text-xs bg-white border-2 border-[#808080] border-r-white border-b-white outline-none"
             />
             <button
               onClick={handleCreateCategory}
-              title="Criar categoria"
+              title={t('favoritos.criarCategoriaDica')}
               className="bevel-out bg-[#ece9d8] px-3 lg:px-2 text-black hover:bg-white cursor-pointer active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
             >
               <FolderPlus size={12} />
@@ -954,12 +951,12 @@ export function FavoritosDashboard() {
               <input
                 value={query}
                 onChange={e => setQuery(e.target.value)}
-                aria-label="Buscar nos favoritos por música ou artista"
-                placeholder="Buscar por música ou artista"
+                aria-label={t('favoritos.buscarAria')}
+                placeholder={t('favoritos.buscarPlaceholder')}
                 className="flex-1 min-w-0 py-1.5 text-xs outline-none bg-transparent"
               />
               {query && (
-                <button onClick={() => setQuery('')} aria-label="Limpar busca" className="text-gray-500 hover:text-black cursor-pointer shrink-0">
+                <button onClick={() => setQuery('')} aria-label={t('favoritos.limparBusca')} className="text-gray-500 hover:text-black cursor-pointer shrink-0">
                   <X size={12} aria-hidden="true" />
                 </button>
               )}
@@ -983,11 +980,10 @@ export function FavoritosDashboard() {
             <p className="text-[10px] text-gray-600 bg-[#ece9d8] border border-[#d4d0c8] px-2 py-1.5 leading-relaxed">
               {podeReordenar ? (
                 <>
-                  Arraste pelo <strong>⠿</strong>, use <strong>▲▼</strong> ou digite o número da
-                  posição. A ordem vale só em “{categoriaAtiva?.name}”.
+                  {t('favoritos.reordenarDica')} A ordem vale só em “{categoriaAtiva?.name}”.
                 </>
               ) : (
-                <>Limpe a busca para reordenar — a ordem é da categoria inteira, não do resultado filtrado.</>
+                <>{t('favoritos.reordenarBusca')}</>
               )}
             </p>
           )}
@@ -996,7 +992,7 @@ export function FavoritosDashboard() {
             <EmptyState onGoToCifras={() => navigate('/cifras')} />
           ) : visible.length === 0 ? (
             <div className="flex-1 flex items-center justify-center text-center text-gray-500 italic text-xs px-6">
-              Nenhuma cifra nesta categoria corresponde à busca.
+              {t('favoritos.nenhumaNaBusca')}
             </div>
           ) : (
             <ul className="flex flex-col gap-1.5 overflow-y-auto retro-scrollbar">
@@ -1033,7 +1029,7 @@ export function FavoritosDashboard() {
                       <button
                         onClick={() => abrirEsta(entry)}
                         className="flex-1 min-w-0 text-left cursor-pointer"
-                        title="Abrir cifra"
+                        title={t('favoritos.abrirCifra')}
                       >
                         <div className="text-xs font-bold text-[#002fa7] truncate">{entry.title}</div>
                         <div className="text-[10px] text-gray-600 truncate">
@@ -1069,17 +1065,17 @@ export function FavoritosDashboard() {
                         onClick={() => setOpenMenuFor(openMenuFor === key ? null : key)}
                         aria-expanded={openMenuFor === key}
                         className="bevel-out bg-[#ece9d8] px-2 py-2 sm:py-1 text-[10px] font-bold text-black hover:bg-white cursor-pointer shrink-0 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
-                        title="Organizar em categorias"
+                        title={t('favoritos.organizarDica')}
                       >
                         {/* Rótulo curto no telefone: com o título da cifra ao lado, "Categorias"
                             por extenso não cabe numa tela de 360px. */}
-                        <span className="sm:hidden">Cat.</span>
-                        <span className="hidden sm:inline">Categorias</span>
+                        <span className="sm:hidden">{t('favoritos.categoriasCurto')}</span>
+                        <span className="hidden sm:inline">{t('favoritos.categorias')}</span>
                       </button>
 
                       <button
                         onClick={() => updateStore(s => removeEntry(s, entry.artistSlug, entry.songSlug))}
-                        title="Remover dos favoritos"
+                        title={t('favoritos.removerDica')}
                         className="p-2 sm:p-1.5 text-[#cc3300] hover:bg-[#fdecea] cursor-pointer shrink-0"
                       >
                         <Heart size={14} className="fill-current" />
@@ -1104,10 +1100,8 @@ export function FavoritosDashboard() {
           )}
 
           <p className="text-[10px] text-gray-500 border-t border-dashed border-[#808080] pt-2 leading-relaxed">
-            Seus favoritos ficam salvos neste navegador e funcionam offline. Como o site não tem
-            login, <strong>exportar é a única forma de não perdê-los</strong> ao limpar o navegador ou
-            trocar de aparelho. O backup pessoal leva sua identidade junto — trate-o como uma senha e
-            use a opção "para compartilhar" quando for mandar a lista para alguém.
+            {t('favoritos.rodape')} <strong>{t('favoritos.rodapeForte')}</strong>{' '}
+            {t('favoritos.rodapeDepois')}
           </p>
         </section>
       </div>
@@ -1135,10 +1129,11 @@ function ListaRecebidaPainel({ recebida, categorias, onAceitar, onDescartar }: {
   onAceitar: (guardarEm: string | null) => void;
   onDescartar: () => void;
 }) {
+  const t = useT();
   if (recebida.estado === 'lendo') {
     return (
       <div className="bg-[#ece9d8] border-2 border-white border-r-[#808080] border-b-[#808080] p-3 text-[11px] text-gray-600 italic">
-        Lendo a lista que veio no link…
+        {t('favoritos.lendoLink')}
       </div>
     );
   }
@@ -1146,7 +1141,7 @@ function ListaRecebidaPainel({ recebida, categorias, onAceitar, onDescartar }: {
   if (recebida.estado === 'erro') {
     return (
       <div className="bg-[#fff8e1] border-2 border-[#ff7f27] p-3 flex flex-wrap items-center justify-between gap-2">
-        <span className="text-[11px] text-[#992200]">{recebida.error}</span>
+        <span className="text-[11px] text-[#992200]">{t(recebida.error)}</span>
         <button onClick={onDescartar} className="px-3 py-1.5 text-xs text-gray-600 hover:text-black cursor-pointer">
           Fechar
         </button>
@@ -1173,6 +1168,7 @@ function OfertaDeLista({ file, categorias, onAceitar, onDescartar }: {
   onAceitar: (guardarEm: string | null) => void;
   onDescartar: () => void;
 }) {
+  const t = useT();
   const { entries, categories, listName } = file;
   const AMOSTRA = 8;
 
@@ -1191,15 +1187,15 @@ function OfertaDeLista({ file, categorias, onAceitar, onDescartar }: {
       <div className="text-xs font-bold text-[#002fa7] flex items-center gap-1.5 min-w-0">
         <Link2 size={13} className="shrink-0" />
         <span className="truncate">
-          {listName ? `Lista compartilhada: “${listName}”` : 'Alguém compartilhou uma lista com você'}
+          {listName ? t('favoritos.listaCompartilhada', { nome: listName }) : t('favoritos.alguemCompartilhou')}
         </span>
       </div>
 
       <p className="text-[11px] text-gray-800 leading-relaxed">
-        São <strong>{entries.length} cifra{entries.length === 1 ? '' : 's'}</strong>
-        {categories.length > 0 && <> em {categories.length} categoria{categories.length === 1 ? '' : 's'} ({categories.map(c => c.name).join(', ')})</>}.
-        Adicionar <strong>soma</strong> à sua estante: nada do que já está lá é apagado ou trocado
-        {categorias > 0 && ', e as categorias com o mesmo nome viram uma só'}.
+        {t('favoritos.ofertaSao', { n: entries.length })}
+        {categories.length > 0 && <> {t('favoritos.ofertaEmCategorias', { n: categories.length, nomes: categories.map(c => c.name).join(', ') })}</>}.{' '}
+        {t('favoritos.ofertaSoma')}
+        {categorias > 0 && t('favoritos.ofertaCategoriasFundem')}.
       </p>
 
       <ul className="bevel-in bg-white max-h-32 overflow-y-auto retro-scrollbar p-2 flex flex-col gap-0.5">
@@ -1210,7 +1206,7 @@ function OfertaDeLista({ file, categorias, onAceitar, onDescartar }: {
           </li>
         ))}
         {entries.length > AMOSTRA && (
-          <li className="text-[10px] text-gray-500 italic">e mais {entries.length - AMOSTRA}…</li>
+          <li className="text-[10px] text-gray-500 italic">{t('favoritos.ofertaEMais', { n: entries.length - AMOSTRA })}</li>
         )}
       </ul>
 
@@ -1222,15 +1218,15 @@ function OfertaDeLista({ file, categorias, onAceitar, onDescartar }: {
             onChange={() => setGuardarEmGaveta(v => !v)}
             className="cursor-pointer"
           />
-          Guardar numa categoria:
+          {t('favoritos.ofertaGuardarEm')}
         </label>
         <input
           value={nomeGaveta}
           onChange={e => setNomeGaveta(e.target.value)}
           disabled={!guardarEmGaveta}
           maxLength={60}
-          aria-label="Nome da categoria onde guardar a lista recebida"
-          placeholder="Nome da categoria"
+          aria-label={t('favoritos.ofertaNomeCategoriaAria')}
+          placeholder={t('favoritos.ofertaNomeCategoria')}
           className="flex-1 min-w-[8rem] bevel-in bg-white px-2 py-1 text-xs outline-none disabled:opacity-50 disabled:bg-[#ece9d8]"
         />
       </div>
@@ -1240,10 +1236,10 @@ function OfertaDeLista({ file, categorias, onAceitar, onDescartar }: {
           onClick={() => onAceitar(guardarEmGaveta && nomeGaveta.trim() ? nomeGaveta : null)}
           className="bevel-out bg-[#ece9d8] px-3 py-2 sm:py-1.5 text-xs font-bold text-black hover:bg-white cursor-pointer active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
         >
-          Adicionar aos meus favoritos
+          {t('favoritos.ofertaAdicionar')}
         </button>
         <button onClick={onDescartar} className="px-3 py-2 sm:py-1.5 text-xs text-gray-600 hover:text-black cursor-pointer">
-          Agora não
+          {t('favoritos.ofertaAgoraNao')}
         </button>
       </div>
     </div>
@@ -1294,6 +1290,7 @@ function ControlesDeOrdem({ posicao, total, titulo, onMover }: {
   titulo: string;
   onMover: (destino: number) => void;
 }) {
+  const t = useT();
   const [rascunho, setRascunho] = useState<string | null>(null);
 
   const aplicar = () => {
@@ -1310,7 +1307,7 @@ function ControlesDeOrdem({ posicao, total, titulo, onMover }: {
         // `draggable`. Este punho existe para dizer ONDE pegar.
         aria-hidden="true"
         className="text-gray-400 text-sm leading-none cursor-grab select-none px-0.5"
-        title="Arraste para reordenar"
+        title={t('favoritos.arrasteDica')}
       >
         ⠿
       </span>
@@ -1324,14 +1321,14 @@ function ControlesDeOrdem({ posicao, total, titulo, onMover }: {
           if (e.key === 'Escape') { setRascunho(null); e.currentTarget.blur(); }
         }}
         inputMode="numeric"
-        aria-label={`Posição de ${titulo} na categoria, de 1 a ${total}`}
+        aria-label={t('favoritos.posicaoAria', { titulo, total })}
         className="bevel-in bg-white w-8 px-1 py-1 sm:py-0.5 text-[10px] text-center font-mono outline-none"
       />
       <div className="flex flex-col">
         <button
           onClick={() => onMover(posicao - 1)}
           disabled={posicao === 0}
-          aria-label={`Subir ${titulo}`}
+          aria-label={t('favoritos.subirAria', { titulo })}
           className="px-1 text-[8px] leading-none text-gray-600 hover:text-[#002fa7] disabled:opacity-25 disabled:cursor-default cursor-pointer"
         >
           ▲
@@ -1339,7 +1336,7 @@ function ControlesDeOrdem({ posicao, total, titulo, onMover }: {
         <button
           onClick={() => onMover(posicao + 1)}
           disabled={posicao >= total - 1}
-          aria-label={`Descer ${titulo}`}
+          aria-label={t('favoritos.descerAria', { titulo })}
           className="px-1 text-[8px] leading-none text-gray-600 hover:text-[#002fa7] disabled:opacity-25 disabled:cursor-default cursor-pointer"
         >
           ▼
@@ -1392,18 +1389,19 @@ function CategoryPicker({ categories, selectedIds, onToggle, onFechar }: {
   onToggle: (id: string) => void;
   onFechar: () => void;
 }) {
+  const t = useT();
   return (
     <div className="bg-[#ece9d8] border-t border-[#808080] p-2 flex justify-end">
       <div className="w-full sm:w-64 sm:max-w-full bevel-out bg-[#ece9d8] p-1">
         <div className="flex items-center justify-between px-1.5 py-1 border-b border-dashed border-[#808080] mb-1">
-          <span className="text-[10px] font-bold text-gray-600 uppercase tracking-wider">Categorias</span>
-          <button onClick={onFechar} aria-label="Fechar seletor de categorias" className="text-gray-500 hover:text-black cursor-pointer">
+          <span className="text-[10px] font-bold text-gray-600 uppercase tracking-wider">{t('favoritos.categorias')}</span>
+          <button onClick={onFechar} aria-label={t('favoritos.fecharSeletorAria')} className="text-gray-500 hover:text-black cursor-pointer">
             <X size={11} aria-hidden="true" />
           </button>
         </div>
         {categories.length === 0 ? (
           <span className="block px-1.5 py-1 text-[10px] text-gray-600 italic">
-            Crie uma categoria na barra lateral primeiro.
+            {t('favoritos.crieCategoriaPrimeiro')}
           </span>
         ) : (
           <div className="max-h-44 overflow-y-auto retro-scrollbar flex flex-col">
@@ -1431,18 +1429,18 @@ function CategoryPicker({ categories, selectedIds, onToggle, onFechar }: {
 }
 
 function EmptyState({ onGoToCifras }: { onGoToCifras: () => void }) {
+  const t = useT();
   return (
     <div className="flex-1 flex flex-col items-center justify-center text-center gap-3 px-6 py-12">
       <Heart size={28} className="text-gray-300" />
       <p className="text-xs text-gray-500 max-w-sm leading-relaxed">
-        Nenhuma cifra favoritada ainda. Abra uma cifra e clique em <strong>Favoritar</strong> —
-        ela aparece aqui e você pode organizá-la em categorias.
+        {t('favoritos.vazioTexto1')} <strong>{t('favoritos.vazioForte')}</strong>{t('favoritos.vazioTexto2')}
       </p>
       <button
         onClick={onGoToCifras}
         className="bevel-out bg-[#ece9d8] px-4 py-1.5 text-xs font-bold text-black hover:bg-white cursor-pointer active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
       >
-        Procurar cifras
+        {t('favoritos.procurarCifras')}
       </button>
     </div>
   );

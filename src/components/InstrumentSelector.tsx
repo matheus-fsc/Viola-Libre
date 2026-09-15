@@ -1,4 +1,5 @@
 import React from 'react';
+import { useT } from '../i18n';
 import type { Instrument, Tuning } from '../engine/types';
 import { PRESET_INSTRUMENTS, NOTE_NAMES_SHARP } from '../engine/tunings';
 
@@ -18,6 +19,7 @@ export const InstrumentSelector: React.FC<InstrumentSelectorProps> = ({
   onTuningChange,
   onCustomTuningChange
 }) => {
+  const t = useT();
 
   const handleInstrumentSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const inst = PRESET_INSTRUMENTS.find(i => i.id === e.target.value);
@@ -55,7 +57,7 @@ export const InstrumentSelector: React.FC<InstrumentSelectorProps> = ({
       
       {/* Box Header (XP look) */}
       <div className="bg-gradient-to-r from-[#0058e6] to-[#3a8bfb] text-white px-2 py-1 flex justify-between items-center font-bold text-sm select-none">
-        <span>Configuração do Instrumento</span>
+        <span>{t('acordes.configuracaoInstrumento')}</span>
         <span className="font-mono text-xs">v1.0</span>
       </div>
 
@@ -76,7 +78,7 @@ export const InstrumentSelector: React.FC<InstrumentSelectorProps> = ({
         </div>
 
         <div className="flex flex-col gap-1">
-          <label className="text-xs font-bold font-mono text-gray-700" htmlFor="tuning-select">Afinação:</label>
+          <label className="text-xs font-bold font-mono text-gray-700" htmlFor="tuning-select">{t('acordes.afinacao')}</label>
           <select
             id="tuning-select"
             value={selectedTuning.id.startsWith('custom-') ? 'custom' : selectedTuning.id}
@@ -95,7 +97,7 @@ export const InstrumentSelector: React.FC<InstrumentSelectorProps> = ({
 
       {/* Tuning Editor (Up/Down string notes adjustment) */}
       <div className="border-t border-[#d4d0c8] pt-3">
-        <span className="text-xs font-bold font-mono text-gray-700 block mb-2">Ajuste Fino das Cordas (Cursos):</span>
+        <span className="text-xs font-bold font-mono text-gray-700 block mb-2">{t('acordes.ajusteFinoCordas')}</span>
         
         {/* Double-row display for strings */}
         <div className="flex justify-around items-center bg-[#d4d0c8] p-2 border border-[#808080] rounded shadow-inner">
@@ -135,7 +137,7 @@ export const InstrumentSelector: React.FC<InstrumentSelectorProps> = ({
           })}
         </div>
         <p className="text-[10px] text-gray-500 font-mono mt-2 text-center">
-          Dica: Use as setas para criar afinações alternativas instantaneamente!
+          {t('acordes.dicaSetas')}
         </p>
       </div>
 

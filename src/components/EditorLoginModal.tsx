@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useT, type Chave } from '../i18n';
 import { loginEditor, storeEditorSession, type EditorSession } from '../services/authApi';
 import { useDialog } from '../hooks/useDialog';
 
@@ -11,7 +12,10 @@ interface EditorLoginModalProps {
 export const EditorLoginModal: React.FC<EditorLoginModalProps> = ({ onClose, onLoginSuccess, isAuthenticated }) => {
   const { ref: dialogRef, props: dialogProps } = useDialog({ onClose, titleId: 'titulo-login-editor' });
   const [tokenInput, setTokenInput] = useState('');
-  const [error, setError] = useState('');
+  const t = useT();
+  // Chave do dicionário, e '' para «sem erro»: guardar a frase pronta prenderia o aviso
+  // ao idioma em que a tentativa falhou.
+  const [error, setError] = useState<Chave | ''>('');
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -20,18 +24,18 @@ export const EditorLoginModal: React.FC<EditorLoginModalProps> = ({ onClose, onL
     const trimmedToken = tokenInput.trim();
 
     if (!trimmedToken) {
-      setError('O token não pode estar vazio.');
+      setError('modais.editorErroVazio');
       return;
     }
 
     if (!trimmedToken.startsWith('vl_edit_')) {
-      setError('Token inválido. O formato esperado não foi reconhecido.');
+      setError('modais.editorErroFormato');
       return;
     }
 
     const maliciousPattern = /[<>{}"'`]/;
     if (maliciousPattern.test(trimmedToken)) {
-      setError('Token contém caracteres inválidos.');
+      setError('modais.editorErroCaracteres');
       return;
     }
 
@@ -47,9 +51,9 @@ export const EditorLoginModal: React.FC<EditorLoginModalProps> = ({ onClose, onL
       }, 800);
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status;
-      if (status === 401) setError('Token inválido ou não reconhecido.');
-      else if (status === 429) setError('Muitas tentativas. Aguarde um minuto e tente novamente.');
-      else setError('Não foi possível autenticar agora. Tente novamente em instantes.');
+      if (status === 401) setError('modais.editorErroNaoReconhecido');
+      else if (status === 429) setError('modais.editorErroTentativas');
+      else setError('modais.editorErroRede');
     } finally {
       setLoading(false);
     }
@@ -80,8 +84,8 @@ export const EditorLoginModal: React.FC<EditorLoginModalProps> = ({ onClose, onL
           {isAuthenticated ? (
             <div className="flex flex-col items-center gap-4 py-4">
               <div className="text-4xl">🛡️</div>
-              <p className="text-center font-bold text-[#0058e6]">Você está autenticado como Editor.</p>
-              <p className="text-center text-gray-600">Com grandes poderes vêm grandes responsabilidades. Curar os melhores acordes ajuda toda a comunidade.</p>
+              <p className="text-center font-bold text-[#0058e6]">{t('modais.editorAutenticado')}</p>
+              <p className="text-center text-gray-600">{t('modais.editorPoderes')}</p>
               
               <button
                 onClick={handleLogout}
@@ -93,14 +97,14 @@ export const EditorLoginModal: React.FC<EditorLoginModalProps> = ({ onClose, onL
           ) : (
             <>
               <p className="text-gray-700 leading-relaxed text-justify">
-                Este sistema é restrito para curadores oficiais do Viola Libre. Insira o seu Token de Acesso pessoal abaixo para autenticar.
+                {t('modais.editorRestrito')}
               </p>
               
               <div className="flex flex-col gap-1">
                 {/* htmlFor/id: sem o par, a <label> é só texto ao lado da caixa — o
                     leitor de tela anuncia "campo de senha, em branco" e clicar no
                     rótulo não foca o campo. */}
-                <label htmlFor="token-editor" className="font-bold text-gray-800">Token de Editor:</label>
+                <label htmlFor="token-editor" className="font-bold text-gray-800">{t('modais.editorTokenRotulo')}</label>
                 <input
                   id="token-editor"
                   type="password"
@@ -117,13 +121,13 @@ export const EditorLoginModal: React.FC<EditorLoginModalProps> = ({ onClose, onL
 
               {error && (
                 <div className="bg-[#ffdddd] border border-[#cc3300] text-[#cc3300] p-2 font-bold text-center">
-                  ⚠️ {error}
+                  ⚠️ {t(error as Chave)}
                 </div>
               )}
 
               {success && (
                 <div className="bg-[#ddffdd] border border-[#228b22] text-[#1a6b1a] p-2 font-bold text-center">
-                  ✔️ Autenticado com sucesso!
+                  {t('modais.editorSucesso')}
                 </div>
               )}
 
@@ -132,14 +136,14 @@ export const EditorLoginModal: React.FC<EditorLoginModalProps> = ({ onClose, onL
                   onClick={onClose}
                   className="px-4 py-1.5 bg-[#ece9d8] border border-white border-r-[#808080] border-bottom-[#808080] active:border-t-[#808080] active:border-l-[#808080] font-bold text-xs hover:bg-white cursor-pointer text-gray-700"
                 >
-                  Cancelar
+                  {t('comum.cancelar')}
                 </button>
                 <button
                   onClick={handleLogin}
                   disabled={success || loading}
                   className="px-4 py-1.5 bg-[#0058e6] text-white border border-[#002fa7] active:border-t-[#002fa7] active:border-l-[#002fa7] font-bold text-xs hover:bg-[#3a8bfb] cursor-pointer disabled:opacity-50"
                 >
-                  {loading ? 'Autenticando...' : 'Autenticar'}
+                  {loading ? t('modais.editorAutenticando') : t('modais.editorAutenticar')}
                 </button>
               </div>
             </>

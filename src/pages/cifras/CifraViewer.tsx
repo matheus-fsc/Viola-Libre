@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState, useMemo, useRef } from 'react';
+import { useT } from '../../i18n';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Ellipsis, Eye, FileText, FolderOpen, Guitar, Heart, Music2, Pencil, Pin, Play, Printer, RotateCcw, Save, Share2, Video } from 'lucide-react';
 import {
@@ -157,7 +158,15 @@ function fmtTime(sec: number): string {
    corrigidos na mudança — a leitura da terça por `suffix.includes('m')` e o tom menor
    reconhecido só por `endsWith('m')`. Ver os testes em `detectKey.test.ts`. */
 
+/** Qual frase mostrar para cada falha do modal de sequência. */
+const ERRO_SEQ = {
+  salvar: 'cifra.seqErroSalvar',
+  hash: 'cifra.seqErroHash',
+  deletar: 'cifra.seqErroDeletar',
+} as const;
+
 export const CifraViewer: React.FC = () => {
+  const t = useT();
   const { artistSlug, '*': songSlug } = useParams<{ artistSlug: string; '*': string }>();
   const [cifra, setCifra] = useState<CifraDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -266,7 +275,9 @@ export const CifraViewer: React.FC = () => {
   const [loadHashInput, setLoadHashInput] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingSeq, setIsLoadingSeq] = useState(false);
-  const [seqError, setSeqError] = useState<string | null>(null);
+  // Chave do dicionário, não a frase: guardar texto congelaria o idioma em que a falha
+  // aconteceu.
+  const [seqError, setSeqError] = useState<'salvar' | 'hash' | 'deletar' | null>(null);
   const [copied, setCopied] = useState(false);
   const [recentSeqs, setRecentSeqs] = useState<RecentSequencia[]>(() => getRecentSequencias());
 
@@ -1034,7 +1045,7 @@ export const CifraViewer: React.FC = () => {
       addRecentSequencia({ hash, title: cifra.title, artistSlug: artistSlug || '', savedAt: new Date().toISOString() });
       refreshRecent();
     } catch (e) {
-      setSeqError('Erro ao salvar. Tente novamente.');
+      setSeqError('salvar');
       console.error(e);
     } finally {
       setIsSaving(false);
@@ -1059,7 +1070,7 @@ export const CifraViewer: React.FC = () => {
       setSeqModalOpen(null);
       setLoadHashInput('');
     } catch (e) {
-      setSeqError('Hash não encontrado ou inválido.');
+      setSeqError('hash');
       console.error(e);
     } finally {
       setIsLoadingSeq(false);
@@ -1073,7 +1084,7 @@ export const CifraViewer: React.FC = () => {
       if (savedHash === hash) setSavedHash(null);
       refreshRecent();
     } catch (e) {
-      setSeqError('Erro ao deletar.');
+      setSeqError('deletar');
       console.error(e);
     }
   };
@@ -1542,7 +1553,7 @@ export const CifraViewer: React.FC = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full bg-[var(--color-winxp-bg)] text-sm text-gray-600">
-        Carregando cifra...
+        {t('cifra.carregando')}
       </div>
     );
   }
@@ -1550,12 +1561,12 @@ export const CifraViewer: React.FC = () => {
   if (!cifra) {
     return (
       <div className="flex flex-col items-center justify-center h-full bg-[var(--color-winxp-bg)]">
-        <h2 className="text-lg font-bold mb-2">Cifra não encontrada</h2>
+        <h2 className="text-lg font-bold mb-2">{t('cifra.naoEncontrada')}</h2>
         <button 
           onClick={() => navigate(-1)} 
           className="bevel-out bg-[var(--color-winxp-panel)] px-4 py-1 text-sm font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
         >
-          Voltar
+          {t('comum.voltar')}
         </button>
       </div>
     );
@@ -1571,22 +1582,22 @@ export const CifraViewer: React.FC = () => {
         <div className="absolute inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
            <div className="bg-[#ece9d8] border border-white border-r-[#808080] border-b-[#808080] shadow-xl max-w-sm w-full p-4 bevel-out">
               <div className="flex justify-between items-center mb-4 winxp-gradient-blue text-white px-2 py-1 rounded">
-                 <h3 className="font-bold text-sm">Informações do Acorde</h3>
+                 <h3 className="font-bold text-sm">{t('cifra.infoTitulo')}</h3>
                  <button onClick={() => setInfoPopupChord(null)} className="text-white hover:text-gray-200 text-xs font-bold bg-red-600 px-1 border border-white border-r-gray-500 border-b-gray-500 active:border-t-gray-500 active:border-l-gray-500 active:border-r-white active:border-b-white">X</button>
               </div>
               <p className="text-sm mb-3 font-bold text-[#002fa7]">
-                 Acorde: {infoPopupChord}<br/>
-                 Tom da Música: {transposeChordString(songKey, transposeOffset, false) || '?'}
+                 {t('cifra.infoAcorde', { acorde: infoPopupChord })}<br/>
+                 {t('cifra.infoTom', { tom: transposeChordString(songKey, transposeOffset, false) || '?' })}
               </p>
               {isChordDiatonic(infoPopupChord, transposeChordString(songKey, transposeOffset, false)) ? (
                 <div className="bg-white text-black p-2 text-sm border-2 border-green-500 shadow-inner flex gap-2">
                    <span className="text-green-600 font-bold">✓</span>
-                   <span>Este acorde <strong>faz parte</strong> (é diatônico) do tom da música.</span>
+                   <span><strong>{t('cifra.diatonicoForte')}</strong> {t('cifra.diatonicoTexto')}</span>
                 </div>
               ) : (
                 <div className="bg-white text-black p-2 text-sm border-2 border-[#cc3300] shadow-inner flex gap-2">
                    <span className="text-[#cc3300] font-bold">⚠️</span>
-                   <span>Este acorde <strong>está fora</strong> do tom principal da música (pode ser de empréstimo ou passagem).</span>
+                   <span><strong>{t('cifra.foraForte')}</strong> {t('cifra.foraTexto')}</span>
                 </div>
               )}
            </div>
@@ -1600,7 +1611,7 @@ export const CifraViewer: React.FC = () => {
             <div className="winxp-gradient-blue text-white px-2 py-1 flex items-center justify-between font-bold text-sm">
               <div className="flex items-center gap-1.5">
                 <Save size={13} />
-                <span>Sequência de Acordes</span>
+                <span>{t('cifra.seqTitulo')}</span>
               </div>
               <button
                 onClick={() => { setSeqModalOpen(null); setSeqError(null); }}
@@ -1616,30 +1627,30 @@ export const CifraViewer: React.FC = () => {
                 onClick={() => { setSeqModalOpen('save'); setSeqError(null); }}
                 className={`px-3 py-1 text-xs font-bold border-r border-gray-400 ${seqModalOpen === 'save' ? 'bg-[#ece9d8]' : 'bg-[#d4d0c8] hover:bg-[#e8e4d8]'}`}
               >
-                Salvar
+                {t('cifra.folhaSalvar')}
               </button>
               <button
                 onClick={() => { setSeqModalOpen('load'); setSeqError(null); }}
                 className={`px-3 py-1 text-xs font-bold ${seqModalOpen === 'load' ? 'bg-[#ece9d8]' : 'bg-[#d4d0c8] hover:bg-[#e8e4d8]'}`}
               >
-                Carregar
+                {t('comum.carregar')}
               </button>
             </div>
 
             <div className="p-3 text-xs flex flex-col gap-2">
               {seqError && (
-                <div className="bg-red-100 border border-red-400 text-red-700 px-2 py-1 text-[10px]">{seqError}</div>
+                <div className="bg-red-100 border border-red-400 text-red-700 px-2 py-1 text-[10px]">{t(ERRO_SEQ[seqError])}</div>
               )}
 
               {seqModalOpen === 'save' && (
                 <>
                   {savedHash ? (
                     <>
-                      <p className="text-gray-600 text-[10px]">Sequência salva. Guarde o hash para editar depois:</p>
+                      <p className="text-gray-600 text-[10px]">{t('cifra.seqSalva')}</p>
                       <div className="flex gap-1">
                         <input
                           readOnly
-                          aria-label="Hash da sequência salva"
+                          aria-label={t('cifra.seqHashSalvoAria')}
                           value={savedHash}
                           className="bevel-in bg-white px-2 py-0.5 text-[10px] font-mono flex-1 min-w-0 text-gray-800"
                         />
@@ -1647,7 +1658,7 @@ export const CifraViewer: React.FC = () => {
                           onClick={handleCopyHash}
                           className="bevel-out bg-[#ece9d8] border border-gray-400 px-2 py-0.5 font-bold hover:bg-white whitespace-nowrap text-[10px]"
                         >
-                          {copied ? '✓ Copiado' : 'Copiar'}
+                          {copied ? t('cifra.seqCopiado') : t('cifra.seqCopiar')}
                         </button>
                       </div>
                       <div className="flex gap-1">
@@ -1656,33 +1667,33 @@ export const CifraViewer: React.FC = () => {
                           disabled={isSaving}
                           className="bevel-out bg-[var(--color-winxp-panel)] border border-gray-400 px-3 py-0.5 font-bold hover:bg-white flex-1 disabled:opacity-50 text-[10px]"
                         >
-                          {isSaving ? 'Salvando...' : 'Atualizar'}
+                          {isSaving ? t('cifra.seqSalvando') : t('cifra.seqAtualizar')}
                         </button>
                         <button
                           onClick={() => handleSaveSeq(true)}
                           disabled={isSaving}
                           className="bevel-out bg-[#ece9d8] border border-gray-400 px-3 py-0.5 font-bold hover:bg-white flex-1 disabled:opacity-50 text-[10px]"
                         >
-                          Salvar novo
+                          {t('cifra.seqSalvarNovo')}
                         </button>
                       </div>
                     </>
                   ) : (
                     <>
-                      <p className="text-gray-600 text-[10px]">Salva instrumento, tom, filtros e variações fixadas. Um hash único será gerado.</p>
+                      <p className="text-gray-600 text-[10px]">{t('cifra.seqExplicacao')}</p>
                       <button
                         onClick={() => handleSaveSeq(false)}
                         disabled={isSaving}
                         className="bevel-out bg-[var(--color-winxp-panel)] border border-gray-400 px-3 py-1 font-bold hover:bg-white w-full disabled:opacity-50 text-[10px]"
                       >
-                        {isSaving ? 'Salvando...' : 'Salvar Sequência'}
+                        {isSaving ? t('cifra.seqSalvando') : t('cifra.seqSalvarBotao')}
                       </button>
                     </>
                   )}
 
                   {recentSeqs.length > 0 && (
                     <div className="border-t border-gray-400 pt-2">
-                      <p className="text-[10px] font-bold text-gray-500 mb-1">Recentes:</p>
+                      <p className="text-[10px] font-bold text-gray-500 mb-1">{t('cifra.seqRecentes')}</p>
                       <div className="flex flex-col gap-0.5 max-h-28 overflow-y-auto retro-scrollbar">
                         {recentSeqs.map(seq => (
                           <div key={seq.hash} className="flex items-center gap-1 bg-white border border-gray-200 px-1 py-0.5">
@@ -1692,7 +1703,7 @@ export const CifraViewer: React.FC = () => {
                             <button
                               onClick={() => handleDeleteSeq(seq.hash)}
                               className="text-[9px] text-red-500 hover:text-red-700 font-bold shrink-0 px-0.5"
-                              title="Deletar"
+                              title={t('cifra.seqDeletar')}
                             >
                               ✕
                             </button>
@@ -1706,14 +1717,14 @@ export const CifraViewer: React.FC = () => {
 
               {seqModalOpen === 'load' && (
                 <>
-                  <p className="text-gray-600 text-[10px]">Digite o hash para carregar uma sequência salva:</p>
+                  <p className="text-gray-600 text-[10px]">{t('cifra.seqCarregarTexto')}</p>
                   <div className="flex gap-1">
                     <input
-                      aria-label="Hash da sequência a carregar"
+                      aria-label={t('cifra.seqHashCarregarAria')}
                       value={loadHashInput}
                       onChange={e => setLoadHashInput(e.target.value.trim())}
                       onKeyDown={e => e.key === 'Enter' && handleLoadSeq(loadHashInput)}
-                      placeholder="Cole o hash aqui..."
+                      placeholder={t('cifra.seqPlaceholder')}
                       className="bevel-in bg-white px-2 py-0.5 text-[10px] font-mono flex-1 min-w-0 outline-none"
                     />
                     <button
@@ -1721,13 +1732,13 @@ export const CifraViewer: React.FC = () => {
                       disabled={!loadHashInput || isLoadingSeq}
                       className="bevel-out bg-[var(--color-winxp-panel)] border border-gray-400 px-2 py-0.5 font-bold hover:bg-white disabled:opacity-50 whitespace-nowrap text-[10px]"
                     >
-                      {isLoadingSeq ? '...' : 'Carregar'}
+                      {isLoadingSeq ? '...' : t('comum.carregar')}
                     </button>
                   </div>
 
                   {recentSeqs.length > 0 && (
                     <div className="border-t border-gray-400 pt-2">
-                      <p className="text-[10px] font-bold text-gray-500 mb-1">Recentes:</p>
+                      <p className="text-[10px] font-bold text-gray-500 mb-1">{t('cifra.seqRecentes')}</p>
                       <div className="flex flex-col gap-0.5 max-h-36 overflow-y-auto retro-scrollbar">
                         {recentSeqs.map(seq => (
                           <div key={seq.hash} className="flex items-center gap-1 bg-white border border-gray-200 px-1 py-0.5">
@@ -1740,12 +1751,12 @@ export const CifraViewer: React.FC = () => {
                               disabled={isLoadingSeq}
                               className="text-[9px] font-bold bevel-out bg-[#ece9d8] border border-gray-400 px-1.5 py-0 hover:bg-white shrink-0 disabled:opacity-50"
                             >
-                              Usar
+                              {t('cifra.seqUsar')}
                             </button>
                             <button
                               onClick={() => handleDeleteSeq(seq.hash)}
                               className="text-[9px] text-red-500 hover:text-red-700 font-bold shrink-0 px-0.5"
-                              title="Deletar"
+                              title={t('cifra.seqDeletar')}
                             >
                               ✕
                             </button>
@@ -1778,7 +1789,7 @@ export const CifraViewer: React.FC = () => {
             <span aria-hidden="true" className="shrink-0">—</span>
             <Link
               to={artistPath}
-              title={`Ver todas as cifras de ${artistName}`}
+              title={t('cifra.verTodasDoArtista', { artista: artistName })}
               className="shrink-0 truncate max-w-[45%] underline decoration-dotted underline-offset-2 hover:decoration-solid"
             >
               {artistName}
@@ -1791,11 +1802,11 @@ export const CifraViewer: React.FC = () => {
         <div className="flex items-center gap-1 shrink-0 ml-2">
           <Link
             to={artistPath}
-            title={`Todas as músicas de ${artistName}`}
+            title={t('cifra.todasAsMusicasDe', { artista: artistName })}
             className={`flex ${botaoBarra}`}
           >
             <FolderOpen size={12} aria-hidden="true" />
-            Ver artista
+            {t('cifra.verArtista')}
           </Link>
           {/* Só existe quando existe passo anterior. Link direto, compartilhado ou aberto
               em aba nova não tem para onde voltar, e um botão que nesse caso pulasse para
@@ -1805,11 +1816,11 @@ export const CifraViewer: React.FC = () => {
           {temHistorico && (
             <button
               onClick={() => navigate(-1)}
-              title="Voltar para a página anterior"
+              title={t('lista.voltarDica')}
               className={`hidden sm:flex ${botaoBarra}`}
             >
               <ArrowLeft size={12} aria-hidden="true" />
-              Voltar
+              {t('comum.voltar')}
             </button>
           )}
         </div>
@@ -1823,14 +1834,17 @@ export const CifraViewer: React.FC = () => {
       {previewTiming && (
         <div className="bevel-out bg-[#d4edda] border border-green-500 px-3 py-1 text-xs flex items-center justify-between gap-2 shrink-0">
           <span className="font-bold text-[#155724]">
-            🎵 Auto-scroll usando timing contribuído — BPM: {previewTiming.bpm}, duração: {Math.floor(previewTiming.duration / 60)}:{String(Math.round(previewTiming.duration % 60)).padStart(2, '0')}
+            {t('cifra.timingContribuido', {
+              bpm: previewTiming.bpm,
+              duracao: `${Math.floor(previewTiming.duration / 60)}:${String(Math.round(previewTiming.duration % 60)).padStart(2, '0')}`,
+            })}
           </span>
           <div className="flex gap-1 shrink-0">
             <button
               onClick={() => navigate(`/cifras/${artistSlug}/${songSlug}/timing`)}
               className="bevel-out bg-[var(--color-winxp-panel)] border border-gray-400 px-2 py-0 text-[10px] font-bold hover:bg-white"
             >
-              Editar
+              {t('cifra.editar')}
             </button>
             <button
               onClick={() => { setPreviewTiming(null); if (songSlug) localStorage.removeItem(`viola_preview_timing_${songSlug}`); }}
@@ -1850,8 +1864,8 @@ export const CifraViewer: React.FC = () => {
         {isMobile ? null : isVertical ? (
           <aside className={`bevel-out bg-[var(--color-winxp-panel)] flex flex-col gap-1.5 p-2 shrink-0 overflow-y-auto text-xs w-44 ${panelPosition === 'right' ? 'order-last' : ''}`}>
             <div className="flex items-center justify-between">
-              <span className="font-bold text-[10px] uppercase text-gray-500">Painel</span>
-              <button onClick={cyclePosition} className="bevel-out bg-[var(--color-winxp-panel)] px-1 py-0 text-sm leading-none border border-gray-400" title="Mover painel">{PANEL_ICONS[panelPosition]}</button>
+              <span className="font-bold text-[10px] uppercase text-gray-500">{t('cifra.painel')}</span>
+              <button onClick={cyclePosition} className="bevel-out bg-[var(--color-winxp-panel)] px-1 py-0 text-sm leading-none border border-gray-400" title={t('cifra.moverPainel')}>{PANEL_ICONS[panelPosition]}</button>
             </div>
 
             <div className="flex gap-2 text-[10px] text-gray-600">
@@ -1860,7 +1874,7 @@ export const CifraViewer: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-1">
-              <span className="font-bold text-[10px] uppercase text-gray-500 shrink-0">Tom:</span>
+              <span className="font-bold text-[10px] uppercase text-gray-500 shrink-0">{t('cifra.rotuloTom')}</span>
               <SeletorDeTom
                 songKey={songKey}
                 descricao={descricaoDoTom(deteccao)}
@@ -1877,21 +1891,21 @@ export const CifraViewer: React.FC = () => {
             <SalvarTom estado={estadoTom} songKey={songKey} offsetAtual={transposeOffset} onSalvar={salvarTomAtual} className="self-start max-w-full" />
 
             <div className="flex flex-col gap-0.5">
-              <label className="font-bold text-[10px] uppercase text-gray-500">Variações:</label>
+              <label className="font-bold text-[10px] uppercase text-gray-500">{t('cifra.rotuloVariacoes')}</label>
               <select value={currentVersionSlug} onChange={(e) => handleVersionChange(e.target.value)} disabled={versionOptions.length <= 1} className="bevel-in bg-white px-1 py-0 text-xs w-full outline-none cursor-pointer disabled:opacity-60 disabled:cursor-default">
-                {versionOptions.map(v => (<option key={v.id} value={v.slug}>{v.version_name || 'Principal'}</option>))}
+                {versionOptions.map(v => (<option key={v.id} value={v.slug}>{v.version_name || t('cifra.versaoPrincipal')}</option>))}
               </select>
             </div>
 
             <div className="flex flex-col gap-0.5">
-              <label className="font-bold text-[10px] uppercase text-gray-500">Instrumento:</label>
+              <label className="font-bold text-[10px] uppercase text-gray-500">{t('cifra.rotuloInstrumento')}</label>
               <select value={selectedInstId} onChange={(e) => handleInstrumentChange(e.target.value)} className="bevel-in bg-white px-1 py-0 text-xs w-full outline-none cursor-pointer">
                 {PRESET_INSTRUMENTS.map(inst => (<option key={inst.id} value={inst.id}>{inst.name}</option>))}
               </select>
             </div>
 
             <div className="flex flex-col gap-0.5">
-              <label className="font-bold text-[10px] uppercase text-gray-500">Afinação:</label>
+              <label className="font-bold text-[10px] uppercase text-gray-500">{t('cifra.rotuloAfinacao')}</label>
               <select value={selectedTuningId} onChange={(e) => setSelectedTuningId(e.target.value)} className="bevel-in bg-white px-1 py-0 text-xs w-full outline-none cursor-pointer">
                 {currentInst.tunings.map(tuning => (<option key={tuning.id} value={tuning.id}>{tuning.name.split(' (')[0]}</option>))}
               </select>
@@ -1900,7 +1914,7 @@ export const CifraViewer: React.FC = () => {
             <hr className="border-gray-300" />
 
             <div className="flex flex-col gap-0.5">
-              <label className="font-bold text-[10px] uppercase text-gray-500">TOM:</label>
+              <label className="font-bold text-[10px] uppercase text-gray-500">{t('cifra.rotuloTomCurto')}</label>
               <div className="flex items-center gap-1">
                 <button onClick={() => setTransposeOffset(p => p - 1)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white">-½</button>
                 <span className="font-mono text-xs font-bold flex-1 text-center text-[#cc3300]">{transposeOffset > 0 ? `+${transposeOffset}` : transposeOffset}</span>
@@ -1909,7 +1923,7 @@ export const CifraViewer: React.FC = () => {
             </div>
 
             <div className="flex flex-col gap-0.5">
-              <label className="font-bold text-[10px] uppercase text-gray-500">POS.TAB:</label>
+              <label className="font-bold text-[10px] uppercase text-gray-500">{t('cifra.rotuloPosTab')}</label>
               <div className="flex items-center gap-1">
                 <button onClick={() => setTabPosIdx(p => (p - 1 + TAB_POSITIONS.length) % TAB_POSITIONS.length)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white">◀</button>
                 <span className="font-mono text-xs font-bold flex-1 text-center text-[#005500]">{TAB_POSITIONS[tabPosIdx].label}</span>
@@ -1931,44 +1945,44 @@ export const CifraViewer: React.FC = () => {
                 <button onClick={() => setLocalBpm(p => Math.min(300, (p ?? effectiveBpm ?? 100) + 1))} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white">+</button>
               </div>
               {bpmModified && (
-                <button onClick={() => setLocalBpm(null)} className="bevel-out bg-[var(--color-winxp-panel)] px-1.5 py-0.5 text-xs w-full border border-gray-400 hover:bg-white" title="Restaurar BPM da API">↺ Restaurar</button>
+                <button onClick={() => setLocalBpm(null)} className="bevel-out bg-[var(--color-winxp-panel)] px-1.5 py-0.5 text-xs w-full border border-gray-400 hover:bg-white" title={t('cifra.restaurarBpmDica')}>↺ {t('cifra.restaurar')}</button>
               )}
               {durationStr && (
-                <span className="text-[9px] text-gray-600 text-center" title={durationFromVideo ? 'Duração medida no vídeo da source' : 'Duração vinda da API'}>
+                <span className="text-[9px] text-gray-600 text-center" title={durationFromVideo ? t('cifra.duracaoDoVideo') : t('cifra.duracaoDaApi')}>
                   ⏱ {durationStr}{durationFromVideo && ' 📺'}
                 </span>
               )}
-              <button disabled className="bevel-out bg-[#f0f0f0] px-2 py-0.5 text-[9px] w-full border border-gray-300 text-gray-600 cursor-not-allowed" title="Em breve: contribua com BPM e duração para a comunidade">↑ Enviar BPM</button>
+              <button disabled className="bevel-out bg-[#f0f0f0] px-2 py-0.5 text-[9px] w-full border border-gray-300 text-gray-600 cursor-not-allowed" title={t('cifra.enviarBpmDica')}>↑ {t('cifra.enviarBpm')}</button>
               {sourceVideoUrl && (
                 <button
                   onClick={() => setShowVideo(v => !v)}
                   className={`bevel-out px-2 py-0.5 text-[9px] w-full border border-gray-400 font-bold ${showVideo ? 'bg-[#316ac5] text-white' : 'bg-[var(--color-winxp-panel)] text-black hover:bg-white'}`}
-                  title="Ver o vídeo da música (source)"
+                  title={t('cifra.verVideoDica')}
                 >
-                  📺 {showVideo ? 'Fechar vídeo' : 'Ver vídeo'}
+                  📺 {showVideo ? t('cifra.fecharVideo') : t('cifra.verVideo')}
                 </button>
               )}
               <button onClick={() => navigate(`/cifras/${artistSlug}/${songSlug}/timing`)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-[9px] w-full border border-gray-400 font-bold hover:bg-white text-black">
-                ✏️ Timing
+                ✏️ {t('cifra.timing')}
               </button>
-              <button onClick={() => navigate(printPath)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-[9px] w-full border border-gray-400 font-bold hover:bg-white text-black flex items-center justify-center gap-1" title="Abrir a folha de impressão">
-                <Printer size={11} /> Imprimir
+              <button onClick={() => navigate(printPath)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-[9px] w-full border border-gray-400 font-bold hover:bg-white text-black flex items-center justify-center gap-1" title={t('cifra.imprimirDica')}>
+                <Printer size={11} /> {t('cifra.imprimir')}
               </button>
-              <button onClick={() => navigate(grafoPath)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-[9px] w-full border border-gray-400 font-bold hover:bg-white text-black flex items-center justify-center gap-1" title="Ver as passagens de acorde desenhadas como rede, sobre o ciclo de quintas">
-                <Share2 size={11} /> Ver grafo
+              <button onClick={() => navigate(grafoPath)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-[9px] w-full border border-gray-400 font-bold hover:bg-white text-black flex items-center justify-center gap-1" title={t('cifra.grafoDica')}>
+                <Share2 size={11} /> {t('cifra.verGrafo')}
               </button>
             </div>
 
             {/* Auto-scroll */}
             <div className="flex flex-col gap-0.5">
-              <label className="font-bold text-[10px] uppercase text-gray-500">Rolar Auto:</label>
-              <button onClick={handleToggleAutoScroll} className={`bevel-out px-2 py-1 text-xs font-bold w-full border border-gray-400 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${autoScroll ? 'bg-[#316ac5] text-white' : 'bg-[var(--color-winxp-panel)] text-black hover:bg-white'}`} title="Espaço — retoma da posição atual da tela">
-                {autoScroll ? (userSeeking ? '✋ Ajustando' : '⏸ Parar') : '▶ Rolar'}
+              <label className="font-bold text-[10px] uppercase text-gray-500">{t('cifra.rolarAuto')}</label>
+              <button onClick={handleToggleAutoScroll} className={`bevel-out px-2 py-1 text-xs font-bold w-full border border-gray-400 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${autoScroll ? 'bg-[#316ac5] text-white' : 'bg-[var(--color-winxp-panel)] text-black hover:bg-white'}`} title={t('cifra.rolarDica')}>
+                {autoScroll ? (userSeeking ? `✋ ${t('cifra.ajustando')}` : `⏸ ${t('cifra.parar')}`) : `▶ ${t('cifra.rolar')}`}
               </button>
               <div className="flex gap-1">
-                <button onClick={handleRestart} className="flex-1 text-[10px] font-bold py-0.5 border border-gray-400 bg-[#ece9d8] hover:bg-white leading-tight" title="Voltar ao início (Home)">⏮</button>
-                <button onClick={() => seekBySeconds(-NUDGE_SEC)} className="flex-1 text-[10px] font-bold py-0.5 border border-gray-400 bg-[#ece9d8] hover:bg-white leading-tight" title={`Voltar ${NUDGE_SEC}s (←)`}>◀◀</button>
-                <button onClick={() => seekBySeconds(NUDGE_SEC)} className="flex-1 text-[10px] font-bold py-0.5 border border-gray-400 bg-[#ece9d8] hover:bg-white leading-tight" title={`Avançar ${NUDGE_SEC}s (→)`}>▶▶</button>
+                <button onClick={handleRestart} className="flex-1 text-[10px] font-bold py-0.5 border border-gray-400 bg-[#ece9d8] hover:bg-white leading-tight" title={t('cifra.inicioDica')}>⏮</button>
+                <button onClick={() => seekBySeconds(-NUDGE_SEC)} className="flex-1 text-[10px] font-bold py-0.5 border border-gray-400 bg-[#ece9d8] hover:bg-white leading-tight" title={t('cifra.voltarSegundos', { s: NUDGE_SEC })}>◀◀</button>
+                <button onClick={() => seekBySeconds(NUDGE_SEC)} className="flex-1 text-[10px] font-bold py-0.5 border border-gray-400 bg-[#ece9d8] hover:bg-white leading-tight" title={t('cifra.avancarSegundos', { s: NUDGE_SEC })}>▶▶</button>
               </div>
               {totalTime > 0 && (
                 <span className="font-mono text-[10px] font-bold text-[#002fa7] text-center tabular-nums">{fmtTime(elapsedDisplay)} / {fmtTime(totalTime)}</span>
@@ -1983,49 +1997,49 @@ export const CifraViewer: React.FC = () => {
             {/* Loop A→B */}
             <div className="flex flex-col gap-0.5">
               <div className="flex items-center justify-between">
-                <label className="font-bold text-[10px] uppercase text-gray-500">Loop:</label>
+                <label className="font-bold text-[10px] uppercase text-gray-500">{t('cifra.rotuloLoop')}</label>
                 {(loopA !== null || loopB !== null) && (
                   <button onClick={() => { setLoopA(null); setLoopB(null); }} className="text-[9px] font-bold border border-gray-400 px-1 bg-[#ece9d8] hover:bg-white text-[#cc3300]">✕</button>
                 )}
               </div>
               <div className="flex gap-1">
-                <button onClick={() => setLoopA(window.scrollY)} className={`flex-1 text-[10px] font-bold py-0.5 border leading-tight ${loopA !== null ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#ece9d8] border-gray-400 hover:bg-white'}`} title="Marcar ponto A na posição atual">{loopA !== null ? 'A ✓' : '[A]'}</button>
-                <button onClick={() => setLoopB(window.scrollY)} className={`flex-1 text-[10px] font-bold py-0.5 border leading-tight ${loopB !== null ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#ece9d8] border-gray-400 hover:bg-white'}`} title="Marcar ponto B na posição atual">{loopB !== null ? 'B ✓' : '[B]'}</button>
+                <button onClick={() => setLoopA(window.scrollY)} className={`flex-1 text-[10px] font-bold py-0.5 border leading-tight ${loopA !== null ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#ece9d8] border-gray-400 hover:bg-white'}`} title={t('cifra.marcarA')}>{loopA !== null ? 'A ✓' : '[A]'}</button>
+                <button onClick={() => setLoopB(window.scrollY)} className={`flex-1 text-[10px] font-bold py-0.5 border leading-tight ${loopB !== null ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#ece9d8] border-gray-400 hover:bg-white'}`} title={t('cifra.marcarB')}>{loopB !== null ? 'B ✓' : '[B]'}</button>
               </div>
             </div>
 
             <hr className="border-gray-300" />
 
             <button onClick={() => setShowTabs(v => !v)} className={`bevel-out px-2 py-1 text-xs font-bold w-full text-left border border-gray-400 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${!showTabs ? 'bg-[#316ac5] text-white' : 'bg-[var(--color-winxp-panel)] text-black hover:bg-white'}`}>
-              {showTabs ? 'Ocultar Tabs' : '▶ Mostrar Tabs'}
+              {showTabs ? t('cifra.ocultarTabs') : `▶ ${t('cifra.mostrarTabs')}`}
             </button>
 
-            <button onClick={handleFavorite} disabled={isFavoriting} title={isFavorited ? 'Remover dos favoritos' : 'Favoritar'} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-1 text-xs font-bold flex items-center gap-1 w-full border border-gray-400 hover:bg-white disabled:opacity-50 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white text-black">
+            <button onClick={handleFavorite} disabled={isFavoriting} title={isFavorited ? t('cifra.removerFavorito') : t('cifra.favoritar')} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-1 text-xs font-bold flex items-center gap-1 w-full border border-gray-400 hover:bg-white disabled:opacity-50 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white text-black">
               <Heart size={12} className={`${isFavoriting ? 'opacity-50' : ''} ${isFavorited ? 'fill-red-500 text-red-500' : 'text-gray-600'}`} />
-              <span className={isFavoriting ? 'opacity-50' : ''}>{isFavorited ? 'Favoritado' : 'Favoritar'}</span>
+              <span className={isFavoriting ? 'opacity-50' : ''}>{isFavorited ? t('cifra.favoritado') : t('cifra.favoritar')}</span>
             </button>
 
             <button onClick={() => setSeqModalOpen('save')} className={`bevel-out px-2 py-1 text-xs font-bold flex items-center gap-1 w-full border border-gray-400 hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white text-black ${savedHash ? 'bg-[#d4edda] border-green-500' : 'bg-[var(--color-winxp-panel)]'}`}>
               <Save size={11} className={savedHash ? 'text-green-700' : 'text-gray-600'} />
-              <span>{savedHash ? 'Sequência ✓' : 'Sequência'}</span>
+              <span>{savedHash ? t('cifra.seqSalvo') : t('cifra.seq')}</span>
             </button>
           </aside>
         ) : (
           <div className={`bevel-out bg-[var(--color-winxp-panel)] p-1.5 sm:p-2 flex flex-col sm:flex-row sm:flex-wrap sm:items-start sm:justify-between gap-2 sm:gap-3 text-xs sm:text-sm shrink-0 ${panelPosition === 'bottom' ? 'order-last' : ''}`}>
             <div className="flex flex-wrap items-center gap-1.5 sm:gap-3 shrink-0">
-              <button onClick={cyclePosition} className="bevel-out bg-[var(--color-winxp-panel)] px-1.5 py-0 text-sm font-bold border border-gray-400" title="Mover painel">{PANEL_ICONS[panelPosition]}</button>
-              <span className="text-gray-600 flex items-center gap-1 font-bold" title="Visualizações"><Eye size={16} className="text-blue-600" /> {cifra.views || 1}</span>
-              <span className="text-gray-600 flex items-center gap-1 font-bold" title="Favoritos"><Heart size={16} className="text-red-500" /> {cifra.favorited || 0}</span>
+              <button onClick={cyclePosition} className="bevel-out bg-[var(--color-winxp-panel)] px-1.5 py-0 text-sm font-bold border border-gray-400" title={t('cifra.moverPainel')}>{PANEL_ICONS[panelPosition]}</button>
+              <span className="text-gray-600 flex items-center gap-1 font-bold" title={t('cifra.visualizacoes')}><Eye size={16} className="text-blue-600" /> {cifra.views || 1}</span>
+              <span className="text-gray-600 flex items-center gap-1 font-bold" title={t('cifra.favoritos')}><Heart size={16} className="text-red-500" /> {cifra.favorited || 0}</span>
             </div>
 
             <div className="hidden sm:block w-px self-stretch bg-gray-400/60" />
 
             {/* Grupo: Música (tom + versão) */}
             <div className="flex flex-col gap-0.5 min-w-0">
-              <span className="text-[8px] font-bold uppercase tracking-wider text-gray-500 leading-none">Música</span>
+              <span className="text-[8px] font-bold uppercase tracking-wider text-gray-500 leading-none">{t('cifra.grupoMusica')}</span>
               <div className="flex items-center gap-1.5 sm:gap-3 flex-wrap [&>*]:shrink-0">
                 <div className="flex items-center gap-1">
-                  <label className="hidden sm:inline font-bold text-[11px] uppercase tracking-wider text-gray-700">Tom:</label>
+                  <label className="hidden sm:inline font-bold text-[11px] uppercase tracking-wider text-gray-700">{t('cifra.rotuloTom')}</label>
                   <SeletorDeTom
                     songKey={songKey}
                     descricao={descricaoDoTom(deteccao)}
@@ -2039,9 +2053,9 @@ export const CifraViewer: React.FC = () => {
                   <SalvarTom estado={estadoTom} songKey={songKey} offsetAtual={transposeOffset} onSalvar={salvarTomAtual} />
                 </div>
                 <div className="flex items-center gap-1">
-                  <label className="hidden sm:inline font-bold text-[11px] uppercase tracking-wider text-gray-700">Variações:</label>
+                  <label className="hidden sm:inline font-bold text-[11px] uppercase tracking-wider text-gray-700">{t('cifra.rotuloVariacoes')}</label>
                   <select value={currentVersionSlug} onChange={(e) => handleVersionChange(e.target.value)} disabled={versionOptions.length <= 1} className="bevel-in bg-white px-1 py-0 text-xs outline-none cursor-pointer max-w-[100px] sm:max-w-[120px] disabled:opacity-60 disabled:cursor-default">
-                    {versionOptions.map(v => (<option key={v.id} value={v.slug}>{v.version_name || 'Principal'}</option>))}
+                    {versionOptions.map(v => (<option key={v.id} value={v.slug}>{v.version_name || t('cifra.versaoPrincipal')}</option>))}
                   </select>
                 </div>
               </div>
@@ -2051,16 +2065,16 @@ export const CifraViewer: React.FC = () => {
 
             {/* Grupo: Instrumento (instrumento + afinação) */}
             <div className="flex flex-col gap-0.5 min-w-0">
-              <span className="text-[8px] font-bold uppercase tracking-wider text-gray-500 leading-none">Instrumento</span>
+              <span className="text-[8px] font-bold uppercase tracking-wider text-gray-500 leading-none">{t('cifra.grupoInstrumento')}</span>
               <div className="flex items-center gap-1.5 sm:gap-3 flex-wrap [&>*]:shrink-0">
                 <div className="flex items-center gap-1">
-                  <label className="hidden sm:inline font-bold text-[11px] uppercase tracking-wider text-gray-700">Instrumento:</label>
+                  <label className="hidden sm:inline font-bold text-[11px] uppercase tracking-wider text-gray-700">{t('cifra.rotuloInstrumento')}</label>
                   <select value={selectedInstId} onChange={(e) => handleInstrumentChange(e.target.value)} className="bevel-in bg-white px-1 py-0 text-xs outline-none cursor-pointer max-w-[90px] sm:max-w-[100px]">
                     {PRESET_INSTRUMENTS.map(inst => (<option key={inst.id} value={inst.id}>{inst.name}</option>))}
                   </select>
                 </div>
                 <div className="flex items-center gap-1">
-                  <label className="hidden sm:inline font-bold text-[11px] uppercase tracking-wider text-gray-700">Afinação:</label>
+                  <label className="hidden sm:inline font-bold text-[11px] uppercase tracking-wider text-gray-700">{t('cifra.rotuloAfinacao')}</label>
                   <select value={selectedTuningId} onChange={(e) => setSelectedTuningId(e.target.value)} className="bevel-in bg-white px-1 py-0 text-xs outline-none cursor-pointer max-w-[90px] sm:max-w-[100px]">
                     {currentInst.tunings.map(tuning => (<option key={tuning.id} value={tuning.id}>{tuning.name.split(' (')[0]}</option>))}
                   </select>
@@ -2072,21 +2086,21 @@ export const CifraViewer: React.FC = () => {
 
             {/* Grupo: Transposição (tom da execução + posição da tab) */}
             <div className="flex flex-col gap-0.5 min-w-0">
-              <span className="text-[8px] font-bold uppercase tracking-wider text-gray-500 leading-none">Transposição</span>
+              <span className="text-[8px] font-bold uppercase tracking-wider text-gray-500 leading-none">{t('cifra.grupoTransposicao')}</span>
               <div className="flex items-center gap-1.5 sm:gap-3 flex-wrap [&>*]:shrink-0">
                 <div className="flex items-center bg-[#d4d0c8] bevel-in px-1 py-1 gap-1">
-                  <span className="hidden sm:inline text-[11px] font-bold px-1 text-gray-700">TOM:</span>
-                  <button onClick={() => setTransposeOffset(p => p - 1)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white" title="Abaixar meio tom">-½</button>
+                  <span className="hidden sm:inline text-[11px] font-bold px-1 text-gray-700">{t('cifra.rotuloTomCurto')}</span>
+                  <button onClick={() => setTransposeOffset(p => p - 1)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white" title={t('cifra.abaixarMeioTom')}>-½</button>
                   <span className="font-mono text-xs font-bold w-6 text-center text-[#cc3300]">{transposeOffset > 0 ? `+${transposeOffset}` : transposeOffset}</span>
-                  <button onClick={() => setTransposeOffset(p => p + 1)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white" title="Aumentar meio tom">+½</button>
+                  <button onClick={() => setTransposeOffset(p => p + 1)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white" title={t('cifra.aumentarMeioTom')}>+½</button>
                 </div>
                 <div className="flex items-center bg-[#d4d0c8] bevel-in px-1 py-1 gap-1">
-                  <span className="hidden sm:inline text-[11px] font-bold px-1 text-gray-700">POS.TAB:</span>
+                  <span className="hidden sm:inline text-[11px] font-bold px-1 text-gray-700">{t('cifra.rotuloPosTab')}</span>
                   <button onClick={() => setTabPosIdx(p => (p - 1 + TAB_POSITIONS.length) % TAB_POSITIONS.length)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white">◀</button>
                   <span className="font-mono text-xs font-bold min-w-[44px] text-center text-[#005500]">{TAB_POSITIONS[tabPosIdx].label}</span>
                   <button onClick={() => setTabPosIdx(p => (p + 1) % TAB_POSITIONS.length)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white">▶</button>
                 </div>
-                <button onClick={() => setShowTabs(v => !v)} className={`bevel-out px-3 py-1 text-xs font-bold border border-gray-400 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${!showTabs ? 'bg-[#316ac5] text-white' : 'bg-[var(--color-winxp-panel)] text-[#002fa7]'}`}>{showTabs ? 'Tabs ▼' : 'Tabs ▶'}</button>
+                <button onClick={() => setShowTabs(v => !v)} className={`bevel-out px-3 py-1 text-xs font-bold border border-gray-400 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${!showTabs ? 'bg-[#316ac5] text-white' : 'bg-[var(--color-winxp-panel)] text-[#002fa7]'}`}>{showTabs ? `${t('cifra.folhaTabs')} ▼` : `${t('cifra.folhaTabs')} ▶`}</button>
               </div>
             </div>
 
@@ -2094,31 +2108,31 @@ export const CifraViewer: React.FC = () => {
 
             {/* Grupo: Reprodução (BPM, auto-rolar, velocidade, loop) */}
             <div className="flex flex-col gap-0.5 min-w-0">
-              <span className="text-[8px] font-bold uppercase tracking-wider text-gray-500 leading-none">Reprodução</span>
+              <span className="text-[8px] font-bold uppercase tracking-wider text-gray-500 leading-none">{t('cifra.grupoReproducao')}</span>
               <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap [&>*]:shrink-0">
                 <div className="flex items-center bg-[#d4d0c8] bevel-in px-1 py-1 gap-1">
-                  <span className="hidden sm:inline text-[11px] font-bold px-1 text-gray-700">BPM:</span>
+                  <span className="hidden sm:inline text-[11px] font-bold px-1 text-gray-700">{t('cifra.rotuloBpm')}</span>
                   <button onClick={() => setLocalBpm(p => Math.max(20, (p ?? effectiveBpm ?? 100) - 1))} className="bevel-out bg-[var(--color-winxp-panel)] px-1.5 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white">−</button>
                   <span className={`font-mono text-xs font-bold w-9 text-center ${bpmModified ? 'text-[#cc3300]' : 'text-[#005500]'}`}>{effectiveBpm != null ? `${effectiveBpm}${bpmModified ? '*' : ''}` : '—'}</span>
                   <button onClick={() => setLocalBpm(p => Math.min(300, (p ?? effectiveBpm ?? 100) + 1))} className="bevel-out bg-[var(--color-winxp-panel)] px-1.5 py-0.5 text-xs font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white">+</button>
-                  {bpmModified && <button onClick={() => setLocalBpm(null)} className="bevel-out bg-[var(--color-winxp-panel)] px-1 py-0.5 text-xs border border-gray-400 hover:bg-white" title="Restaurar BPM da API">↺</button>}
+                  {bpmModified && <button onClick={() => setLocalBpm(null)} className="bevel-out bg-[var(--color-winxp-panel)] px-1 py-0.5 text-xs border border-gray-400 hover:bg-white" title={t('cifra.restaurarBpmDica')}>↺</button>}
                 </div>
-                <button onClick={handleRestart} className="bevel-out px-2 py-1 text-xs font-bold border border-gray-400 bg-[var(--color-winxp-panel)] text-[#002fa7] hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white" title="Voltar ao início (Home)">⏮</button>
-                <button onClick={() => seekBySeconds(-NUDGE_SEC)} className="bevel-out px-1.5 py-1 text-xs font-bold border border-gray-400 bg-[var(--color-winxp-panel)] text-[#002fa7] hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white" title={`Voltar ${NUDGE_SEC}s (←)`}>◀◀</button>
-                <button onClick={handleToggleAutoScroll} className={`bevel-out px-3 py-1 text-xs font-bold border border-gray-400 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${autoScroll ? 'bg-[#316ac5] text-white' : 'bg-[var(--color-winxp-panel)] text-[#002fa7]'}`} title="Espaço — retoma da posição atual da tela">
-                  {autoScroll ? (userSeeking ? '✋' : '⏸') : '▶'} Rolar
+                <button onClick={handleRestart} className="bevel-out px-2 py-1 text-xs font-bold border border-gray-400 bg-[var(--color-winxp-panel)] text-[#002fa7] hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white" title={t('cifra.inicioDica')}>⏮</button>
+                <button onClick={() => seekBySeconds(-NUDGE_SEC)} className="bevel-out px-1.5 py-1 text-xs font-bold border border-gray-400 bg-[var(--color-winxp-panel)] text-[#002fa7] hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white" title={t('cifra.voltarSegundos', { s: NUDGE_SEC })}>◀◀</button>
+                <button onClick={handleToggleAutoScroll} className={`bevel-out px-3 py-1 text-xs font-bold border border-gray-400 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${autoScroll ? 'bg-[#316ac5] text-white' : 'bg-[var(--color-winxp-panel)] text-[#002fa7]'}`} title={t('cifra.rolarDica')}>
+                  {autoScroll ? (userSeeking ? '✋' : '⏸') : '▶'} {t('cifra.rolar')}
                 </button>
-                <button onClick={() => seekBySeconds(NUDGE_SEC)} className="bevel-out px-1.5 py-1 text-xs font-bold border border-gray-400 bg-[var(--color-winxp-panel)] text-[#002fa7] hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white" title={`Avançar ${NUDGE_SEC}s (→)`}>▶▶</button>
+                <button onClick={() => seekBySeconds(NUDGE_SEC)} className="bevel-out px-1.5 py-1 text-xs font-bold border border-gray-400 bg-[var(--color-winxp-panel)] text-[#002fa7] hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white" title={t('cifra.avancarSegundos', { s: NUDGE_SEC })}>▶▶</button>
                 {totalTime > 0 && (
                   <span className="font-mono text-[10px] font-bold text-[#002fa7] tabular-nums px-1">{fmtTime(elapsedDisplay)} / {fmtTime(totalTime)}</span>
                 )}
                 {([0.5, 1, 2] as const).map(m => (
                   <button key={m} onClick={() => setScrollMult(m)} className={`text-[10px] font-bold px-1.5 py-1 border leading-tight ${scrollMult === m ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#ece9d8] border-gray-400 hover:bg-white'}`}>{m}×</button>
                 ))}
-                <button onClick={() => setLoopA(window.scrollY)} className={`px-2 py-1 text-xs font-bold border leading-tight active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${loopA !== null ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[var(--color-winxp-panel)] border-gray-400 hover:bg-white'}`} title="Marcar ponto A do loop">A</button>
-                <button onClick={() => setLoopB(window.scrollY)} className={`px-2 py-1 text-xs font-bold border leading-tight active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${loopB !== null ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[var(--color-winxp-panel)] border-gray-400 hover:bg-white'}`} title="Marcar ponto B do loop">B</button>
+                <button onClick={() => setLoopA(window.scrollY)} className={`px-2 py-1 text-xs font-bold border leading-tight active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${loopA !== null ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[var(--color-winxp-panel)] border-gray-400 hover:bg-white'}`} title={t('cifra.marcarALoop')}>A</button>
+                <button onClick={() => setLoopB(window.scrollY)} className={`px-2 py-1 text-xs font-bold border leading-tight active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${loopB !== null ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[var(--color-winxp-panel)] border-gray-400 hover:bg-white'}`} title={t('cifra.marcarBLoop')}>B</button>
                 {(loopA !== null || loopB !== null) && (
-                  <button onClick={() => { setLoopA(null); setLoopB(null); }} className="px-2 py-1 text-xs font-bold border border-gray-400 bg-[#ece9d8] text-[#cc3300] hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white">✕ Loop</button>
+                  <button onClick={() => { setLoopA(null); setLoopB(null); }} className="px-2 py-1 text-xs font-bold border border-gray-400 bg-[#ece9d8] text-[#cc3300] hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white">✕ {t('cifra.loop')}</button>
                 )}
               </div>
             </div>
@@ -2127,32 +2141,32 @@ export const CifraViewer: React.FC = () => {
 
             {/* Grupo: Ações (favoritar, sequência, contribuir timing) */}
             <div className="flex flex-col gap-0.5 min-w-0">
-              <span className="text-[8px] font-bold uppercase tracking-wider text-gray-500 leading-none">Ações</span>
+              <span className="text-[8px] font-bold uppercase tracking-wider text-gray-500 leading-none">{t('cifra.grupoAcoes')}</span>
               <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap [&>*]:shrink-0">
-                <button onClick={handleFavorite} disabled={isFavoriting} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-1 sm:px-3 text-xs font-bold flex items-center gap-1 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white text-black" title={isFavorited ? 'Remover dos favoritos' : 'Favoritar'}>
+                <button onClick={handleFavorite} disabled={isFavoriting} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-1 sm:px-3 text-xs font-bold flex items-center gap-1 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white text-black" title={isFavorited ? t('cifra.removerFavorito') : t('cifra.favoritar')}>
                   <Heart size={14} className={`${isFavoriting ? 'opacity-50' : ''} ${isFavorited ? 'fill-red-500 text-red-500' : 'text-gray-600'}`} />
-                  <span className={`hidden sm:inline ${isFavoriting ? 'opacity-50' : ''}`}>{isFavorited ? 'Favoritado' : 'Favoritar'}</span>
+                  <span className={`hidden sm:inline ${isFavoriting ? 'opacity-50' : ''}`}>{isFavorited ? t('cifra.favoritado') : t('cifra.favoritar')}</span>
                 </button>
-                <button onClick={() => setSeqModalOpen('save')} className={`bevel-out px-2 py-1 sm:px-3 text-xs font-bold flex items-center gap-1 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white text-black ${savedHash ? 'bg-[#d4edda] border border-green-500' : 'bg-[var(--color-winxp-panel)]'}`} title="Salvar ou carregar sequência de acordes">
+                <button onClick={() => setSeqModalOpen('save')} className={`bevel-out px-2 py-1 sm:px-3 text-xs font-bold flex items-center gap-1 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white text-black ${savedHash ? 'bg-[#d4edda] border border-green-500' : 'bg-[var(--color-winxp-panel)]'}`} title={t('cifra.seqDica')}>
                   <Save size={13} className={savedHash ? 'text-green-700' : 'text-gray-600'} />
-                  <span className="hidden sm:inline">{savedHash ? 'Sequência ✓' : 'Sequência'}</span>
+                  <span className="hidden sm:inline">{savedHash ? t('cifra.seqSalvo') : t('cifra.seq')}</span>
                 </button>
-                <button onClick={() => navigate(`/cifras/${artistSlug}/${songSlug}/timing`)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-1 sm:px-3 text-xs font-bold border border-gray-400 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white text-black hover:bg-white" title="Contribuir timing">
-                  ✏️ <span className="hidden sm:inline">Contribuir timing</span>
+                <button onClick={() => navigate(`/cifras/${artistSlug}/${songSlug}/timing`)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-1 sm:px-3 text-xs font-bold border border-gray-400 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white text-black hover:bg-white" title={t('cifra.contribuirTiming')}>
+                  ✏️ <span className="hidden sm:inline">{t('cifra.contribuirTiming')}</span>
                 </button>
-                <button onClick={() => navigate(grafoPath)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-1 sm:px-3 text-xs font-bold border border-gray-400 flex items-center gap-1 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white text-black hover:bg-white" title="Ver as passagens de acorde desenhadas como rede, sobre o ciclo de quintas">
-                  <Share2 size={14} /> <span className="hidden sm:inline">Grafo</span>
+                <button onClick={() => navigate(grafoPath)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-1 sm:px-3 text-xs font-bold border border-gray-400 flex items-center gap-1 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white text-black hover:bg-white" title={t('cifra.grafoDica')}>
+                  <Share2 size={14} /> <span className="hidden sm:inline">{t('cifra.grafo')}</span>
                 </button>
-                <button onClick={() => navigate(printPath)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-1 sm:px-3 text-xs font-bold border border-gray-400 flex items-center gap-1 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white text-black hover:bg-white" title="Abrir a folha de impressão">
-                  <Printer size={13} className="text-gray-600" /> <span className="hidden sm:inline">Imprimir</span>
+                <button onClick={() => navigate(printPath)} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-1 sm:px-3 text-xs font-bold border border-gray-400 flex items-center gap-1 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white text-black hover:bg-white" title={t('cifra.imprimirDica')}>
+                  <Printer size={13} className="text-gray-600" /> <span className="hidden sm:inline">{t('cifra.imprimir')}</span>
                 </button>
                 {sourceVideoUrl && (
                   <button
                     onClick={() => setShowVideo(v => !v)}
                     className={`bevel-out px-2 py-1 sm:px-3 text-xs font-bold border border-gray-400 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${showVideo ? 'bg-[#316ac5] text-white' : 'bg-[var(--color-winxp-panel)] text-black hover:bg-white'}`}
-                    title="Ver o vídeo da música (source)"
+                    title={t('cifra.verVideoDica')}
                   >
-                    📺 <span className="hidden sm:inline">{showVideo ? 'Fechar vídeo' : 'Ver vídeo'}</span>
+                    📺 <span className="hidden sm:inline">{showVideo ? t('cifra.fecharVideo') : t('cifra.verVideo')}</span>
                   </button>
                 )}
               </div>
@@ -2171,7 +2185,7 @@ export const CifraViewer: React.FC = () => {
                   em duas linhas e espremia os controles, e a barra de baixo já mostra o
                   instrumento — a afinação inteira está a um toque, na folha. */}
               <span className="text-xs font-bold text-[#002fa7] flex items-center gap-1 min-w-0">
-                <span className="shrink-0">Acordes ({currentChords.length})</span>
+                <span className="shrink-0">{t('cifra.acordesContagem', { n: currentChords.length })}</span>
                 <span className="hidden sm:inline truncate">- {currentTuning.name}</span>
               </span>
               <div className="flex gap-1 items-center relative shrink-0">
@@ -2187,27 +2201,27 @@ export const CifraViewer: React.FC = () => {
                     setVariationIndices({});
                   }}
                   className="text-[10px] font-bold border border-gray-400 bg-[#ece9d8] text-black px-1 py-1.5 sm:py-0.5 hover:bg-white cursor-pointer max-w-[104px]"
-                  title="Qual fonte decide a primeira variação de cada acorde"
+                  title={t('cifra.ordemFonteDica')}
                 >
                   {VOICING_ORDER_MODES.map(m => (
-                    <option key={m.value} value={m.value} title={m.hint}>{m.label}</option>
+                    <option key={m.value} value={m.value} title={t(m.dica)}>{t(m.rotulo)}</option>
                   ))}
                 </select>
                 {isFilterActive && (
                   <button
                     onClick={() => { setVoicingFilter(DEFAULT_FILTER); setVariationIndices({}); setLockedVariations({}); setExcludedFromFilter({}); }}
                     className="text-[10px] font-bold border border-gray-400 px-2 py-1.5 sm:py-0.5 bg-[#ece9d8] hover:bg-white text-[#cc3300]"
-                    title="Restaurar todos os filtros ao padrão"
+                    title={t('cifra.restaurarFiltrosDica')}
                   >
-                    Restaurar
+                    {t('cifra.restaurar')}
                   </button>
                 )}
                 <button
                   onClick={() => setFilterPopupOpen(p => !p)}
                   className={`text-[10px] font-bold border px-2 py-1.5 sm:py-0.5 ${isFilterActive ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#ece9d8] text-black border-gray-400 hover:bg-white'}`}
-                  title="Filtrar variações de acordes"
+                  title={t('cifra.filtrarDica')}
                 >
-                  {isFilterActive ? 'Filtros ▼' : 'Filtros ▽'}
+                  {t('cifra.filtros')} {isFilterActive ? '▼' : '▽'}
                 </button>
                 {filterPopupOpen && (
                   <div className="fixed inset-0 z-30" onClick={() => setFilterPopupOpen(false)} />
@@ -2215,7 +2229,7 @@ export const CifraViewer: React.FC = () => {
                 {filterPopupOpen && (
                   <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[88vw] max-w-xs sm:absolute sm:left-auto sm:top-full sm:right-0 sm:translate-x-0 sm:translate-y-0 sm:mt-1 sm:w-60 z-40 bg-[#ece9d8] bevel-out shadow-lg text-xs select-none max-h-[80vh] overflow-y-auto">
                     <div className="winxp-gradient-blue text-white px-2 py-1 sm:py-0.5 flex items-center justify-between font-bold">
-                      <span>Filtrar Variações</span>
+                      <span>{t('cifra.filtrarVariacoes')}</span>
                       <button
                         onClick={() => setFilterPopupOpen(false)}
                         className="bg-red-600 border border-white border-r-gray-600 border-b-gray-600 px-2 py-0.5 sm:px-1.5 sm:py-0 text-white font-bold leading-tight"
@@ -2224,44 +2238,44 @@ export const CifraViewer: React.FC = () => {
                       </button>
                     </div>
                     <div className="p-2">
-                      <p className="font-bold text-gray-600 uppercase tracking-wider text-[9px] mb-1">Ordenação (combinável)</p>
+                      <p className="font-bold text-gray-600 uppercase tracking-wider text-[9px] mb-1">{t('cifra.ordenacao')}</p>
                       <label className="flex items-center gap-2 py-1.5 sm:py-0.5 px-1 cursor-pointer hover:bg-white">
                         <input type="checkbox" checked={voicingFilter.proximity} className="accent-[#316ac5] w-4 h-4 sm:w-auto sm:h-auto"
                           onChange={e => { setVoicingFilter(f => ({ ...f, proximity: e.target.checked })); setVariationIndices({}); }} />
-                        ★ Acordes próximos
+                        ★ {t('cifra.acordesProximos')}
                       </label>
                       <label className="flex items-center gap-2 py-1.5 sm:py-0.5 px-1 cursor-pointer hover:bg-white">
                         <input type="checkbox" checked={voicingFilter.maxNotes} className="accent-[#316ac5] w-4 h-4 sm:w-auto sm:h-auto"
                           onChange={e => { setVoicingFilter(f => ({ ...f, maxNotes: e.target.checked })); setVariationIndices({}); }} />
-                        ♪ Mais notas soando
+                        ♪ {t('cifra.maisNotas')}
                       </label>
-                      <p className="font-bold text-gray-600 uppercase tracking-wider text-[9px] mt-2 mb-1">Abafamento Interno</p>
+                      <p className="font-bold text-gray-600 uppercase tracking-wider text-[9px] mt-2 mb-1">{t('cifra.abafamentoInterno')}</p>
                       {([
-                        ['any',       'Qualquer'],
-                        ['with_mute', '≈ Com abafamento'],
-                        ['no_mute',   '○ Sem abafamento'],
+                        ['any',       'cifra.abafQualquer'],
+                        ['with_mute', 'cifra.abafCom'],
+                        ['no_mute',   'cifra.abafSem'],
                       ] as const).map(([val, label]) => (
                         <label key={val} className="flex items-center gap-2 py-1.5 sm:py-0.5 px-1 cursor-pointer hover:bg-white">
                           <input type="radio" name="muteFilter" className="accent-[#316ac5] w-4 h-4 sm:w-auto sm:h-auto"
                             checked={voicingFilter.muteFilter === val}
                             onChange={() => { setVoicingFilter(f => ({ ...f, muteFilter: val })); setVariationIndices({}); }} />
-                          {label}
+                          {t(label)}
                         </label>
                       ))}
                       <div className="border-t border-gray-400 mt-2 pt-2">
                         <label className="flex items-center gap-2 py-1.5 sm:py-0.5 px-1 cursor-pointer hover:bg-white">
                           <input type="checkbox" checked={voicingFilter.prioritizeEasy} className="accent-[#316ac5] w-4 h-4 sm:w-auto sm:h-auto"
                             onChange={e => { setVoicingFilter(f => ({ ...f, prioritizeEasy: e.target.checked })); setVariationIndices({}); }} />
-                          Priorizar acordes fáceis
+                          {t('cifra.priorizarFaceis')}
                         </label>
-                        <p className="text-gray-600 px-1 text-[9px] leading-tight mt-0.5">Exibe só acordes sem barra, sem abafamento interno e até traste 5</p>
+                        <p className="text-gray-600 px-1 text-[9px] leading-tight mt-0.5">{t('cifra.priorizarFaceisNota')}</p>
                       </div>
                       <div className="border-t border-gray-400 mt-2 pt-2 flex justify-end">
                         <button
                           onClick={() => { setVoicingFilter(DEFAULT_FILTER); setVariationIndices({}); setLockedVariations({}); setExcludedFromFilter({}); }}
                           className="bevel-out bg-[#ece9d8] border border-gray-400 px-2 py-1 sm:py-0.5 hover:bg-white font-bold text-[10px]"
                         >
-                          Restaurar padrão
+                          {t('cifra.restaurarPadrao')}
                         </button>
                       </div>
                     </div>
@@ -2454,10 +2468,10 @@ export const CifraViewer: React.FC = () => {
                             ? 'bg-[#316ac5] text-white border-[#316ac5]'
                             : 'bg-[#ece9d8] text-gray-500 border-gray-300 hover:bg-white'
                         }`}
-                        title={isChordLocked ? 'Soltar variação fixada' : 'Fixar variação atual como âncora'}
+                        title={isChordLocked ? t('cifra.soltarFixada') : t('cifra.fixarDica')}
                       >
                         <Pin size={9} className={isChordLocked ? 'fill-white' : ''} />
-                        {isChordLocked ? 'Fixado' : 'Fixar'}
+                        {isChordLocked ? t('cifra.fixado') : t('cifra.fixar')}
                       </button>
                       {isFilterActive && (
                         <button
@@ -2467,9 +2481,9 @@ export const CifraViewer: React.FC = () => {
                               ? 'bg-[#c06000] text-white border-[#c06000]'
                               : 'bg-[#ece9d8] text-gray-500 border-gray-300 hover:bg-white'
                           }`}
-                          title={isChordExcluded ? 'Reaplicar filtro neste acorde' : 'Usar ordem padrão neste acorde'}
+                          title={isChordExcluded ? t('cifra.reaplicarFiltroDica') : t('cifra.ordemPadraoDica')}
                         >
-                          {isChordExcluded ? 'Padrão' : 'Filtro'}
+                          {isChordExcluded ? t('cifra.usarPadrao') : t('cifra.usarFiltro')}
                         </button>
                       )}
                     </div>
@@ -2564,7 +2578,7 @@ export const CifraViewer: React.FC = () => {
           onPointerUp={handleRailPointerUp}
           onPointerCancel={handleRailPointerUp}
           className="fixed right-2 md:right-3 top-20 bottom-28 md:bottom-20 w-6 md:w-3.5 z-40 bg-[#d4d0c8] bevel-in cursor-pointer touch-none select-none"
-          title="Clique ou arraste para reposicionar"
+          title={t('cifra.barraPosicaoDica')}
         >
           {(loopA !== null || loopB !== null) && (
             <div
@@ -2583,7 +2597,7 @@ export const CifraViewer: React.FC = () => {
                 onPointerDown={(e) => { e.stopPropagation(); seekToTime(s.startTime); }}
                 className={`absolute left-0 right-0 h-[3px] -mt-[1px] ${s.isInstrumental ? 'bg-[#996600]' : 'bg-[#666]'} opacity-60 hover:opacity-100 hover:h-[5px]`}
                 style={{ top: `${Math.min(100, (y / maxScroll) * 100)}%` }}
-                title={`${s.label} — ${fmtTime(s.startTime)}`}
+                title={t('cifra.secaoEmTempo', { secao: s.label, tempo: fmtTime(s.startTime) })}
               />
             );
           })}
@@ -2600,28 +2614,28 @@ export const CifraViewer: React.FC = () => {
           <button
             onClick={handleRestart}
             className="bevel-out px-2 py-1 font-bold border border-gray-400 bg-[var(--color-winxp-panel)] text-[#002fa7] hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
-            title="Voltar ao início (Home)"
+            title={t('cifra.inicioDica')}
           >
             ⏮
           </button>
           <button
             onClick={() => seekBySeconds(-NUDGE_SEC)}
             className="bevel-out px-1.5 py-1 font-bold border border-gray-400 bg-[var(--color-winxp-panel)] text-[#002fa7] hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
-            title={`Voltar ${NUDGE_SEC}s (←)`}
+            title={t('cifra.voltarSegundos', { s: NUDGE_SEC })}
           >
             ◀◀
           </button>
           <button
             onClick={handleToggleAutoScroll}
             className={`bevel-out px-3 py-1 font-bold border border-gray-400 min-w-[90px] text-center active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${autoScroll ? 'bg-[#316ac5] text-white' : 'bg-[var(--color-winxp-panel)] text-[#002fa7] hover:bg-white'}`}
-            title="Tocar/pausar (Espaço) — retoma de onde a tela está"
+            title={t('cifra.tocarPausarDica')}
           >
-            {autoScroll ? (userSeeking ? '✋ Ajustando' : '⏸ Pausar') : '▶ Auto-Rolar'}
+            {autoScroll ? (userSeeking ? `✋ ${t('cifra.ajustando')}` : `⏸ ${t('cifra.pausar')}`) : `▶ ${t('cifra.autoRolar')}`}
           </button>
           <button
             onClick={() => seekBySeconds(NUDGE_SEC)}
             className="bevel-out px-1.5 py-1 font-bold border border-gray-400 bg-[var(--color-winxp-panel)] text-[#002fa7] hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
-            title={`Avançar ${NUDGE_SEC}s (→)`}
+            title={t('cifra.avancarSegundos', { s: NUDGE_SEC })}
           >
             ▶▶
           </button>
@@ -2644,15 +2658,15 @@ export const CifraViewer: React.FC = () => {
           <button
             onClick={() => setShowTabs(v => !v)}
             className={`text-[10px] font-bold px-1.5 py-0.5 border leading-tight ${!showTabs ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#ece9d8] border-gray-400 hover:bg-white'}`}
-            title={showTabs ? 'Ocultar as tabs' : 'Mostrar as tabs'}
+            title={showTabs ? t('cifra.tabsOcultarDica') : t('cifra.tabsMostrarDica')}
           >
-            {showTabs ? 'Tabs ▼' : 'Tabs ▶'}
+            {t('cifra.folhaTabs')} {showTabs ? '▼' : '▶'}
           </button>
           {effectiveBpm != null && (
             <span className="font-mono text-[10px] font-bold text-[#005500] border-l border-gray-400 pl-1.5">♩ {effectiveBpm}</span>
           )}
           {(loopA !== null && loopB !== null) && (
-            <span className="text-[10px] font-bold text-[#316ac5] border-l border-gray-400 pl-1.5">⟳ Loop</span>
+            <span className="text-[10px] font-bold text-[#316ac5] border-l border-gray-400 pl-1.5">⟳ {t('cifra.loop')}</span>
           )}
           {currentSection && autoScroll && (
             <span
@@ -2691,19 +2705,19 @@ export const CifraViewer: React.FC = () => {
           />}
           destinos={[
             {
-              id: 'tom', tipo: 'folha', icone: <Music2 size={17} />, rotulo: 'Tom',
+              id: 'tom', tipo: 'folha', icone: <Music2 size={17} />, rotulo: t('cifra.folhaTom'),
               // O tom que soa agora, com o deslocamento ao lado quando não é o original —
               // "A +2" responde as duas perguntas: em que tom estou e o quanto mexi.
               valor: `${tomAtual}${transposeOffset !== 0 ? ` ${transposeOffset > 0 ? '+' : ''}${transposeOffset}` : ''}`,
               conteudo: (
                 <>
                   <GrupoAjustes>
-                    <LinhaAjuste rotulo="Tom da música" dica={descricaoDoTom(deteccao)}>
+                    <LinhaAjuste rotulo={t('cifra.folhaTomDaMusica')} dica={descricaoDoTom(deteccao)}>
                       <span className="font-bold text-xs bg-white border border-gray-400 px-2 py-1 text-[#002fa7]">{tomAtual}</span>
                     </LinhaAjuste>
-                    <LinhaAjuste rotulo="Ajuste fino" dica="Meio tom por vez">
+                    <LinhaAjuste rotulo={t('cifra.folhaAjusteFino')} dica={t('cifra.folhaAjusteFinoDica')}>
                       <Stepper
-                        nome="ajuste fino do tom (meio tom)"
+                        nome={t('cifra.folhaAjusteFinoNome')}
                         rotuloMenos="-½" rotuloMais="+½"
                         onMenos={() => setTransposeOffset(p => p - 1)}
                         onMais={() => setTransposeOffset(p => p + 1)}
@@ -2712,54 +2726,54 @@ export const CifraViewer: React.FC = () => {
                       </Stepper>
                     </LinhaAjuste>
                     {transposeOffset !== 0 && (
-                      <LinhaAjuste rotulo="Voltar ao original">
-                        <BotaoFolha onClick={() => setTransposeOffset(0)}><RotateCcw size={13} /> Zerar</BotaoFolha>
+                      <LinhaAjuste rotulo={t('cifra.folhaVoltarOriginal')}>
+                        <BotaoFolha onClick={() => setTransposeOffset(0)}><RotateCcw size={13} /> {t('cifra.folhaZerar')}</BotaoFolha>
                       </LinhaAjuste>
                     )}
                     {/* Na folha do telefone o botão é `BotaoFolha`, e não o `SalvarTom` dos
                         painéis do desktop: aqui todo controle tem a mesma altura de toque e
                         o mesmo desenho, e um botãozinho de 10px destoaria da fila inteira. */}
                     {estadoTom === 'salvar' && (
-                      <LinhaAjuste rotulo="Guardar este tom" dica="A cifra passa a abrir assim nos seus favoritos">
-                        <BotaoFolha onClick={salvarTomAtual}><Heart size={13} className="fill-red-500 text-red-500" /> Salvar</BotaoFolha>
+                      <LinhaAjuste rotulo={t('cifra.folhaGuardarTom')} dica={t('cifra.folhaGuardarTomDica')}>
+                        <BotaoFolha onClick={salvarTomAtual}><Heart size={13} className="fill-red-500 text-red-500" /> {t('cifra.folhaSalvar')}</BotaoFolha>
                       </LinhaAjuste>
                     )}
                     {estadoTom === 'guardado' && (
-                      <LinhaAjuste rotulo="Tom dos favoritos" dica="Foi por isto que a cifra abriu fora do original">
+                      <LinhaAjuste rotulo={t('cifra.folhaTomFavoritos')} dica={t('cifra.folhaTomFavoritosDica')}>
                         <span className="inline-flex items-center gap-1 text-[11px] text-gray-600">
-                          <Heart size={12} className="fill-red-500 text-red-500" /> guardado
+                          <Heart size={12} className="fill-red-500 text-red-500" /> {t('cifra.folhaGuardado')}
                         </span>
                       </LinhaAjuste>
                     )}
                   </GrupoAjustes>
 
                   {songKey && (
-                    <GrupoAjustes titulo="Escolher o tom">
+                    <GrupoAjustes titulo={t('cifra.folhaEscolherTom')}>
                       <GradeDeTons songKey={songKey} offset={transposeOffset} onSelect={setTransposeOffset} deteccao={deteccao} />
                     </GrupoAjustes>
                   )}
                 </>
               ),
             },
-            { id: 'rolagem', tipo: 'acao', icone: <Play size={17} />, rotulo: 'Rolagem', ativo: autoScroll, onClick: handleToggleAutoScroll },
+            { id: 'rolagem', tipo: 'acao', icone: <Play size={17} />, rotulo: t('cifra.folhaRolagem'), ativo: autoScroll, onClick: handleToggleAutoScroll },
             {
-              id: 'instrumento', tipo: 'folha', icone: <Guitar size={17} />, rotulo: 'Instrumento', rotuloCurto: 'Instr.',
+              id: 'instrumento', tipo: 'folha', icone: <Guitar size={17} />, rotulo: t('cifra.folhaInstrumento'), rotuloCurto: t('cifra.folhaInstrumentoCurto'),
               valor: currentInst.name,
               conteudo: (
                 <GrupoAjustes>
-                  <LinhaAjuste rotulo="Instrumento">
+                  <LinhaAjuste rotulo={t('cifra.folhaInstrumento')}>
                     <select value={selectedInstId} onChange={(e) => handleInstrumentChange(e.target.value)} className="bevel-in bg-white px-2 py-1.5 text-xs outline-none cursor-pointer max-w-[150px]">
                       {PRESET_INSTRUMENTS.map(inst => (<option key={inst.id} value={inst.id}>{inst.name}</option>))}
                     </select>
                   </LinhaAjuste>
-                  <LinhaAjuste rotulo="Afinação" dica={currentTuning.name}>
+                  <LinhaAjuste rotulo={t('cifra.folhaAfinacao')} dica={currentTuning.name}>
                     <select value={selectedTuningId} onChange={(e) => setSelectedTuningId(e.target.value)} className="bevel-in bg-white px-2 py-1.5 text-xs outline-none cursor-pointer max-w-[150px]">
                       {currentInst.tunings.map(tuning => (<option key={tuning.id} value={tuning.id}>{tuning.name.split(' (')[0]}</option>))}
                     </select>
                   </LinhaAjuste>
-                  <LinhaAjuste rotulo="Posição da tab" dica="Onde a tab é escrita no braço">
+                  <LinhaAjuste rotulo={t('cifra.folhaPosicaoTab')} dica={t('cifra.folhaPosicaoTabDica')}>
                     <Stepper
-                      nome="posição da tab no braço"
+                      nome={t('cifra.folhaPosicaoTabNome')}
                       rotuloMenos="◀" rotuloMais="▶"
                       onMenos={() => setTabPosIdx(p => (p - 1 + TAB_POSITIONS.length) % TAB_POSITIONS.length)}
                       onMais={() => setTabPosIdx(p => (p + 1) % TAB_POSITIONS.length)}
@@ -2771,24 +2785,24 @@ export const CifraViewer: React.FC = () => {
               ),
             },
             {
-              id: 'opcoes', tipo: 'folha', icone: <Ellipsis size={17} />, rotulo: 'Opções',
+              id: 'opcoes', tipo: 'folha', icone: <Ellipsis size={17} />, rotulo: t('cifra.folhaOpcoes'),
               conteudo: (
                 <>
-                  <GrupoAjustes titulo="Esta cifra">
-                    <LinhaAjuste rotulo="Variação" dica={`${cifra.views || 1} views · ${cifra.favorited || 0} favoritos`}>
+                  <GrupoAjustes titulo={t('cifra.folhaEstaCifra')}>
+                    <LinhaAjuste rotulo={t('cifra.folhaVariacao')} dica={t('cifra.folhaVariacaoDica', { views: cifra.views || 1, favoritos: cifra.favorited || 0 })}>
                       <select value={currentVersionSlug} onChange={(e) => handleVersionChange(e.target.value)} disabled={versionOptions.length <= 1} className="bevel-in bg-white px-2 py-1.5 text-xs outline-none cursor-pointer max-w-[150px] disabled:opacity-60">
-                        {versionOptions.map(v => (<option key={v.id} value={v.slug}>{v.version_name || 'Principal'}</option>))}
+                        {versionOptions.map(v => (<option key={v.id} value={v.slug}>{v.version_name || t('cifra.versaoPrincipal')}</option>))}
                       </select>
                     </LinhaAjuste>
-                    <LinhaAjuste rotulo="Tabs" dica="Ocultar encurta bastante a cifra">
+                    <LinhaAjuste rotulo={t('cifra.folhaTabs')} dica={t('cifra.folhaTabsDica')}>
                       <BotaoFolha ativo={!showTabs} onClick={() => setShowTabs(v => !v)}>
-                        {showTabs ? 'Ocultar' : 'Mostrar'}
+                        {showTabs ? t('cifra.folhaOcultar') : t('cifra.folhaMostrar')}
                       </BotaoFolha>
                     </LinhaAjuste>
                   </GrupoAjustes>
 
-                  <GrupoAjustes titulo="Andamento">
-                    <LinhaAjuste rotulo="BPM" dica={durationStr ? `Duração ⏱ ${durationStr}${durationFromVideo ? ' 📺' : ''}` : (cifra.bpm != null ? `API: ${cifra.bpm}` : undefined)}>
+                  <GrupoAjustes titulo={t('cifra.folhaAndamento')}>
+                    <LinhaAjuste rotulo="BPM" dica={durationStr ? t('cifra.folhaDuracao', { duracao: `${durationStr}${durationFromVideo ? ' 📺' : ''}` }) : (cifra.bpm != null ? t('cifra.folhaApiBpm', { bpm: cifra.bpm }) : undefined)}>
                       <Stepper
                         nome="BPM"
                         onMenos={() => setLocalBpm(p => Math.max(20, (p ?? effectiveBpm ?? 100) - 1))}
@@ -2798,33 +2812,33 @@ export const CifraViewer: React.FC = () => {
                       </Stepper>
                     </LinhaAjuste>
                     {bpmModified && (
-                      <LinhaAjuste rotulo="Restaurar BPM da API">
-                        <BotaoFolha onClick={() => setLocalBpm(null)}><RotateCcw size={13} /> Restaurar</BotaoFolha>
+                      <LinhaAjuste rotulo={t('cifra.folhaRestaurarBpm')}>
+                        <BotaoFolha onClick={() => setLocalBpm(null)}><RotateCcw size={13} /> {t('cifra.restaurar')}</BotaoFolha>
                       </LinhaAjuste>
                     )}
                   </GrupoAjustes>
 
-                  <GrupoAjustes titulo="Ações">
+                  <GrupoAjustes titulo={t('cifra.folhaAcoes')}>
                     <div className="grid grid-cols-2 gap-1.5 p-2">
-                      <BotaoFolha onClick={handleFavorite} disabled={isFavoriting} ativo={isFavorited} title={isFavorited ? 'Remover dos favoritos' : 'Favoritar'}>
+                      <BotaoFolha onClick={handleFavorite} disabled={isFavoriting} ativo={isFavorited} title={isFavorited ? t('cifra.removerFavorito') : t('cifra.favoritar')}>
                         <Heart size={13} className={isFavorited ? 'fill-current' : ''} />
-                        {isFavorited ? 'Favoritado' : 'Favoritar'}
+                        {isFavorited ? t('cifra.favoritado') : t('cifra.favoritar')}
                       </BotaoFolha>
                       <BotaoFolha onClick={() => { setFolhaAberta(null); setSeqModalOpen('save'); }} ativo={!!savedHash}>
-                        <Save size={13} /> {savedHash ? 'Sequência ✓' : 'Sequência'}
+                        <Save size={13} /> {savedHash ? t('cifra.seqSalvo') : t('cifra.seq')}
                       </BotaoFolha>
                       <BotaoFolha onClick={() => navigate(`/cifras/${artistSlug}/${songSlug}/timing`)}>
-                        <Pencil size={13} /> Timing
+                        <Pencil size={13} /> {t('cifra.timing')}
                       </BotaoFolha>
                       <BotaoFolha onClick={() => { setFolhaAberta(null); navigate(grafoPath); }}>
-                        <Share2 size={13} /> Grafo
+                        <Share2 size={13} /> {t('cifra.grafo')}
                       </BotaoFolha>
                       <BotaoFolha onClick={() => { setFolhaAberta(null); navigate(printPath); }}>
-                        <Printer size={13} /> Imprimir
+                        <Printer size={13} /> {t('cifra.imprimir')}
                       </BotaoFolha>
                       {sourceVideoUrl && (
                         <BotaoFolha ativo={showVideo} onClick={() => { setFolhaAberta(null); setShowVideo(v => !v); }}>
-                          <Video size={13} /> {showVideo ? 'Fechar vídeo' : 'Ver vídeo'}
+                          <Video size={13} /> {showVideo ? t('cifra.fecharVideo') : t('cifra.verVideo')}
                         </BotaoFolha>
                       )}
                     </div>

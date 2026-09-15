@@ -11,14 +11,20 @@
 // escolhida que os filtros do usuário haviam removido — ela é reinserida na frente.
 
 import type { CuratedVoicing } from './authApi';
+import type { Chave } from '../i18n';
 import { fretsKey, type PopularVoicing } from './chordFavoritesApi';
 
 export type VoicingOrderMode = 'favoritos' | 'curados' | 'algoritmo';
 
-export const VOICING_ORDER_MODES: ReadonlyArray<{ value: VoicingOrderMode; label: string; hint: string }> = [
-  { value: 'favoritos', label: '★ Favoritos', hint: 'Ordena pelas posições mais favoritadas pela comunidade' },
-  { value: 'curados', label: '🛡 Curados', hint: 'Ordena pelas posições recomendadas pelos Editores' },
-  { value: 'algoritmo', label: '⚙ Algoritmo', hint: 'Sem intervenção: a ordem calculada pelo app' },
+/*
+ * Rótulo e dica saem como CHAVE, não como texto: esta lista é montada quando o módulo
+ * carrega, e um texto aqui ficaria congelado no idioma que valia naquele instante. Quem
+ * desenha chama o `t` na hora.
+ */
+export const VOICING_ORDER_MODES: ReadonlyArray<{ value: VoicingOrderMode; rotulo: Chave; dica: Chave }> = [
+  { value: 'favoritos', rotulo: 'cifra.ordemFavoritos', dica: 'cifra.ordemFavoritosDica' },
+  { value: 'curados', rotulo: 'cifra.ordemCurados', dica: 'cifra.ordemCuradosDica' },
+  { value: 'algoritmo', rotulo: 'cifra.ordemAlgoritmo', dica: 'cifra.ordemAlgoritmoDica' },
 ];
 
 const STORAGE_KEY = 'vl_voicing_order_mode_v1';

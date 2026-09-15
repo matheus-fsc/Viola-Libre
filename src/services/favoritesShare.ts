@@ -37,6 +37,7 @@ import {
   type FavoritesFile,
   type FavoritesStore,
 } from './cifraFavorites';
+import type { Chave } from '../i18n';
 
 /** Chave do fragmento: `#lista=<token>`. */
 export const SHARE_HASH_KEY = 'lista';
@@ -345,7 +346,12 @@ export async function encodeLista(file: FavoritesFile): Promise<string> {
 
 export type DecodeResult =
   | { ok: true; file: FavoritesFile }
-  | { ok: false; error: string };
+  /*
+   * `error` é CHAVE do dicionário, e não frase pronta: o serviço não sabe (nem deve
+   * saber) em que idioma a tela está, e guardar o texto aqui prenderia o aviso ao idioma
+   * que valia quando o módulo carregou.
+   */
+  | { ok: false; error: Chave };
 
 /**
  * Lê um token de link com a mesma desconfiança de um arquivo importado — porque é a mesma
@@ -356,24 +362,24 @@ export type DecodeResult =
  * sobre identidade para o usuário responder errado.
  */
 export async function decodeLista(token: string): Promise<DecodeResult> {
-  if (!token) return { ok: false, error: 'O link não traz nenhuma lista.' };
+  if (!token) return { ok: false, error: 'erros.linkSemLista' };
   if (token.length > MAX_LINK_CHARS) {
-    return { ok: false, error: 'O link é grande demais para ser uma lista de favoritos.' };
+    return { ok: false, error: 'erros.linkGrande' };
   }
 
   const flag = token[0];
   const corpo = fromBase64Url(token.slice(1));
   if (!corpo || (flag !== FLAG_DEFLATE && flag !== FLAG_PLANO)) {
-    return { ok: false, error: 'O link parece incompleto ou foi cortado no caminho.' };
+    return { ok: false, error: 'erros.linkIncompleto' };
   }
 
   let bytes: Uint8Array | null = corpo;
   if (flag === FLAG_DEFLATE) {
     if (!temDescompressao()) {
-      return { ok: false, error: 'Este navegador é antigo demais para abrir listas por link. Peça o arquivo .json.' };
+      return { ok: false, error: 'erros.navegadorAntigo' };
     }
     bytes = await descomprimir(corpo, MAX_FILE_BYTES);
-    if (!bytes) return { ok: false, error: 'O link parece incompleto ou foi cortado no caminho.' };
+    if (!bytes) return { ok: false, error: 'erros.linkIncompleto' };
   }
 
   const texto = new TextDecoder().decode(bytes);
@@ -385,7 +391,7 @@ export async function decodeLista(token: string): Promise<DecodeResult> {
     try {
       json = JSON.parse(texto);
     } catch {
-      return { ok: false, error: 'O link parece incompleto ou foi cortado no caminho.' };
+      return { ok: false, error: 'erros.linkIncompleto' };
     }
   }
 
@@ -397,10 +403,10 @@ export async function decodeLista(token: string): Promise<DecodeResult> {
 
   const parsed = favoritesFileSchema.safeParse(semIdentidade);
   if (!parsed.success) {
-    return { ok: false, error: 'Este link não é uma lista de favoritos do Viola Libre.' };
+    return { ok: false, error: 'erros.linkNaoEhLista' };
   }
   if (parsed.data.entries.length === 0) {
-    return { ok: false, error: 'A lista compartilhada está vazia.' };
+    return { ok: false, error: 'erros.listaVazia' };
   }
   return { ok: true, file: parsed.data };
 }

@@ -1,4 +1,5 @@
 import React, { useCallback, useLayoutEffect, useRef, useState } from 'react';
+import { useT } from '../i18n';
 import type { Voicing, Tuning } from '../engine/types';
 import { MiniFretboard } from './MiniFretboard';
 
@@ -51,6 +52,7 @@ export const ChordHoverCard: React.FC<ChordHoverCardProps> = ({
   onMouseLeave,
   containerRef,
 }) => {
+  const t = useT();
   const nodeRef = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
 
@@ -121,7 +123,7 @@ export const ChordHoverCard: React.FC<ChordHoverCardProps> = ({
           <MiniFretboard voicing={voicing} tuning={tuning} width={BOARD_W} />
         ) : (
           <div className="h-[74px] flex items-center justify-center text-[10px] text-gray-600">
-            sem posição
+            {t('cifra.semPosicao')}
           </div>
         )}
       </div>
@@ -136,9 +138,9 @@ export const ChordHoverCard: React.FC<ChordHoverCardProps> = ({
 
       {voicings.length > 1 && (
         <div className="flex items-center justify-between px-1 pt-0.5 pb-1 gap-0.5">
-          <button className={navButton} onClick={() => step(-1)} title="Variação anterior">◀</button>
+          <button className={navButton} onClick={() => step(-1)} title={t('cifra.variacaoAnterior')}>◀</button>
           <span className="text-[9px] font-bold text-gray-600">{index + 1}/{voicings.length}</span>
-          <button className={navButton} onClick={() => step(1)} title="Próxima variação">▶</button>
+          <button className={navButton} onClick={() => step(1)} title={t('cifra.variacaoProxima')}>▶</button>
         </div>
       )}
     </div>

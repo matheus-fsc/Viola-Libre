@@ -1,10 +1,12 @@
 import React from 'react';
+import { useT } from '../i18n';
 import { useVisualizationStore } from '../stores/useVisualizationStore';
 import { PRESET_INSTRUMENTS } from '../engine/tunings';
 import { FretboardDiagram } from './FretboardDiagram';
 import { useDialog } from '../hooks/useDialog';
 
 export const VisualizationOnboardingModal: React.FC = () => {
+  const t = useT();
   const { stringOrder, setStringOrder } = useVisualizationStore();
 
   // Antes do return adiantado: hook não pode ser condicional. Sem `onClose` de
@@ -38,17 +40,17 @@ export const VisualizationOnboardingModal: React.FC = () => {
       <div ref={dialogRef} {...dialogProps} className="bg-[#ece9d8] border-[3px] border-[#0058e6] shadow-2xl rounded-t-lg flex flex-col w-full max-w-2xl max-h-[90vh] overflow-hidden">
         <div className="bg-gradient-to-r from-[#0a246a] to-[#3a6ea5] text-white px-3 py-1.5 flex justify-between items-center rounded-t-sm border-b-2 border-[#002fa7] select-none">
           <span id="titulo-onboarding-visualizacao" className="font-bold text-sm tracking-wide font-mono">
-            Preferência de Visualização
+            {t('modais.visualizacaoTitulo')}
           </span>
         </div>
 
         <div className="p-4 sm:p-6 flex flex-col gap-6 overflow-y-auto">
           <div className="text-center">
             <h2 className="text-lg font-bold text-[#002fa7] font-mono mb-2">
-              Como você prefere ler as cordas?
+              {t('modais.visualizacaoPergunta')}
             </h2>
             <p className="text-sm text-gray-700 font-mono">
-              Antes de modificar o acorde, escolha a ordem das cordas que você prefere.
+              {t('modais.visualizacaoTexto')}
             </p>
           </div>
 
@@ -58,8 +60,8 @@ export const VisualizationOnboardingModal: React.FC = () => {
               onClick={() => handleSelect('standard')}
             >
               <div className="text-center font-mono">
-                <div className="font-bold text-black text-base">Padrão</div>
-                <div className="text-xs text-gray-600 mt-1">Grave no Topo/Esquerda</div>
+                <div className="font-bold text-black text-base">{t('modais.visualizacaoPadrao')}</div>
+                <div className="text-xs text-gray-600 mt-1">{t('modais.visualizacaoPadraoNota')}</div>
                 <div className="text-xs text-[#0058e6] mt-1 font-bold">E A D G B E</div>
               </div>
               <div className="pointer-events-none">
@@ -72,7 +74,7 @@ export const VisualizationOnboardingModal: React.FC = () => {
                 />
               </div>
               <button className="bg-[#0058e6] text-white px-4 py-2 font-bold font-mono text-xs rounded hover:bg-[#3a8bfb]">
-                Selecionar Padrão
+                {t('modais.visualizacaoPadraoBotao')}
               </button>
             </div>
 
@@ -81,8 +83,8 @@ export const VisualizationOnboardingModal: React.FC = () => {
               onClick={() => handleSelect('inverted')}
             >
               <div className="text-center font-mono">
-                <div className="font-bold text-black text-base">Invertida</div>
-                <div className="text-xs text-gray-600 mt-1">Agudo no Topo/Esquerda</div>
+                <div className="font-bold text-black text-base">{t('modais.visualizacaoInvertida')}</div>
+                <div className="text-xs text-gray-600 mt-1">{t('modais.visualizacaoInvertidaNota')}</div>
                 <div className="text-xs text-[#0058e6] mt-1 font-bold">E B G D A E</div>
               </div>
               <div className="pointer-events-none">
@@ -95,7 +97,7 @@ export const VisualizationOnboardingModal: React.FC = () => {
                 />
               </div>
               <button className="bg-[#0058e6] text-white px-4 py-2 font-bold font-mono text-xs rounded hover:bg-[#3a8bfb]">
-                Selecionar Invertida
+                {t('modais.visualizacaoInvertidaBotao')}
               </button>
             </div>
           </div>

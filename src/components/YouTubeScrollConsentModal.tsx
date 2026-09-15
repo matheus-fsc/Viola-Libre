@@ -1,4 +1,5 @@
 import React from 'react';
+import { useT } from '../i18n';
 import { allowYouTubeJs, denyYouTubeJs } from '../services/youtubeApi';
 
 interface YouTubeScrollConsentModalProps {
@@ -19,6 +20,7 @@ interface YouTubeScrollConsentModalProps {
  * como o site funcionava antes de existir a medição.
  */
 export const YouTubeScrollConsentModal: React.FC<YouTubeScrollConsentModalProps> = ({ onAnswered }) => {
+  const t = useT();
   const answer = (allow: boolean) => {
     if (allow) allowYouTubeJs(); else denyYouTubeJs();
     onAnswered();
@@ -37,24 +39,22 @@ export const YouTubeScrollConsentModal: React.FC<YouTubeScrollConsentModalProps>
       >
         <div className="bg-gradient-to-r from-[#0a246a] to-[#3a6ea5] text-white px-3 py-1.5 flex justify-between items-center rounded-t-sm border-b-2 border-[#002fa7] select-none">
           <span id="titulo-rolagem-precisa" className="font-bold text-sm tracking-wide font-mono">
-            Rolagem precisa
+            {t('youtube.rolagemTitulo')}
           </span>
         </div>
 
         <div className="p-4 sm:p-5 flex flex-col gap-3 font-mono text-sm text-gray-800">
           <p>
-            Para acertar o ritmo da rolagem, o site precisa saber a{' '}
-            <strong>duração real da gravação</strong>. Hoje o único jeito de descobrir isso é
-            abrir um player do YouTube escondido e perguntar a ele.
+            {t('youtube.rolagemPorQueAntes')}{' '}
+            <strong>{t('youtube.rolagemDuracaoForte')}</strong>.{' '}
+            {t('youtube.rolagemPorQueDepois')}
           </p>
           <p className="text-xs bg-white border border-gray-400 p-2 leading-relaxed">
-            Isso carrega <strong>JavaScript não-livre</strong> do YouTube e entrega ao Google o
-            seu IP e qual vídeo está sendo consultado. Se você recusar, a rolagem continua
-            funcionando: ela deduz o tempo pelo BPM da cifra, com menos precisão.
+            {t('youtube.rolagemCustoAntes')} <strong>{t('youtube.rolagemCustoForte')}</strong>{' '}
+            {t('youtube.rolagemCustoDepois')}
           </p>
           <p className="text-xs text-gray-600">
-            Sua resposta fica lembrada neste navegador e pode ser trocada na Política de
-            Privacidade.
+            {t('youtube.rolagemLembrada')}
           </p>
 
           {/* No telefone os botões empilham em largura total, com folga entre eles e
@@ -76,14 +76,14 @@ export const YouTubeScrollConsentModal: React.FC<YouTubeScrollConsentModalProps>
               onClick={() => answer(false)}
               className="bevel-out bg-[var(--color-winxp-panel)] w-full sm:w-auto min-h-[44px] sm:min-h-0 px-3 py-2 sm:py-1 text-[13px] sm:text-xs font-bold border border-gray-400 hover:bg-white cursor-pointer touch-manipulation"
             >
-              Não, seguir pelo BPM
+              {t('youtube.rolagemNao')}
             </button>
             <button
               type="button"
               onClick={() => answer(true)}
               className="bg-[#0058e6] text-white w-full sm:w-auto min-h-[44px] sm:min-h-0 px-3 py-2 sm:py-1 font-bold text-[13px] sm:text-xs rounded hover:bg-[#3a8bfb] cursor-pointer touch-manipulation"
             >
-              Sim, usar a rolagem precisa
+              {t('youtube.rolagemSim')}
             </button>
           </div>
         </div>

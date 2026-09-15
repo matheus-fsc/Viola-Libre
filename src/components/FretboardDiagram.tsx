@@ -1,9 +1,12 @@
 import React from 'react';
+import { useT } from '../i18n';
+import { DIFICULDADE } from '../i18n/musica';
 import type { Voicing, Tuning } from '../engine/types';
 import { midiToNoteName, getVoicingDifficulty } from '../engine/chordCalculator';
 import { AudioEngine } from '../engine/AudioEngine';
 import { StarIcon } from './Icons';
 import { useVisualizationStore } from '../stores/useVisualizationStore';
+
 
 export const IconWarning: React.FC<{ className?: string }> = ({ className = "w-3 h-3" }) => (
   <svg className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -155,6 +158,7 @@ export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
   canDemote = false,
   forceInverted
 }) => {
+  const t = useT();
   const { frets, notes, barre } = voicing;
   const numStrings = tuning.strings.length;
 
@@ -240,7 +244,7 @@ export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
       : "bg-[#ece9d8] text-black border-2 border-white border-r-[#808080] border-bottom-[#808080] shadow-sm p-4 w-[200px] flex flex-col items-center relative select-none cursor-pointer hover:bg-[#e4dfc9] transition-colors"
     ) + (isCurated ? " ring-2 ring-[#228b22] ring-inset" : "")}>
       {isCurated && (
-        <div className="absolute -top-1.5 -right-1.5 z-10 bg-[#228b22] border border-[#1a6b1a] rounded-full w-4 h-4 flex items-center justify-center shadow" title="Variação curada pelos Editores">
+        <div className="absolute -top-1.5 -right-1.5 z-10 bg-[#228b22] border border-[#1a6b1a] rounded-full w-4 h-4 flex items-center justify-center shadow" title={t('acordes.curadaPelosEditores')}>
           <IconShield className="w-2.5 h-2.5" filled />
         </div>
       )}
@@ -252,7 +256,7 @@ export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
             <button
               onClick={onInfoClick}
               className={`cursor-pointer focus:outline-none hover:scale-110 transition-transform flex items-center justify-center ${infoActive ? 'scale-110 drop-shadow-md' : ''}`}
-              title="Informações de Teoria (Tom)"
+              title={t('acordes.infoTeoria')}
             >
               <IconInfo className="w-4 h-4" />
             </button>
@@ -261,7 +265,7 @@ export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
             <button
               onClick={onEditClick}
               className="cursor-pointer focus:outline-none hover:scale-110 transition-transform flex items-center justify-center"
-              title="Modificar acorde no braço"
+              title={t('acordes.modificarNoBraco')}
             >
               <IconEdit className="w-4 h-4" />
             </button>
@@ -271,7 +275,7 @@ export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
               onClick={onCurateClick}
               disabled={curateBusy}
               className="cursor-pointer focus:outline-none hover:scale-110 transition-transform flex items-center justify-center disabled:opacity-50"
-              title={isCurated ? 'Variação curada pelos Editores' : 'Curar esta variação como recomendada'}
+              title={isCurated ? t('acordes.curadaPelosEditores') : t('acordes.curarVariacao')}
             >
               <IconShield className="w-4 h-4" filled={isCurated} />
             </button>
@@ -282,7 +286,7 @@ export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
                 onClick={onPromoteClick}
                 disabled={!canPromote || curateBusy}
                 className="cursor-pointer focus:outline-none hover:text-[#0058e6] disabled:opacity-25 disabled:cursor-default text-gray-600 text-[9px] leading-none"
-                title="Priorizar esta variação (subir posição entre as curadas)"
+                title={t('acordes.priorizarVariacao')}
               >
                 ▲
               </button>
@@ -290,7 +294,7 @@ export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
                 onClick={onDemoteClick}
                 disabled={!canDemote || curateBusy}
                 className="cursor-pointer focus:outline-none hover:text-[#0058e6] disabled:opacity-25 disabled:cursor-default text-gray-600 text-[9px] leading-none"
-                title="Baixar prioridade desta variação"
+                title={t('acordes.baixarPrioridade')}
               >
                 ▼
               </button>
@@ -516,8 +520,8 @@ export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
       {/* Info text at the bottom — hidden on mobile in compact mode to save vertical space */}
       <div className={`w-full text-center border-t border-[#d4d0c8] pt-1 ${compact ? 'mt-1 sm:mt-2' : 'mt-2'}`}>
         <div className={`${compact ? 'hidden sm:flex' : 'flex'} text-[10px] font-mono text-gray-600 justify-between items-center`}>
-          <span>Dificuldade:</span>
-          <span className="font-bold text-black">{getVoicingDifficulty(frets).label}</span>
+          <span>{t('acordes.dificuldade')}</span>
+          <span className="font-bold text-black">{t(DIFICULDADE[getVoicingDifficulty(frets).label])}</span>
         </div>
         {/* Só o abafamento CARO vira alerta. O que fica colado no baixo é abafado pelo próprio
             dedo da fundamental (pegada de bossa, ex.: Gm7 3-x-3-3-3-x) e não merece aviso
@@ -541,7 +545,7 @@ export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
               <button
                 onClick={onPrevVariation}
                 className="px-2 py-0.5 text-[#0058e6] hover:bg-[#e0e0e0] font-bold text-[10px] rounded"
-                title="Variação Anterior"
+                title={t('acordes.variacaoAnterior')}
               >
                 &lt;
               </button>
@@ -555,7 +559,7 @@ export const FretboardDiagram: React.FC<FretboardDiagramProps> = ({
               <button
                 onClick={onNextVariation}
                 className="px-2 py-0.5 text-[#0058e6] hover:bg-[#e0e0e0] font-bold text-[10px] rounded"
-                title="Próxima Variação"
+                title={t('acordes.variacaoProxima')}
               >
                 &gt;
               </button>

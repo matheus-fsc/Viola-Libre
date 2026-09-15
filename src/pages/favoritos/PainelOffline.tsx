@@ -15,6 +15,7 @@
  * algo não cabe — aqui cabe tudo, então a pergunta certa é uma só: guarda ou não guarda.
  */
 import { useState } from 'react';
+import { useT } from '../../i18n';
 import { HardDrive, Download, Trash2, Check, Loader } from 'lucide-react';
 import {
   apagarCifras,
@@ -46,30 +47,28 @@ export function ConviteOffline({ quantas, ocupara, onResponder, ocupado }: {
   onResponder: (v: PreferenciaOffline) => void;
   ocupado: boolean;
 }) {
+  const t = useT();
   return (
     <div className="bg-[#e8f0fe] border-2 border-[#0058e6] p-3 flex flex-col gap-2">
       <div className="text-xs font-bold text-[#002fa7] flex items-center gap-1.5">
-        <HardDrive size={13} /> Guardar seus favoritos no aparelho?
+        <HardDrive size={13} /> {t('offline.ofertaTitulo')}
       </div>
       <p className="text-[11px] text-gray-800 leading-relaxed">
-        Suas <strong>{quantas} cifra{quantas === 1 ? '' : 's'}</strong> ficam guardadas aqui
-        (~{ocupara}) e passam a abrir <strong>na hora</strong>, inclusive o "Próxima" de
-        dentro da música — e continuam legíveis se a internet cair no meio do uso. Os
-        favoritos novos são guardados sozinhos daí em diante.
+        {t('offline.ofertaTexto', { n: quantas, tamanho: ocupara })}
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <button onClick={() => onResponder('sim')} disabled={ocupado} className={botao}>
           {ocupado ? <Loader size={12} className="animate-spin" /> : <Download size={12} />}
-          Sim, guardar
+          {t('offline.ofertaSim')}
         </button>
         <button
           onClick={() => onResponder('nao')}
           disabled={ocupado}
           className="px-3 py-2 sm:py-1.5 text-xs text-gray-600 hover:text-black cursor-pointer disabled:opacity-50"
         >
-          Agora não
+          {t('offline.ofertaAgoraNao')}
         </button>
-        <span className="text-[10px] text-gray-500">dá para mudar em "No aparelho"</span>
+        <span className="text-[10px] text-gray-500">{t('offline.ofertaOndeMudar')}</span>
       </div>
     </div>
   );
@@ -83,6 +82,7 @@ export function PainelOffline({ cache, total, onAviso }: {
   total: number;
   onAviso: (tom: 'ok' | 'erro', texto: string) => void;
 }) {
+  const t = useT();
   const [pref, setPref] = useState<PreferenciaOffline | null>(lerPreferencia);
   const { resumo, espaco, progresso, faltam } = cache;
 
@@ -128,24 +128,20 @@ export function PainelOffline({ cache, total, onAviso }: {
   return (
     <div className="bg-[#ece9d8] border-2 border-white border-r-[#808080] border-b-[#808080] p-3 flex flex-col gap-2">
       <div className="text-xs font-bold text-[#002fa7] flex items-center gap-1.5">
-        <HardDrive size={12} /> Cifras guardadas no aparelho
+        <HardDrive size={12} /> {t('offline.painelTitulo')}
       </div>
 
       <p className="text-[10px] text-gray-700 leading-relaxed">
-        Guardar faz a cifra abrir <strong>na hora</strong> — inclusive o "Próxima" de dentro
-        da música — e continuar legível se a internet cair no meio do uso. Não substitui a
-        internet para <em>abrir o site</em>: para isso o navegador ainda precisa de sinal na
-        primeira carga.
+        {t('offline.painelTexto')}
       </p>
 
       <div className="bevel-in bg-white px-2 py-1.5 text-[11px] flex flex-wrap items-center gap-x-4 gap-y-1">
         <span>
-          <strong>{resumo?.itens ?? 0}</strong> de {total} cifra{total === 1 ? '' : 's'} ·{' '}
-          <strong>{formatarBytes(resumo?.bytes ?? 0)}</strong>
+          {t('offline.painelResumo', { itens: resumo?.itens ?? 0, total, bytes: formatarBytes(resumo?.bytes ?? 0) })}
         </span>
         {espaco && (
           <span className="text-gray-500">
-            o navegador oferece {formatarBytes(espaco.total)} para este site
+            {t('offline.painelEspaco', { total: formatarBytes(espaco.total) })}
           </span>
         )}
       </div>
@@ -157,15 +153,15 @@ export function PainelOffline({ cache, total, onAviso }: {
           onChange={e => trocarPreferencia(e.target.checked ? 'sim' : 'nao')}
           className="cursor-pointer"
         />
-        Guardar meus favoritos automaticamente
+        {t('offline.painelAutomatico')}
       </label>
 
       {progresso ? (
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center gap-2 text-[11px]">
             <Loader size={12} className="animate-spin shrink-0" />
-            <span>Guardando {progresso.feitas} de {progresso.total}…</span>
-            {progresso.falhas > 0 && <span className="text-[#992200]">({progresso.falhas} falhou)</span>}
+            <span>{t('offline.painelGuardando', { feitas: progresso.feitas, total: progresso.total })}</span>
+            {progresso.falhas > 0 && <span className="text-[#992200]">{t('offline.painelFalhas', { n: progresso.falhas })}</span>}
           </div>
           {/* Barra em `div`, não `<progress>`: o elemento nativo ignora a moldura do tema
               XP em quase todo navegador, e aqui ela é o que faz a peça pertencer à tela. */}
@@ -175,7 +171,7 @@ export function PainelOffline({ cache, total, onAviso }: {
               style={{ width: `${Math.round((progresso.feitas / Math.max(1, progresso.total)) * 100)}%` }}
             />
           </div>
-          <button onClick={cache.parar} className={`${botao} self-start`}>Parar</button>
+          <button onClick={cache.parar} className={`${botao} self-start`}>{t('offline.painelParar')}</button>
         </div>
       ) : (
         <div className="flex flex-wrap gap-2">
@@ -183,16 +179,16 @@ export function PainelOffline({ cache, total, onAviso }: {
             onClick={() => void baixar()}
             disabled={faltam === 0}
             className={botao}
-            title={faltam === 0 ? 'Toda a sua estante já está guardada' : 'Guardar todos os favoritos no aparelho'}
+            title={faltam === 0 ? t('offline.painelTudoGuardadoDica') : t('offline.painelGuardarTodosDica')}
           >
             {faltam === 0 ? <Check size={12} className="text-green-700" /> : <Download size={12} />}
-            {faltam === 0 ? 'Tudo já está no aparelho' : `Guardar todos (${faltam}, ~${estimarTamanho(faltam)})`}
+            {faltam === 0 ? t('offline.painelTudoGuardado') : t('offline.painelGuardarTodos', { n: faltam, tamanho: estimarTamanho(faltam) })}
           </button>
 
           {(resumo?.itens ?? 0) > 0 && (
             <button onClick={() => void limpar()} className={`${botao} text-[#992200]`}>
               <Trash2 size={12} />
-              Apagar as guardadas
+              {t('offline.painelApagar')}
             </button>
           )}
         </div>

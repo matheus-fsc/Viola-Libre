@@ -1,4 +1,6 @@
 import React, { useMemo, useState } from 'react';
+import { useT } from '../i18n';
+import { DIFICULDADE } from '../i18n/musica';
 import type { Tuning, Instrument } from '../engine/types';
 import {
   detectChord,
@@ -41,6 +43,7 @@ export const ChordEditorModal: React.FC<ChordEditorModalProps> = ({
   onApply,
   onClose,
 }) => {
+  const t = useT();
   const { ref: dialogRef, props: dialogProps } = useDialog({ onClose, titleId: 'titulo-editor-acorde' });
   const numStrings = tuning.strings.length;
 
@@ -148,8 +151,8 @@ export const ChordEditorModal: React.FC<ChordEditorModalProps> = ({
           {/* Legend */}
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] font-mono text-gray-700 items-center">
             <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-[#0058e6] border border-[#002fa7] inline-block" /> nota tocada</span>
-            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full border-2 border-[#228b22] bg-[#228b22]/15 inline-block" /> nota do acorde (clique p/ acrescentar)</span>
-            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full border-2 border-[#c06000] bg-[#c06000]/15 inline-block" /> tônica</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full border-2 border-[#228b22] bg-[#228b22]/15 inline-block" /> {t('acordes.legendaNotaDoAcorde')}</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full border-2 border-[#c06000] bg-[#c06000]/15 inline-block" /> {t('acordes.legendaTonica')}</span>
           </div>
 
           {/* Neck */}
@@ -244,18 +247,18 @@ export const ChordEditorModal: React.FC<ChordEditorModalProps> = ({
           {/* Status panel */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <div className="bg-white border border-[#808080] p-2 font-mono">
-              <span className="text-[9px] text-gray-500 font-bold block">Resulta em</span>
+              <span className="text-[9px] text-gray-500 font-bold block">{t('acordes.resultaEm')}</span>
               <span className="text-sm font-bold text-[#002fa7]">{detected[0]?.chordName ?? '—'}</span>
               {detected.length > 1 && (
-                <span className="text-[9px] text-gray-600 block truncate">tb: {detected.slice(1).map(d => d.chordName).join(', ')}</span>
+                <span className="text-[9px] text-gray-600 block truncate">{t('acordes.tambem', { acordes: detected.slice(1).map(d => d.chordName).join(', ') })}</span>
               )}
             </div>
             <div className="bg-white border border-[#808080] p-2 font-mono">
-              <span className="text-[9px] text-gray-500 font-bold block">Dificuldade</span>
-              <span className={`text-sm font-bold ${diffColor}`}>{difficulty.label}</span>
+              <span className="text-[9px] text-gray-500 font-bold block">{t('acordes.dificuldadeRotulo')}</span>
+              <span className={`text-sm font-bold ${diffColor}`}>{t(DIFICULDADE[difficulty.label])}</span>
             </div>
             <div className="bg-white border border-[#808080] p-2 font-mono">
-              <span className="text-[9px] text-gray-500 font-bold block">Notas</span>
+              <span className="text-[9px] text-gray-500 font-bold block">{t('acordes.notas')}</span>
               <span className="text-xs font-bold text-[#228b22] truncate block">
                 {frets.map((f, i) => (f === -1 ? null : noteAt(i, f))).filter(Boolean).join(', ') || '—'}
               </span>
@@ -265,7 +268,7 @@ export const ChordEditorModal: React.FC<ChordEditorModalProps> = ({
           {/* Notação — fica colado no "Resulta em" acima porque é o campo que ele governa:
               o mesmo desenho de acorde muda de nome conforme o padrão. */}
           <div className="bg-white border border-[#808080] font-mono">
-            <span className="text-[9px] text-gray-500 font-bold block px-2 pt-2">Notação</span>
+            <span className="text-[9px] text-gray-500 font-bold block px-2 pt-2">{t('acordes.notacao')}</span>
             <SeletorDeNotacao embutido />
           </div>
 
@@ -274,15 +277,15 @@ export const ChordEditorModal: React.FC<ChordEditorModalProps> = ({
             <div className="flex gap-2">
               <button onClick={handlePlay} className="px-3 py-1 text-xs font-bold font-mono bg-[#ece9d8] border border-white border-r-[#808080] border-b-[#808080] hover:bg-white">▶ Tocar</button>
               <button onClick={() => setFrets(normalizedInitial)} className="px-3 py-1 text-xs font-bold font-mono bg-[#ece9d8] border border-white border-r-[#808080] border-b-[#808080] hover:bg-white">↺ Resetar</button>
-              <button onClick={() => setStringOrder(isInverted ? 'standard' : 'inverted')} className="px-3 py-1 text-xs font-bold font-mono bg-[#ece9d8] border border-white border-r-[#808080] border-b-[#808080] hover:bg-white" title="Alternar entre visualização padrão e invertida">↕ Inverter</button>
+              <button onClick={() => setStringOrder(isInverted ? 'standard' : 'inverted')} className="px-3 py-1 text-xs font-bold font-mono bg-[#ece9d8] border border-white border-r-[#808080] border-b-[#808080] hover:bg-white" title={t('acordes.inverterVisualizacao')}>{t('acordes.inverter')}</button>
             </div>
             <div className="flex gap-2 items-center">
               {editorSession && rankState === 'idle' && (
-                <span className="text-[9px] text-gray-500 font-mono">🏆 será enviado como sugestão de Editor</span>
+                <span className="text-[9px] text-gray-500 font-mono">{t('acordes.sugestaoDeEditor')}</span>
               )}
               {rankState === 'sending' && <span className="text-[9px] text-[#0058e6] font-mono">Enviando ranking...</span>}
               {rankState === 'sent' && <span className="text-[9px] text-[#228b22] font-mono">✔ Ranking enviado</span>}
-              {rankState === 'error' && <span className="text-[9px] text-[#cc3300] font-mono">✗ Falha ao enviar ranking</span>}
+              {rankState === 'error' && <span className="text-[9px] text-[#cc3300] font-mono">{t('acordes.falhaRanking')}</span>}
               <button onClick={onClose} className="px-3 py-1 text-xs font-bold font-mono bg-[#ece9d8] border border-white border-r-[#808080] border-b-[#808080] hover:bg-white">Cancelar</button>
               <button onClick={handleApply} disabled={rankState === 'sending'} className="px-4 py-1 text-xs font-bold font-mono bg-[#316ac5] text-white border border-[#1a4a9c] hover:bg-[#3f7ad6] disabled:opacity-50">Aplicar</button>
             </div>

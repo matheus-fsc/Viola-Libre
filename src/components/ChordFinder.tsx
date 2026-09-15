@@ -1,4 +1,5 @@
 import React from 'react';
+import { useT } from '../i18n';
 
 interface ChordFinderProps {
   selectedRootName: string;
@@ -186,6 +187,7 @@ export const ChordFinder: React.FC<ChordFinderProps> = ({
   onChordChange,
   resultsCount
 }) => {
+  const t = useT();
   const { quality, seventh, has9, hasb5, has11 } = parseSuffix(selectedSuffix);
 
   const updateChord = (
@@ -335,20 +337,20 @@ export const ChordFinder: React.FC<ChordFinderProps> = ({
 
       {/* Suffix / Quality Grid (Modular Chord Builder) */}
       <div className="flex flex-col gap-2 p-2 bg-[#d4d0c8] border border-[#808080]">
-        <span className="text-xs font-bold font-mono text-gray-700">Qualidade e Extensões:</span>
+        <span className="text-xs font-bold font-mono text-gray-700">{t('acordes.qualidadeExtensoes')}</span>
         
         {/* 1. Quality */}
         <div className="flex flex-col gap-1">
-          <span className="text-[10px] font-mono text-gray-600 font-bold">Qualidade Tríade:</span>
+          <span className="text-[10px] font-mono text-gray-600 font-bold">{t('acordes.qualidadeTriade')}</span>
           <div className="grid grid-cols-3 gap-1">
             {(
               [
-                { id: 'M', label: 'Maior' },
-                { id: 'm', label: 'Menor' },
+                { id: 'M', label: t('acordes.maior') },
+                { id: 'm', label: t('acordes.menor') },
                 { id: 'sus4', label: 'Sus4' },
                 { id: 'sus2', label: 'Sus2' },
-                { id: 'dim', label: 'Diminuto' },
-                { id: 'aug', label: 'Aumentado' }
+                { id: 'dim', label: t('acordes.diminuto') },
+                { id: 'aug', label: t('acordes.aumentado') }
               ] as { id: 'M' | 'm' | 'sus4' | 'sus2' | 'dim' | 'aug'; label: string }[]
             ).map(q => (
               <button
@@ -368,7 +370,7 @@ export const ChordFinder: React.FC<ChordFinderProps> = ({
 
         {/* 2. Seventh */}
         <div className="flex flex-col gap-1 mt-1">
-          <span className="text-[10px] font-mono text-gray-600 font-bold">Adicionar Sétima (7ª) ou Sexta (6):</span>
+          <span className="text-[10px] font-mono text-gray-600 font-bold">{t('acordes.setimaOuSexta')}</span>
           <div className="grid grid-cols-4 gap-1">
             {(
               [
@@ -451,7 +453,7 @@ export const ChordFinder: React.FC<ChordFinderProps> = ({
       {/* Notas Customizadas / Dissonâncias */}
       <div className="flex flex-col gap-1">
         <span className="text-xs font-bold font-mono text-gray-700 flex justify-between">
-          <span>Adicionar Nota Customizada (Dissonância):</span>
+          <span>{t('acordes.notaCustomizada')}</span>
           {selectedCustomNotes.length > 0 && <span className="text-[#cc3300] font-bold">+{selectedCustomNotes.length}</span>}
         </span>
         <div className="grid grid-cols-6 gap-1 p-1 bg-[#d4d0c8] border border-[#808080]">
@@ -484,13 +486,13 @@ export const ChordFinder: React.FC<ChordFinderProps> = ({
 
       {/* Bass Selector (Opcional) */}
       <div className="flex flex-col gap-1">
-        <span className="text-xs font-bold font-mono text-gray-700">Baixo na Nota (Opcional):</span>
+        <span className="text-xs font-bold font-mono text-gray-700">{t('acordes.baixoNaNota')}</span>
         <select
           value={selectedBassName}
           onChange={(e) => onChordChange(selectedRootName, selectedSuffix, e.target.value, selectedCustomNotes)}
           className="w-full text-xs font-mono bg-white border-2 border-r-white border-bottom-white border-[#808080] p-1.5 shadow-inner focus:outline-none cursor-pointer"
         >
-          <option value="">Nenhum (Baixo no tom fundamental)</option>
+          <option value="">{t('acordes.baixoNenhum')}</option>
           <option value="C">C</option>
           <option value="C#">C#</option>
           <option value="Db">Db</option>
@@ -514,14 +516,14 @@ export const ChordFinder: React.FC<ChordFinderProps> = ({
       {/* Stats Counter */}
       <div className="bg-[#d4d0c8] p-1.5 border border-[#808080] flex justify-between items-center text-xs font-mono select-none">
         <div className="flex items-center gap-1.5">
-          <span>Posições:</span>
+          <span>{t('acordes.posicoes')}</span>
           <span className="font-bold text-[#cc3300] bg-white border border-[#808080] px-1.5">{resultsCount}</span>
         </div>
         <button
           onClick={() => onChordChange("", "", "", [])}
           disabled={!selectedRootName && !selectedBassName && selectedCustomNotes.length === 0}
           className="px-2 py-0.5 bg-[#ece9d8] border border-white border-r-[#808080] border-bottom-[#808080] active:border-t-[#808080] active:border-l-[#808080] hover:bg-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed font-bold"
-          title="Limpar seleção de acordes"
+          title={t('acordes.limparSelecao')}
         >
           Limpar
         </button>

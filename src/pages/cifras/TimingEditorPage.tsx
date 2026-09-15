@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { useT } from '../../i18n';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getCifra, type CifraDetail } from '../../services/api';
 import { TimingEditor } from '../../components/TimingEditor';
@@ -7,6 +8,7 @@ import type { TimingContribution } from '../../services/timingApi';
 const previewKey = (slug: string) => `viola_preview_timing_${slug}`;
 
 export const TimingEditorPage: React.FC = () => {
+  const t = useT();
   const { artistSlug, songSlug } = useParams<{ artistSlug: string; songSlug: string }>();
   const navigate = useNavigate();
 
@@ -50,7 +52,7 @@ export const TimingEditorPage: React.FC = () => {
           onClick={() => navigate(`/cifras/${artistSlug}/${songSlug}`)}
           className="bevel-out bg-[var(--color-winxp-panel)] text-black px-2 py-0 text-xs active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white shrink-0 ml-2"
         >
-          ← Voltar à cifra
+          {t('cifra.timingVoltar')}
         </button>
       </div>
 
@@ -59,7 +61,7 @@ export const TimingEditorPage: React.FC = () => {
       )}
 
       {!loading && !cifra && (
-        <p className="text-xs text-[#cc3300] text-center py-10">Cifra não encontrada.</p>
+        <p className="text-xs text-[#cc3300] text-center py-10">{t('cifra.timingNaoEncontrada')}</p>
       )}
 
       {!loading && cifra && (

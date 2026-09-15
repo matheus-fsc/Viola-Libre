@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useT } from '../i18n';
 import type { Tuning, Instrument } from '../engine/types';
 import { detectChord, midiToNoteName, shouldUseFlats } from '../engine/chordCalculator';
 import { useNotationStore } from '../stores/useNotationStore';
@@ -16,6 +17,7 @@ export const InteractiveFretboard: React.FC<InteractiveFretboardProps> = ({
 
   loadedFrets
 }) => {
+  const t = useT();
   const numStrings = selectedTuning.strings.length;
   const maxFrets = 12;
 
@@ -97,7 +99,7 @@ export const InteractiveFretboard: React.FC<InteractiveFretboardProps> = ({
       
       {/* Header (XP look) */}
       <div className="bg-gradient-to-r from-[#5a8f29] to-[#80bd41] text-white px-2 py-1 flex justify-between items-center font-bold text-sm select-none">
-        <span>Dicionário Inverso (Clique no Braço)</span>
+        <span>{t('acordes.dicionarioInverso')}</span>
         <span className="font-mono text-xs">Modo Interativo</span>
       </div>
 
@@ -290,10 +292,10 @@ export const InteractiveFretboard: React.FC<InteractiveFretboardProps> = ({
                   <span className="font-bold text-[#002fa7]">{match.chordName}</span>
                   <div className="flex gap-1.5 text-[9px] items-center">
                     {match.isPerfectMatch && (
-                      <span className="bg-[#228b22] text-white px-1 font-bold rounded-sm" title="Todos os graus presentes">Perfeito</span>
+                      <span className="bg-[#228b22] text-white px-1 font-bold rounded-sm" title={t('acordes.todosOsGraus')}>{t('acordes.perfeito')}</span>
                     )}
                     {match.isInversion && (
-                      <span className="bg-[#808080] text-white px-1 rounded-sm" title="Baixo em nota diferente da fundamental">Invertido</span>
+                      <span className="bg-[#808080] text-white px-1 rounded-sm" title={t('acordes.baixoDiferente')}>{t('acordes.invertido')}</span>
                     )}
                   </div>
                 </div>

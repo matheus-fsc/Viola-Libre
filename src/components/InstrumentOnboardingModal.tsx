@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { t, type Chave } from '../i18n';
 import type { Instrument } from '../engine/types';
 import { PRESET_INSTRUMENTS } from '../engine/tunings';
 import { useDialog } from '../hooks/useDialog';
@@ -16,12 +17,14 @@ interface Props {
  * "Violão" no resto do app de propósito: ele aparece em `<select>` estreitos (na barra da
  * cifra o campo tem 90px) onde o nome composto seria cortado no meio.
  */
-const ROTULO_ONBOARDING: Record<string, string> = {
-  violao: 'Violão/Guitarra',
+const ROTULO_ONBOARDING: Record<string, Chave> = {
+  violao: 'modais.instrumentoViolaoGuitarra',
 };
 
 /** Escrito uma vez porque o rodapé o renderiza duas — uma por largura de tela. */
-const ROTULO_PULAR = 'Decidir depois (usar Viola Caipira)';
+/* Fora do componente: a função `rotulo` também é chamada de lá, e é a única linha do
+   arquivo que não vive num render. */
+const ROTULO_PULAR: Chave = 'modais.instrumentoPular';
 
 /**
  * O `<wbr>` depois da barra é a única quebra permitida no rótulo composto: sem ele o
@@ -29,7 +32,7 @@ const ROTULO_PULAR = 'Decidir depois (usar Viola Caipira)';
  * do telefone. Com ele, ou cabe numa linha só, ou vira "Violão/" + "Guitarra".
  */
 function rotulo(inst: Instrument): React.ReactNode {
-  const texto = ROTULO_ONBOARDING[inst.id] ?? inst.name;
+  const texto = ROTULO_ONBOARDING[inst.id] ? t(ROTULO_ONBOARDING[inst.id]) : inst.name;
   if (!texto.includes('/')) return texto;
   return texto.split('/').map((parte, i) => (
     <React.Fragment key={i}>
@@ -95,7 +98,7 @@ export const InstrumentOnboardingModal: React.FC<Props> = ({ onSelect, onSkip })
         className="w-full sm:w-[480px] max-w-full max-h-[85%] sm:max-h-full flex flex-col bg-[#ece9d8] border-[3px] border-b-0 sm:border-b-[3px] border-[#0058e6] rounded-t-lg shadow-2xl"
       >
         <div className="shrink-0 winxp-gradient-blue text-white px-3 py-2 sm:py-1.5 flex items-center rounded-t-md font-bold text-sm select-none">
-          <span id="titulo-onboarding-instrumento">🎸 Qual é o seu instrumento?</span>
+          <span id="titulo-onboarding-instrumento">{t('modais.instrumentoPergunta')}</span>
         </div>
 
         {/* O invólucro existe só para ancorar a dica de rolagem sobre a borda de baixo do
@@ -155,14 +158,14 @@ export const InstrumentOnboardingModal: React.FC<Props> = ({ onSelect, onSkip })
             onClick={onSkip}
             className="sm:hidden w-full min-h-12 bevel-out bg-[var(--color-winxp-panel)] px-3 text-xs font-bold text-gray-700 hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white cursor-pointer"
           >
-            {ROTULO_PULAR}
+            {t(ROTULO_PULAR)}
           </button>
           {/* Desktop: o link discreto de sempre, que ali não disputa com o mouse. */}
           <button
             onClick={onSkip}
             className="hidden sm:inline text-gray-500 hover:text-gray-800 underline cursor-pointer text-xs"
           >
-            {ROTULO_PULAR}
+            {t(ROTULO_PULAR)}
           </button>
         </div>
       </div>

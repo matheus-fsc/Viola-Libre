@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useT } from '../i18n';
 import { extractYouTubeId } from '../services/timingApi';
 import { loadYouTubeApi, type YTPlayer } from '../services/youtubeApi';
 import { YouTubeJsGate } from './YouTubeJsGate';
@@ -35,6 +36,7 @@ interface SourceVideoPanelProps {
 export const SourceVideoPanel: React.FC<SourceVideoPanelProps> = ({
   videoUrl, title, onClose, onDurationDetected,
 }) => {
+  const t = useT();
   const [collapsed, setCollapsed] = useState(false);
   const [wide, setWide] = useState(false);
   const [playing, setPlaying] = useState(false);
@@ -106,7 +108,7 @@ export const SourceVideoPanel: React.FC<SourceVideoPanelProps> = ({
       {/* Barra de título */}
       <div className="winxp-gradient-blue text-white px-2 py-1 flex items-center gap-1.5 text-[11px] font-bold">
         <span className="truncate flex-1" title={title}>▶ Source — {title}</span>
-        <button onClick={togglePlay} className={btn} title={playing ? 'Pausar vídeo' : 'Tocar vídeo'}>
+        <button onClick={togglePlay} className={btn} title={playing ? t('cifra.videoPausar') : t('cifra.videoTocar')}>
           {playing ? '⏸' : '▶'}
         </button>
         <button
@@ -119,11 +121,11 @@ export const SourceVideoPanel: React.FC<SourceVideoPanelProps> = ({
         <button
           onClick={() => setCollapsed(v => !v)}
           className={btn}
-          title={collapsed ? 'Mostrar vídeo' : 'Recolher (o áudio continua)'}
+          title={collapsed ? t('cifra.videoMostrar') : t('cifra.videoRecolher')}
         >
           {collapsed ? '▲' : '▼'}
         </button>
-        <button onClick={onClose} className={`${btn} text-[#cc3300]`} title="Fechar vídeo">✕</button>
+        <button onClick={onClose} className={`${btn} text-[#cc3300]`} title={t('cifra.videoFechar')}>✕</button>
       </div>
 
       {/* Vídeo — 16:9 preservado; no celular a altura é limitada e a largura acompanha. */}
@@ -135,26 +137,26 @@ export const SourceVideoPanel: React.FC<SourceVideoPanelProps> = ({
         <div ref={hostWrapRef} className="absolute inset-0" />
         {!videoId ? (
           <div className="absolute inset-0 flex items-center justify-center text-center text-[11px] text-white/80 px-3">
-            O link da source não é um vídeo reconhecido do YouTube.
+            {t('cifra.videoNaoReconhecido')}
           </div>
         ) : !ytAllowed ? (
           <YouTubeJsGate className="absolute inset-0 bg-[#1a1a1a] text-white/90 [&_a]:text-white" />
         ) : failed ? (
           <div className="absolute inset-0 flex items-center justify-center text-center text-[11px] text-white/80 px-3">
-            Não foi possível carregar o player do YouTube.
+            {t('cifra.videoFalhouPlayer')}
           </div>
         ) : null}
       </div>
 
       <div className="px-2 py-0.5 text-[9px] text-gray-600 flex items-center justify-between gap-2">
-        <span className="truncate">Vídeo hospedado no YouTube</span>
+        <span className="truncate">{t('cifra.videoHospedado')}</span>
         <a
           href={videoUrl}
           target="_blank"
           rel="noopener noreferrer"
           className="text-[#002fa7] font-bold hover:underline shrink-0"
         >
-          Abrir no YouTube ↗
+          {t('cifra.videoAbrirNoYouTube')}
         </a>
       </div>
     </div>

@@ -12,6 +12,7 @@
  * pronto da CifraViewer, que é quem tem o estado.
  */
 import { useEffect, useState, type ReactNode } from 'react';
+import { useT } from '../../i18n';
 import { ChevronDown, ChevronRight, FastForward, Gauge, Hand, Pause, Rewind, RotateCcw, Settings, SkipBack, X } from 'lucide-react';
 
 /** Abre uma folha com o conteúdo dado. */
@@ -232,6 +233,7 @@ const NUDGE_SEC = 5;
  * o Viola Libre é o único que as tem — o certo é tirá-las do caminho, não jogá-las fora.
  */
 export function TransporteMobile(p: TransporteProps) {
+  const t = useT();
   const [expandido, setExpandido] = useState(false);
   /** Float: 1.0000000001 nunca acontece com step 0.1, mas comparar por tolerância é barato. */
   const alterado = Math.abs(p.mult - 1) > 0.001;
@@ -246,8 +248,8 @@ export function TransporteMobile(p: TransporteProps) {
         <button
           onClick={p.onToggle}
           className="bevel-out bg-[#316ac5] text-white px-2.5 py-2 text-xs font-bold border border-gray-400 shrink-0 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
-          title={p.userSeeking ? 'Ajustando a posição' : 'Pausar (Espaço)'}
-          aria-label={p.userSeeking ? 'Ajustando a posição' : 'Pausar'}
+          title={p.userSeeking ? t('cifra.barraAjustando') : t('cifra.barraPausar')}
+          aria-label={p.userSeeking ? t('cifra.barraAjustando') : t('cifra.barraPausarAria')}
         >
           {p.userSeeking ? <Hand size={14} /> : <Pause size={14} />}
         </button>
@@ -265,8 +267,8 @@ export function TransporteMobile(p: TransporteProps) {
           <button
             onClick={() => p.onMult(1)}
             className="bevel-out bg-[var(--color-winxp-panel)] px-1.5 py-1.5 border border-gray-400 shrink-0 text-[#cc3300] active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
-            title="Voltar à velocidade normal (1×)"
-            aria-label="Voltar à velocidade normal"
+            title={t('cifra.barraVelocidadeNormal')}
+            aria-label={t('cifra.barraVelocidadeNormalAria')}
           >
             <RotateCcw size={13} />
           </button>
@@ -294,20 +296,20 @@ export function TransporteMobile(p: TransporteProps) {
           className={`bevel-out px-2 py-2 text-xs font-bold border border-gray-400 shrink-0 active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${
             expandido ? 'bg-[#316ac5] text-white' : 'bg-[var(--color-winxp-panel)] text-[#002fa7]'
           }`}
-          title={expandido ? 'Fechar ajustes da rolagem' : 'Ajustes da rolagem'}
+          title={expandido ? t('cifra.barraFecharAjustes') : t('cifra.barraAjustes')}
         >
           <Settings size={14} />
         </button>
-        <button onClick={p.onToggle} className={`${btn} shrink-0`} title="Parar a rolagem" aria-label="Parar a rolagem">
+        <button onClick={p.onToggle} className={`${btn} shrink-0`} title={t('cifra.barraParar')} aria-label={t('cifra.barraParar')}>
           <X size={14} />
         </button>
       </div>
 
       {expandido && (
         <div className="flex flex-wrap items-center gap-1.5 px-2 pb-2 pt-1 border-t border-gray-400">
-          <button onClick={p.onRestart} className={btn} title="Voltar ao início (Home)" aria-label="Voltar ao início"><SkipBack size={14} /></button>
-          <button onClick={() => p.onSeek(-NUDGE_SEC)} className={btn} title={`Voltar ${NUDGE_SEC}s`} aria-label={`Voltar ${NUDGE_SEC} segundos`}><Rewind size={14} /></button>
-          <button onClick={() => p.onSeek(NUDGE_SEC)} className={btn} title={`Avançar ${NUDGE_SEC}s`} aria-label={`Avançar ${NUDGE_SEC} segundos`}><FastForward size={14} /></button>
+          <button onClick={p.onRestart} className={btn} title={t('cifra.inicioDica')} aria-label={t('cifra.barraInicioAria')}><SkipBack size={14} /></button>
+          <button onClick={() => p.onSeek(-NUDGE_SEC)} className={btn} title={t('cifra.barraVoltarSegundos', { s: NUDGE_SEC })} aria-label={t('cifra.barraVoltarSegundosAria', { s: NUDGE_SEC })}><Rewind size={14} /></button>
+          <button onClick={() => p.onSeek(NUDGE_SEC)} className={btn} title={t('cifra.barraAvancarSegundos', { s: NUDGE_SEC })} aria-label={t('cifra.barraAvancarSegundosAria', { s: NUDGE_SEC })}><FastForward size={14} /></button>
           {p.total > 0 && (
             <span className="font-mono text-[10px] font-bold text-[#002fa7] tabular-nums px-1">
               {p.fmtTime(p.elapsed)} / {p.fmtTime(p.total)}
@@ -316,28 +318,28 @@ export function TransporteMobile(p: TransporteProps) {
           <button
             onClick={p.onLoopA}
             className={`px-2.5 py-2 text-xs font-bold border leading-tight ${p.loopA !== null ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#ece9d8] border-gray-400'}`}
-            title="Marcar início do loop na posição atual"
+            title={t('cifra.barraLoopInicio')}
           >
             A
           </button>
           <button
             onClick={p.onLoopB}
             className={`px-2.5 py-2 text-xs font-bold border leading-tight ${p.loopB !== null ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#ece9d8] border-gray-400'}`}
-            title="Marcar fim do loop na posição atual"
+            title={t('cifra.barraLoopFim')}
           >
             B
           </button>
           {(p.loopA !== null || p.loopB !== null) && (
-            <button onClick={p.onLoopLimpar} className="px-2 py-2 text-xs font-bold border border-gray-400 bg-[#ece9d8] text-[#cc3300] flex items-center gap-1" title="Limpar o loop">
-              <X size={12} /> Loop
+            <button onClick={p.onLoopLimpar} className="px-2 py-2 text-xs font-bold border border-gray-400 bg-[#ece9d8] text-[#cc3300] flex items-center gap-1" title={t('cifra.barraLoopLimpar')}>
+              <X size={12} /> {t('cifra.loop')}
             </button>
           )}
           <button
             onClick={p.onToggleTabs}
             className={`px-2.5 py-2 text-[10px] font-bold border leading-tight flex items-center gap-1 ${!p.showTabs ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#ece9d8] border-gray-400'}`}
-            title={p.showTabs ? 'Ocultar as tabs' : 'Mostrar as tabs'}
+            title={p.showTabs ? t('cifra.tabsOcultarDica') : t('cifra.tabsMostrarDica')}
           >
-            Tabs {p.showTabs ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+            {t('cifra.folhaTabs')} {p.showTabs ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
           </button>
           {p.secao && (
             <span className="text-[10px] font-bold text-[#660033] max-w-[110px] truncate" title={p.secao}>{p.secao}</span>
