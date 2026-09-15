@@ -9,6 +9,7 @@
 import { Link } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, ListMusic } from 'lucide-react';
 import type { PosicaoNaLista } from '../../services/listaAberta';
+import { useT } from '../../i18n';
 
 const botao =
   'bevel-out bg-[var(--color-winxp-panel)] text-black text-xs font-bold flex items-center gap-1 ' +
@@ -23,11 +24,12 @@ export function BarraDaLista({ pos, posicao }: {
   /** `'topo'` ganha o rótulo por extenso; `'fim'` fecha a cifra e repete a contagem. */
   posicao: 'topo' | 'fim';
 }) {
-  const rotulo = `${pos.nome} · ${pos.posicao} de ${pos.total}`;
+  const t = useT();
+  const rotulo = t('lista.posicaoAria', { nome: pos.nome, posicao: pos.posicao, total: pos.total });
 
   return (
     <nav
-      aria-label={`Navegação da lista ${pos.nome}`}
+      aria-label={t('lista.navegacaoAria', { nome: pos.nome })}
       className={`bevel-out bg-[var(--color-winxp-panel)] px-2 py-1.5 flex items-center gap-2 shrink-0 ${
         posicao === 'fim' ? 'mt-3' : ''
       }`}
@@ -35,14 +37,14 @@ export function BarraDaLista({ pos, posicao }: {
       {/* `aria-disabled` em vez de sumir: um botão que desaparece na última música faria os
           outros dois saltarem de lugar justamente quando a mão vai clicar. */}
       {pos.anterior ? (
-        <Link to={pos.anterior} className={botao} title={pos.tituloAnterior ? `Anterior: ${pos.tituloAnterior}` : 'Música anterior da lista'}>
+        <Link to={pos.anterior} className={botao} title={pos.tituloAnterior ? t('lista.anteriorTitulo', { titulo: pos.tituloAnterior }) : t('lista.musicaAnterior')}>
           <ChevronLeft size={14} aria-hidden="true" />
-          <span className="hidden sm:inline">Anterior</span>
+          <span className="hidden sm:inline">{t('lista.anterior')}</span>
         </Link>
       ) : (
         <span aria-disabled="true" className={`${botao} ${inerte}`}>
           <ChevronLeft size={14} aria-hidden="true" />
-          <span className="hidden sm:inline">Anterior</span>
+          <span className="hidden sm:inline">{t('lista.anterior')}</span>
         </span>
       )}
 
@@ -52,7 +54,7 @@ export function BarraDaLista({ pos, posicao }: {
       <Link
         to={pos.voltarPara}
         className="flex-1 min-w-0 flex items-center justify-center gap-1.5 text-xs text-[#002fa7] hover:underline"
-        title={`Voltar para ${pos.nome}`}
+        title={t('lista.voltarPara', { nome: pos.nome })}
       >
         <ListMusic size={13} aria-hidden="true" className="shrink-0" />
         <span className="truncate font-bold">{pos.nome}</span>
@@ -62,13 +64,13 @@ export function BarraDaLista({ pos, posicao }: {
       </Link>
 
       {pos.proxima ? (
-        <Link to={pos.proxima} className={botao} title={pos.tituloProxima ? `Próxima: ${pos.tituloProxima}` : 'Próxima música da lista'}>
-          <span className="hidden sm:inline">Próxima</span>
+        <Link to={pos.proxima} className={botao} title={pos.tituloProxima ? t('lista.proximaTitulo', { titulo: pos.tituloProxima }) : t('lista.musicaProxima')}>
+          <span className="hidden sm:inline">{t('lista.proxima')}</span>
           <ChevronRight size={14} aria-hidden="true" />
         </Link>
       ) : (
         <span aria-disabled="true" className={`${botao} ${inerte}`}>
-          <span className="hidden sm:inline">Próxima</span>
+          <span className="hidden sm:inline">{t('lista.proxima')}</span>
           <ChevronRight size={14} aria-hidden="true" />
         </span>
       )}

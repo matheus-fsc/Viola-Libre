@@ -8,6 +8,7 @@ import { useListScrollRestoration, useRestoredItemCount } from '../../hooks/useL
 import { useSeo } from '../../hooks/useSeo';
 import { useJsonLd, breadcrumbJsonLd } from '../../hooks/useJsonLd';
 import { TopSongsHighlight } from './TopSongsHighlight';
+import { useT, type Chave } from '../../i18n';
 
 const isPrincipal = (v?: string) => (v || '').toLowerCase().includes('principal');
 
@@ -16,13 +17,16 @@ const botaoBarra =
   'bevel-out bg-[var(--color-winxp-panel)] text-black px-2 py-0 text-xs items-center gap-1 ' +
   'active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white';
 
-const TABS: { id: ArtistSongTab; label: string }[] = [
-  { id: 'alfabetica', label: 'Ordem alfabética' },
-  { id: 'mais-visualizadas', label: 'Mais visualizadas' },
-  { id: 'mais-curtidas', label: 'Mais curtidas' },
+/* O rótulo sai do dicionário na hora de desenhar, não daqui: uma lista montada no módulo
+   congela o idioma que estava valendo quando o arquivo foi carregado. */
+const TABS: { id: ArtistSongTab; chave: Chave }[] = [
+  { id: 'alfabetica', chave: 'lista.ordemAlfabetica' },
+  { id: 'mais-visualizadas', chave: 'lista.maisVisualizadas' },
+  { id: 'mais-curtidas', chave: 'lista.maisCurtidas' },
 ];
 
 export const SongList: React.FC = () => {
+  const t = useT();
   const { artistSlug } = useParams<{ artistSlug: string }>();
   const [songs, setSongs] = useState<Song[]>([]);
   const [loading, setLoading] = useState(true);
@@ -124,7 +128,7 @@ export const SongList: React.FC = () => {
           {/* A barra de título É o cabeçalho da página — marcá-la como <h1> não muda
               nada visualmente e dá a quem navega por leitor de tela o mesmo ponto de
               referência que a barra dá a quem enxerga. */}
-          <h1 className="font-bold text-sm">Músicas de {artistName}</h1>
+          <h1 className="font-bold text-sm">{t('lista.musicasDe', { artista: artistName })}</h1>
         </div>
         {/* Mesma separação da página da cifra: um destino fixo e um passo atrás.
             O "Voltar" daqui fazia `navigate('/cifras')` na unha, e com os filtros do
@@ -132,18 +136,18 @@ export const SongList: React.FC = () => {
             destruir estado: quem vinha de `/cifras?letra=E` voltava para o acervo
             inteiro, no topo. `navigate(-1)` devolve a letra, a busca e a posição. */}
         <div className="flex items-center gap-1 shrink-0 ml-2">
-          <Link to="/cifras" title="Explorar todo o acervo" className={`flex ${botaoBarra}`}>
+          <Link to="/cifras" title={t('lista.explorarDica')} className={`flex ${botaoBarra}`}>
             <FolderOpen size={12} aria-hidden="true" />
-            Explorar
+            {t('lista.explorar')}
           </Link>
           {temHistorico && (
             <button
               onClick={() => navigate(-1)}
-              title="Voltar para a página anterior"
+              title={t('lista.voltarDica')}
               className={`hidden sm:flex ${botaoBarra}`}
             >
               <ArrowLeft size={12} aria-hidden="true" />
-              Voltar
+              {t('comum.voltar')}
             </button>
           )}
         </div>
@@ -152,7 +156,7 @@ export const SongList: React.FC = () => {
       <div className="flex-1 bevel-in bg-white p-4 overflow-y-auto flex flex-col retro-scrollbar">
         {loading ? (
           <div className="flex items-center justify-center h-full text-sm text-gray-600">
-            Carregando músicas...
+            {t('lista.carregandoMusicas')}
           </div>
         ) : (
           <div className="flex flex-col gap-2">
@@ -166,8 +170,8 @@ export const SongList: React.FC = () => {
                 <div className="flex items-center w-full mb-2">
                   <input
                     type="text"
-                    aria-label="Buscar música deste artista"
-                    placeholder="Buscar música deste artista..."
+                    aria-label={t('lista.buscarMusicaAria')}
+                    placeholder={t('lista.buscarMusicaPlaceholder')}
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     className="bevel-in px-3 py-2 text-sm w-full outline-none"
@@ -179,12 +183,12 @@ export const SongList: React.FC = () => {
                     <button
                       key={tab.id}
                       onClick={() => setActiveTab(tab.id)}
-                      title={tab.id !== 'alfabetica' ? 'Estatísticas ilustrativas — ranking oficial por artista ainda não existe no backend' : undefined}
+                      title={tab.id !== 'alfabetica' ? t('lista.estatisticasIlustrativas') : undefined}
                       className={`flex items-center gap-1 px-3 py-1 text-sm font-bold border transition-colors ${activeTab === tab.id ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#e0dfd6] text-black border-gray-400 hover:bg-gray-300'}`}
                     >
                       {tab.id === 'mais-visualizadas' && <Flame size={16} className={activeTab === tab.id ? 'text-orange-300' : 'text-orange-500'} />}
                       {tab.id === 'mais-curtidas' && <Heart size={16} className={activeTab === tab.id ? 'text-red-300' : 'text-red-500'} />}
-                      {tab.label}
+                      {t(tab.chave)}
                     </button>
                   ))}
                 </div>

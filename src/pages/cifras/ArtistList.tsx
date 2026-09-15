@@ -1,4 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useT } from '../../i18n';
 import { InfiniteLoader } from '../../components/InfiniteLoader';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Flame, Heart, FileText, Mic2, Music, Guitar, TrendingUp } from 'lucide-react';
@@ -241,7 +242,10 @@ export const ArtistList: React.FC = () => {
 
   // Falha de busca é estado próprio, e não ausência de resultado: são coisas diferentes pro
   // usuário e a tela precisa dizer qual das duas aconteceu.
-  const [searchError, setSearchError] = useState<string | null>(null);
+  // Sinalizador, não frase pronta: guardar o texto congelaria o idioma em que a falha
+  // aconteceu, e trocar de idioma deixaria o aviso antigo em português na tela.
+  const t = useT();
+  const [searchError, setSearchError] = useState(false);
   // Incrementar isto reexecuta a busca sem exigir que o usuário mexa no que digitou.
   const [retryTick, setRetryTick] = useState(0);
 
@@ -279,9 +283,8 @@ export const ArtistList: React.FC = () => {
   // barra; o noindex cobre quem chegar por um link compartilhado. A canônica aponta
   // sempre para /cifras limpo, que é a página que de fato existe.
   useSeo({
-    title: 'Cifras — Explore por Artista e Música',
-    description:
-      'Acervo livre de cifras para viola caipira, violão e cavaquinho. Busque por artista ou música e veja os acordes desenhados no braço do instrumento.',
+    title: t('explorador.seoTitle'),
+    description: t('explorador.seoDescription'),
     path: '/cifras',
     noindex: Boolean(debouncedSearch) || Boolean(selectedLetter) || searchMode !== 'artistas',
   });
@@ -320,7 +323,7 @@ export const ArtistList: React.FC = () => {
     setPageOffset(0);
     pageLoadingRef.current = true;
     setIsLoadingPage(true);
-    setSearchError(null);
+    setSearchError(false);
 
     // Ao voltar, a primeira busca já traz de uma vez todas as páginas que estavam abertas:
     // repetir a paginação em N requests só para reencontrar a mesma posição seria lento e
@@ -346,7 +349,7 @@ export const ArtistList: React.FC = () => {
         console.error(err);
         // Sem isto, falha de rede caía no mesmo lugar visual de "nenhum resultado" e o
         // usuário lia que o artista não existe.
-        setSearchError('Não foi possível buscar agora. Verifique a conexão e tente de novo.');
+        setSearchError(true);
         pageLoadingRef.current = false;
         setIsLoadingPage(false);
       });
@@ -485,7 +488,7 @@ export const ArtistList: React.FC = () => {
 
     setLoadingSongs(true);
     setHasSearchedSongs(true);
-    setSearchError(null);
+    setSearchError(false);
 
     // clearTimeout sozinho só cancelava o timer PENDENTE: uma vez disparado o fetch, nada o
     // interrompia e a resposta antiga ainda sobrescrevia a nova. O abort fecha esse buraco.
@@ -499,7 +502,7 @@ export const ArtistList: React.FC = () => {
         .catch(err => {
           if (isAbortError(err)) return;
           console.error(err);
-          setSearchError('Não foi possível buscar agora. Verifique a conexão e tente de novo.');
+          setSearchError(true);
           setSongResults([]);
           setLoadingSongs(false);
         });
@@ -520,7 +523,7 @@ export const ArtistList: React.FC = () => {
       {/* O <h1> vive à parte da barra de título porque a barra é `hidden` no celular, e
           um cabeçalho em display:none não existe para leitor de tela nenhum. Aqui ele
           está sempre no DOM, em qualquer largura. */}
-      <h1 className="sr-only">Cifras para viola caipira, violão e cavaquinho</h1>
+      <h1 className="sr-only">{t('explorador.h1')}</h1>
 
       {/* Window Header — só no desktop. No celular a app bar logo acima já diz "Explore
           Cifras": repetir o rótulo custa 44px de altura pra não informar nada. */}
@@ -529,7 +532,7 @@ export const ArtistList: React.FC = () => {
         className="hidden md:flex winxp-gradient-blue text-white px-2 py-1 items-center font-bold text-sm mb-2 rounded-t select-none"
       >
         <Music size={16} className="mr-2" />
-        Explorador de Cifras
+        {t('explorador.titulo')}
       </div>
 
       {/* p-2 no celular: largura de leitura é o recurso escasso ali, e 16px de cada lado
@@ -548,13 +551,13 @@ export const ArtistList: React.FC = () => {
             onClick={() => { setSearchMode('artistas'); setSelectedGenero(null); }}
             className={`px-3 py-1 text-sm font-bold border transition-colors ${searchMode === 'artistas' ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#e0dfd6] text-black border-gray-400 hover:bg-gray-300'}`}
           >
-            Artistas
+            {t('explorador.modoArtistas')}
           </button>
           <button
             onClick={() => { setSearchMode('musicas'); setSelectedGenero(null); }}
             className={`px-3 py-1 text-sm font-bold border transition-colors ${searchMode === 'musicas' ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#e0dfd6] text-black border-gray-400 hover:bg-gray-300'}`}
           >
-            Músicas (Busca)
+            {t('explorador.modoMusicas')}
           </button>
           {/* "+ Views" e "+ Likes" eram dois modos irmãos disputando espaço com os outros
               três. Viram um só: Populares abre o ranking (visualizações por padrão) e a
@@ -566,13 +569,13 @@ export const ArtistList: React.FC = () => {
             aria-expanded={isPopulares}
             className={`flex items-center gap-1 px-3 py-1 text-sm font-bold border transition-colors ${isPopulares ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#e0dfd6] text-black border-gray-400 hover:bg-gray-300'}`}
           >
-            <TrendingUp size={16} className={isPopulares ? 'text-orange-300' : 'text-orange-500'} /> Populares
+            <TrendingUp size={16} className={isPopulares ? 'text-orange-300' : 'text-orange-500'} /> {t('explorador.modoPopulares')}
           </button>
           <button
             onClick={() => { setSearchMode('generos'); setSelectedGenero(null); }}
             className={`flex items-center gap-1 px-3 py-1 text-sm font-bold border transition-colors ${searchMode === 'generos' ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#e0dfd6] text-black border-gray-400 hover:bg-gray-300'}`}
           >
-            <Guitar size={16} /> Gêneros
+            <Guitar size={16} /> {t('explorador.modoGeneros')}
           </button>
         </div>
 
@@ -585,14 +588,14 @@ export const ArtistList: React.FC = () => {
               aria-pressed={searchMode === 'top_views'}
               className={`flex items-center gap-1 px-3 py-1 text-sm font-bold border transition-colors ${searchMode === 'top_views' ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#e0dfd6] text-black border-gray-400 hover:bg-gray-300'}`}
             >
-              <Flame size={16} className={searchMode === 'top_views' ? 'text-orange-300' : 'text-orange-500'} /> + Views
+              <Flame size={16} className={searchMode === 'top_views' ? 'text-orange-300' : 'text-orange-500'} /> {t('explorador.rankingViews')}
             </button>
             <button
               onClick={() => setSearchMode('top_likes')}
               aria-pressed={searchMode === 'top_likes'}
               className={`flex items-center gap-1 px-3 py-1 text-sm font-bold border transition-colors ${searchMode === 'top_likes' ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#e0dfd6] text-black border-gray-400 hover:bg-gray-300'}`}
             >
-              <Heart size={16} className={searchMode === 'top_likes' ? 'text-red-300' : 'text-red-500'} /> + Likes
+              <Heart size={16} className={searchMode === 'top_likes' ? 'text-red-300' : 'text-red-500'} /> {t('explorador.rankingLikes')}
             </button>
           </div>
         )}
@@ -602,8 +605,8 @@ export const ArtistList: React.FC = () => {
           <div className="flex items-center w-full mb-4">
             <input
               type="text"
-              aria-label={searchMode === 'artistas' ? 'Buscar pelo nome do artista' : 'Buscar pelo nome da música'}
-              placeholder={searchMode === 'artistas' ? "Buscar pelo nome do artista..." : "Buscar nome da música (mín. 2 letras)..."}
+              aria-label={searchMode === 'artistas' ? t('explorador.buscarArtistaAria') : t('explorador.buscarMusicaAria')}
+              placeholder={searchMode === 'artistas' ? t('explorador.buscarArtistaPlaceholder') : t('explorador.buscarMusicaPlaceholder')}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="bevel-in px-3 py-2 text-sm w-full outline-none"
@@ -637,12 +640,12 @@ export const ArtistList: React.FC = () => {
             "nenhum resultado", e o usuário concluía que o artista não existe. */}
         {searchError && (
           <div className="mb-4 p-3 bevel-out bg-[#ffe9c9] border border-[#cc3300] flex flex-wrap items-center gap-2 text-xs sm:text-sm">
-            <span className="font-bold text-[#cc3300]">{searchError}</span>
+            <span className="font-bold text-[#cc3300]">{t('explorador.erroDeRede')}</span>
             <button
               onClick={() => setRetryTick(t => t + 1)}
               className="px-3 py-1 bevel-out bg-[var(--color-winxp-panel)] font-bold text-xs hover:bg-white active:border-t-[#808080] active:border-l-[#808080] active:border-b-white active:border-r-white cursor-pointer"
             >
-              Tentar de novo
+              {t('explorador.tentarDeNovo')}
             </button>
           </div>
         )}
@@ -652,7 +655,7 @@ export const ArtistList: React.FC = () => {
           {searchMode === 'artistas' && (
             (isLoadingPage && pagedArtists.length === 0) ? (
               <div className="flex items-center justify-center h-full text-sm text-gray-600">
-                Carregando artistas...
+                {t('explorador.carregandoArtistas')}
               </div>
             ) : (
               <div className="flex flex-col gap-4">
@@ -677,7 +680,7 @@ export const ArtistList: React.FC = () => {
                   ))}
                   {pagedArtists.length === 0 && !isLoadingPage && search === debouncedSearch && (
                     <div className="col-span-full text-center text-sm text-gray-500 py-8">
-                      Nenhum artista encontrado com "{debouncedSearch}"
+                      {t('explorador.nenhumArtista', { termo: debouncedSearch })}
                     </div>
                   )}
                 </div>
@@ -686,7 +689,7 @@ export const ArtistList: React.FC = () => {
                   hasMore={pageOffset < totalArtists}
                   onLoadMore={loadNextArtistPage}
                   checkTrigger={loadTrigger}
-                  label="Carregando mais artistas..."
+                  label={t('explorador.carregandoMaisArtistas')}
                 />
               </div>
             )
@@ -696,11 +699,11 @@ export const ArtistList: React.FC = () => {
             <div className="flex flex-col h-full">
               {loadingSongs ? (
                 <div className="flex items-center justify-center h-full text-sm text-gray-600">
-                  Buscando músicas...
+                  {t('explorador.buscandoMusicas')}
                 </div>
               ) : !hasSearchedSongs ? (
                 <div className="flex items-center justify-center h-full text-sm text-gray-500">
-                  Digite pelo menos 2 caracteres para buscar músicas em todo o banco.
+                  {t('explorador.digiteDoisCaracteres')}
                 </div>
               ) : (
                 <div className="flex flex-col gap-2">
@@ -729,14 +732,14 @@ export const ArtistList: React.FC = () => {
                   ))}
                   {songResults.length === 0 && search.length >= 2 && (
                     <div className="text-center text-sm text-gray-500 py-8">
-                      Nenhuma música encontrada contendo "{search}"
+                      {t('explorador.nenhumaMusica', { termo: search })}
                     </div>
                   )}
 
                   <InfiniteLoader
                     hasMore={visibleCount < songResults.length}
                     onLoadMore={() => setVisibleCount(v => v + 32)}
-                    label="Carregando mais músicas..."
+                    label={t('explorador.carregandoMaisMusicas')}
                   />
                 </div>
               )}
@@ -747,15 +750,15 @@ export const ArtistList: React.FC = () => {
             <div className="flex flex-col h-full">
               {loadingSongs ? (
                 <div className="flex items-center justify-center h-full text-sm text-gray-600">
-                  Carregando ranking...
+                  {t('explorador.carregandoRanking')}
                 </div>
               ) : (
                 <div className="flex flex-col gap-2">
                   <h3 className="flex items-center gap-2 font-bold text-[#316ac5] mb-2 border-b border-gray-300 pb-1">
                     {searchMode === 'top_views' ? (
-                      <><Flame size={18} className="text-orange-500" /> Top 50 Mais Visualizadas</>
+                      <><Flame size={18} className="text-orange-500" /> {t('explorador.top50Views')}</>
                     ) : (
-                      <><Heart size={18} className="text-red-500" /> Top 50 Mais Curtidas</>
+                      <><Heart size={18} className="text-red-500" /> {t('explorador.top50Likes')}</>
                     )}
                   </h3>
                   {songResults.slice(0, visibleCount).map((song, index) => (
@@ -766,7 +769,7 @@ export const ArtistList: React.FC = () => {
                       className="flex items-center p-2 hover:bg-[#316ac5] hover:text-white cursor-pointer select-none group border border-transparent hover:border-dotted hover:border-white transition-none text-inherit no-underline"
                     >
                       <div className="w-6 font-bold text-gray-600 group-hover:text-white">
-                        {index + 1}º
+                        {t('comum.ordinal', { n: index + 1 })}
                       </div>
                       <div className="mr-3 text-gray-500 group-hover:text-white">
                         {searchMode === 'top_views' ? <Flame size={18} className="text-orange-500 group-hover:text-white" /> : <Heart size={18} className="text-red-500 group-hover:text-white" />}
@@ -781,7 +784,7 @@ export const ArtistList: React.FC = () => {
                   ))}
                   {songResults.length === 0 && (
                     <div className="text-center text-sm text-gray-500 py-8">
-                      Nenhuma música encontrada no ranking.
+                      {t('explorador.nenhumaNoRanking')}
                     </div>
                   )}
                   <InfiniteLoader
@@ -798,7 +801,7 @@ export const ArtistList: React.FC = () => {
               {!selectedGenero ? (
                 loadingGeneros ? (
                   <div className="flex items-center justify-center h-full text-sm text-gray-600">
-                    Carregando gêneros...
+                    {t('explorador.carregandoGeneros')}
                   </div>
                 ) : (
                   /* Grade de colunas iguais, não flex-wrap. Com largura de conteúdo os 88
@@ -826,7 +829,7 @@ export const ArtistList: React.FC = () => {
                     ))}
                     {generos.length === 0 && (
                       <div className="w-full text-center text-sm text-gray-500 py-8">
-                        Nenhum gênero catalogado no momento.
+                        {t('explorador.nenhumGenero')}
                       </div>
                     )}
                   </div>
@@ -838,14 +841,14 @@ export const ArtistList: React.FC = () => {
                       onClick={() => setSelectedGenero(null)}
                       className="text-sm font-bold bg-[#316ac5] text-white px-2 py-1 bevel-out active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
                     >
-                      &lt; Voltar
+                      &lt; {t('comum.voltar')}
                     </button>
-                    <h3 className="font-bold text-[#316ac5] text-lg">Top Artistas: {selectedGenero}</h3>
+                    <h3 className="font-bold text-[#316ac5] text-lg">{t('explorador.topArtistas', { genero: selectedGenero })}</h3>
                   </div>
 
                   {loadingGeneroArtists ? (
                     <div className="flex items-center justify-center h-full text-sm text-gray-600 py-8">
-                      Carregando artistas de {selectedGenero}...
+                      {t('explorador.carregandoArtistasDe', { genero: selectedGenero })}
                     </div>
                   ) : (
                     <>
@@ -869,7 +872,7 @@ export const ArtistList: React.FC = () => {
                       <InfiniteLoader
                         hasMore={visibleCount < generoArtists.length}
                         onLoadMore={() => setVisibleCount(v => v + 32)}
-                        label="Carregando mais artistas..."
+                        label={t('explorador.carregandoMaisArtistas')}
                       />
                     </>
                   )}

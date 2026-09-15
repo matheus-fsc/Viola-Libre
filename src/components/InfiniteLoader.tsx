@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { useT } from '../i18n';
 
 interface Props {
   hasMore: boolean;
@@ -10,9 +11,13 @@ interface Props {
 export const InfiniteLoader: React.FC<Props> = ({
   hasMore,
   onLoadMore,
-  label = 'Carregando mais...',
+  label,
   checkTrigger = 0,
 }) => {
+  const t = useT();
+  // O padrão não pode ser um literal no parâmetro: valor padrão é avaliado antes de o
+  // componente ter um `t`, e o texto ficaria preso em português para sempre.
+  const rotulo = label ?? t('explorador.carregandoMais');
   const sentinelRef = useRef<HTMLDivElement>(null);
   const onLoadMoreRef = useRef(onLoadMore);
   const cooldownRef = useRef(false);
@@ -44,7 +49,7 @@ export const InfiniteLoader: React.FC<Props> = ({
 
   return (
     <div ref={sentinelRef} className="flex justify-center py-4">
-      <span className="text-xs text-gray-600 animate-pulse">{label}</span>
+      <span className="text-xs text-gray-600 animate-pulse">{rotulo}</span>
     </div>
   );
 };
