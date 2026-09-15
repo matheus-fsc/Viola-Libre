@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useT } from '../i18n';
 import type { Tuning } from '../engine/types';
 import { NOTE_NAMES_SHARP, NOTE_NAMES_FLAT } from '../engine/tunings';
 import { noteNameToPitchClass, midiToNoteName, shouldUseFlats } from '../engine/chordCalculator';
@@ -81,6 +82,7 @@ const playDuetTone = (freqLow: number, freqHigh: number) => {
 };
 
 export const ViolaDuets: React.FC<ViolaDuetsProps> = ({ selectedTuning }) => {
+  const t = useT();
   const numStrings = selectedTuning.strings.length;
   const maxFrets = 15;
 
@@ -211,7 +213,7 @@ export const ViolaDuets: React.FC<ViolaDuetsProps> = ({ selectedTuning }) => {
       
       {/* Box Header (XP look) */}
       <div className="bg-gradient-to-r from-[#0058e6] to-[#3a8bfb] text-white px-2 py-1 flex justify-between items-center font-bold text-sm select-none">
-        <span>Escalas Duetadas na Viola Caipira</span>
+        <span>{t('treinos.duetosTitulo')}</span>
         <span className="font-mono text-xs">{duetRoot} Maior ({selectedTuning.name.split(' ')[0]})</span>
       </div>
 
@@ -220,7 +222,7 @@ export const ViolaDuets: React.FC<ViolaDuetsProps> = ({ selectedTuning }) => {
         
         {/* Key Select Grid */}
         <div className="flex flex-col gap-1">
-          <span className="font-bold text-gray-700">Tom de Referência:</span>
+          <span className="font-bold text-gray-700">{t('treinos.duetosTom')}</span>
           <div className="grid grid-cols-6 gap-1 bg-white p-1.5 border border-[#808080]">
             {roots.map(r => {
               const active = duetRoot === r;
@@ -258,7 +260,7 @@ export const ViolaDuets: React.FC<ViolaDuetsProps> = ({ selectedTuning }) => {
 
         {/* Action Panel */}
         <div className="flex flex-col gap-1 justify-center items-center">
-          <span className="font-bold text-gray-700 mb-1">Demonstração de Ponteio:</span>
+          <span className="font-bold text-gray-700 mb-1">{t('treinos.duetosPonteio')}</span>
           <button
             onClick={handlePlayFullScale}
             disabled={isPlayingScale}
@@ -402,7 +404,7 @@ export const ViolaDuets: React.FC<ViolaDuetsProps> = ({ selectedTuning }) => {
         {/* Right sidebar listing positions */}
         <div className="flex flex-col gap-2 font-mono text-xs bg-white border-2 border-[#808080] border-r-white border-bottom-white p-3 max-h-[350px] overflow-y-auto pr-1 retro-scrollbar">
           <span className="font-bold text-[#002fa7] border-b border-dashed border-[#808080] pb-1.5 block">
-            Posições da Escala Duetada:
+            {t('treinos.duetosPosicoes')}
           </span>
           <div className="flex flex-col gap-1.5">
             {positions.map((pos, idx) => {

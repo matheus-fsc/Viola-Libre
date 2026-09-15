@@ -4,6 +4,7 @@
  * Licenciado sob a GNU AGPL-3.0 — veja o arquivo LICENSE na raiz do projeto.
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useT } from '../../i18n';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, CornerUpLeft, Download, FileDown, Pencil, Printer, Scissors } from 'lucide-react';
 import { getCifra, type CifraDetail } from '../../services/api';
@@ -318,6 +319,7 @@ function paginar(
 }
 
 export const CifraPrintPage: React.FC = () => {
+  const t = useT();
   const { artistSlug, songSlug } = useParams<{ artistSlug: string; songSlug: string }>();
   const [params] = useSearchParams();
 
@@ -735,7 +737,7 @@ export const CifraPrintPage: React.FC = () => {
   if (carregando) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[var(--color-winxp-panel)] font-mono text-sm">
-        Carregando cifra…
+        {t('impressao.carregando')}
       </div>
     );
   }
@@ -743,9 +745,9 @@ export const CifraPrintPage: React.FC = () => {
   if (erro || !cifra) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-[var(--color-winxp-panel)] font-mono text-sm p-4 text-center">
-        <p>Não foi possível carregar esta cifra para impressão.</p>
+        <p>{t('impressao.erro')}</p>
         <Link to={rotaCifra} className="bevel-out bg-[var(--color-winxp-bg)] px-3 py-1 font-bold border border-gray-400">
-          ← Voltar para a cifra
+          {t('impressao.voltarACifra')}
         </Link>
       </div>
     );
@@ -802,15 +804,15 @@ export const CifraPrintPage: React.FC = () => {
               <div key={nome} className="folha-acorde">
                 <FretboardDiagram voicing={forma} tuning={afinacao} chordName={nome} compact />
                 <div className="folha-acorde-controles sem-impressao">
-                  <button onClick={() => trocar(-1)} className="px-1 border border-gray-400 bg-[#ece9d8] hover:bg-white" title="Forma anterior">◀</button>
+                  <button onClick={() => trocar(-1)} className="px-1 border border-gray-400 bg-[#ece9d8] hover:bg-white" title={t('impressao.formaAnterior')}>◀</button>
                   <span className="font-mono tabular-nums text-gray-600">
                     {custom ? '✎' : `${idx + 1}/${lista.length || 1}`}
                   </span>
-                  <button onClick={() => trocar(1)} className="px-1 border border-gray-400 bg-[#ece9d8] hover:bg-white" title="Próxima forma">▶</button>
+                  <button onClick={() => trocar(1)} className="px-1 border border-gray-400 bg-[#ece9d8] hover:bg-white" title={t('impressao.formaProxima')}>▶</button>
                   <button
                     onClick={() => setEditorAcorde({ nome, frets: forma.frets })}
                     className="px-1 border border-gray-400 bg-[#ece9d8] hover:bg-white"
-                    title="Editar a forma no braço"
+                    title={t('impressao.editarForma')}
                   >
                     <Pencil size={10} />
                   </button>
@@ -832,9 +834,9 @@ export const CifraPrintPage: React.FC = () => {
         <Link
           to={rotaCifra}
           className="shrink-0 flex items-center gap-1 px-2 py-1 rounded hover:bg-white/20 active:bg-white/30 font-bold text-xs"
-          title="Voltar para a cifra"
+          title={t('impressao.voltarDica')}
         >
-          <ArrowLeft size={16} strokeWidth={2.5} /> <span className="hidden sm:inline">Voltar</span>
+          <ArrowLeft size={16} strokeWidth={2.5} /> <span className="hidden sm:inline">{t('impressao.voltar')}</span>
         </Link>
         <span className="flex-1 min-w-0 truncate font-bold text-sm font-mono">
           Imprimir — {cifra.title}
@@ -849,16 +851,16 @@ export const CifraPrintPage: React.FC = () => {
         <button
           onClick={baixarTxt}
           className="bevel-out bg-[var(--color-winxp-bg)] text-black px-2 sm:px-3 py-1 text-xs font-bold border border-gray-400 hover:bg-white flex items-center gap-1"
-          title="Baixar a cifra como arquivo de texto"
+          title={t('impressao.baixarDica')}
         >
-          <Download size={13} /> <span className="hidden sm:inline">Baixar .txt</span>
+          <Download size={13} /> <span className="hidden sm:inline">{t('impressao.baixarTxt')}</span>
         </button>
         <button
           onClick={() => window.print()}
           className="bevel-out bg-[#ff7f27] text-black px-2 sm:px-3 py-1 text-xs font-bold border border-[#c05a10] hover:brightness-105 flex items-center gap-1"
-          title="Abrir a caixa de impressão"
+          title={t('impressao.imprimirDica')}
         >
-          <Printer size={13} /> Imprimir
+          <Printer size={13} /> {t('impressao.imprimir')}
         </button>
       </div>
 
@@ -868,11 +870,11 @@ export const CifraPrintPage: React.FC = () => {
           className={`sem-impressao w-full lg:w-64 shrink-0 bevel-out bg-[var(--color-winxp-bg)] p-2 flex-col gap-3 text-xs lg:sticky lg:top-14 lg:max-h-[calc(100vh-4rem)] lg:overflow-y-auto retro-scrollbar ${menuAberto ? 'flex' : 'hidden lg:flex'}`}
         >
           <h2 className="font-bold text-[10px] uppercase tracking-wider text-gray-600 border-b border-gray-400 pb-1">
-            Personalizar folha
+            {t('impressao.personalizar')}
           </h2>
 
           <div className="flex flex-col gap-1">
-            <span className="font-bold text-[10px] uppercase text-gray-500">Layout</span>
+            <span className="font-bold text-[10px] uppercase text-gray-500">{t('impressao.layout')}</span>
             <div className="flex gap-1">
               {([1, 2] as const).map(c => (
                 <button
@@ -888,24 +890,23 @@ export const CifraPrintPage: React.FC = () => {
                   }}
                   className={`flex-1 py-1 font-bold border leading-tight ${opcoes.colunas === c ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#ece9d8] border-gray-400 hover:bg-white'}`}
                 >
-                  {c} coluna{c > 1 ? 's' : ''}
+                  {c === 1 ? t('impressao.umaColuna') : t('impressao.duasColunas')}
                 </button>
               ))}
             </div>
             {opcoes.colunas === 2 && (
               <p className="text-[10px] text-gray-600 leading-snug">
-                A 1ª coluna enche até o fim antes de passar para a 2ª, e o que não couber na
-                folha desce para a próxima. Em <b>Conteúdo</b> dá para mover um trecho de
-                coluna à mão.
+                {t('impressao.duasColunasNotaA')} <b>{t('impressao.conteudo')}</b>{' '}
+                {t('impressao.duasColunasNotaB')}
               </p>
             )}
             <label className={caixa}>
               <input type="checkbox" checked={opcoes.tabs} onChange={e => setOpcoes(o => ({ ...o, tabs: e.target.checked }))} />
-              <span>Incluir tablaturas</span>
+              <span>{t('impressao.incluirTabs')}</span>
             </label>
             <label className={caixa}>
               <input type="checkbox" checked={opcoes.formas} onChange={e => setOpcoes(o => ({ ...o, formas: e.target.checked }))} />
-              <span>Formas dos acordes no topo</span>
+              <span>{t('impressao.formasNoTopo')}</span>
             </label>
             <label className={caixa}>
               <input type="checkbox" checked={opcoes.cabecalho} onChange={e => setOpcoes(o => ({ ...o, cabecalho: e.target.checked }))} />
@@ -917,55 +918,55 @@ export const CifraPrintPage: React.FC = () => {
             </label>
             <label className={caixa}>
               <input type="checkbox" checked={opcoes.acordesPreto} onChange={e => setOpcoes(o => ({ ...o, acordesPreto: e.target.checked }))} />
-              <span>Acordes em preto</span>
+              <span>{t('impressao.acordesEmPreto')}</span>
             </label>
           </div>
 
           <div className="flex flex-col gap-1">
-            <span className="font-bold text-[10px] uppercase text-gray-500">Tipografia</span>
+            <span className="font-bold text-[10px] uppercase text-gray-500">{t('impressao.tipografia')}</span>
             <label className={caixa}>
               <input type="checkbox" checked={opcoes.proporcional} onChange={e => setOpcoes(o => ({ ...o, proporcional: e.target.checked }))} />
-              <span>Fonte proporcional (cabe mais)</span>
+              <span>{t('impressao.fonteProporcional')}</span>
             </label>
             <label className="flex items-center justify-between gap-2">
-              <span>Fonte</span>
+              <span>{t('impressao.fonte')}</span>
               <span className="font-mono font-bold text-[#005500]">{opcoes.fonte}px</span>
             </label>
             <input
               type="range" min={7} max={16} step={0.5} value={opcoes.fonte}
               onChange={e => setOpcoes(o => ({ ...o, fonte: Number(e.target.value) }))}
-              aria-label="Tamanho da fonte"
+              aria-label={t('impressao.fonteAria')}
             />
             <label className="flex items-center justify-between gap-2">
-              <span>Entrelinha</span>
+              <span>{t('impressao.entrelinha')}</span>
               <span className="font-mono font-bold text-[#005500]">{opcoes.entrelinha.toFixed(2)}</span>
             </label>
             <input
               type="range" min={1} max={2} step={0.05} value={opcoes.entrelinha}
               onChange={e => setOpcoes(o => ({ ...o, entrelinha: Number(e.target.value) }))}
-              aria-label="Entrelinha"
+              aria-label={t('impressao.entrelinha')}
             />
             <label className="flex items-center justify-between gap-2">
-              <span>Margem extra</span>
+              <span>{t('impressao.margemExtra')}</span>
               <span className="font-mono font-bold text-[#005500]">{opcoes.margemExtra}mm</span>
             </label>
             <input
               type="range" min={0} max={20} step={1} value={opcoes.margemExtra}
               onChange={e => setOpcoes(o => ({ ...o, margemExtra: Number(e.target.value) }))}
-              aria-label="Margem extra"
+              aria-label={t('impressao.margemExtra')}
             />
           </div>
 
           <div className="flex flex-col gap-1">
-            <span className="font-bold text-[10px] uppercase text-gray-500">Música</span>
+            <span className="font-bold text-[10px] uppercase text-gray-500">{t('impressao.musica')}</span>
             <div className="flex items-center gap-1">
-              <span className="flex-1">Tom</span>
-              <button onClick={() => setTranspose(t => Math.max(-11, t - 1))} disabled={editado} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 font-bold border border-gray-400 disabled:opacity-40" title="Abaixar meio tom">-½</button>
+              <span className="flex-1">{t('impressao.tom')}</span>
+              <button onClick={() => setTranspose(t => Math.max(-11, t - 1))} disabled={editado} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 font-bold border border-gray-400 disabled:opacity-40" title={t('impressao.abaixarMeioTom')}>-½</button>
               <span className="font-mono font-bold w-7 text-center text-[#cc3300]">{transpose > 0 ? `+${transpose}` : transpose}</span>
-              <button onClick={() => setTranspose(t => Math.min(11, t + 1))} disabled={editado} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 font-bold border border-gray-400 disabled:opacity-40" title="Subir meio tom">+½</button>
+              <button onClick={() => setTranspose(t => Math.min(11, t + 1))} disabled={editado} className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-0.5 font-bold border border-gray-400 disabled:opacity-40" title={t('impressao.subirMeioTom')}>+½</button>
             </div>
             <label className="flex flex-col gap-0.5">
-              <span>Instrumento</span>
+              <span>{t('impressao.instrumento')}</span>
               <select
                 value={instrumento.id}
                 onChange={e => { setInstId(e.target.value); setAfinacaoId(''); setFormasCustom({}); }}
@@ -975,7 +976,7 @@ export const CifraPrintPage: React.FC = () => {
               </select>
             </label>
             <label className="flex flex-col gap-0.5">
-              <span>Afinação</span>
+              <span>{t('impressao.afinacao')}</span>
               <select
                 value={afinacao.id}
                 onChange={e => { setAfinacaoId(e.target.value); setFormasCustom({}); }}
@@ -986,7 +987,7 @@ export const CifraPrintPage: React.FC = () => {
             </label>
             {opcoes.tabs && (
               <div className="flex items-center gap-1">
-                <span className="flex-1">Pos. tab</span>
+                <span className="flex-1">{t('impressao.posTab')}</span>
                 <button onClick={() => setPosIdx(p => (p - 1 + TAB_POSITIONS.length) % TAB_POSITIONS.length)} disabled={editado} className="bevel-out bg-[var(--color-winxp-panel)] px-1.5 py-0.5 font-bold border border-gray-400 disabled:opacity-40">◀</button>
                 <span className="font-mono font-bold min-w-[42px] text-center text-[#005500]">{TAB_POSITIONS[posIdx].label}</span>
                 <button onClick={() => setPosIdx(p => (p + 1) % TAB_POSITIONS.length)} disabled={editado} className="bevel-out bg-[var(--color-winxp-panel)] px-1.5 py-0.5 font-bold border border-gray-400 disabled:opacity-40">▶</button>
@@ -995,7 +996,7 @@ export const CifraPrintPage: React.FC = () => {
           </div>
 
           <div className="flex flex-col gap-1">
-            <span className="font-bold text-[10px] uppercase text-gray-500">Conteúdo</span>
+            <span className="font-bold text-[10px] uppercase text-gray-500">{t('impressao.conteudo')}</span>
             {/* Ordem: as duas ferramentas de coluna juntas (uma empurra, a outra puxa — são
                 o par), e a de página por último, que é a de outra escala.
 
@@ -1003,10 +1004,10 @@ export const CifraPrintPage: React.FC = () => {
                 primeiras sairiam de cena com um clique sem efeito nenhum. */}
             {([
               ...(opcoes.colunas === 2 ? [
-                { id: 'coluna' as const, Icone: Scissors, rotulo: 'Próxima coluna', dica: 'Manda a linha, e o que vem depois dela, para a coluna ao lado.' },
-                { id: 'colar' as const, Icone: CornerUpLeft, rotulo: 'Puxar para trás', dica: 'Traz a primeira linha da coluna de volta para a anterior, até onde a margem do papel aguentar.' },
+                { id: 'coluna' as const, Icone: Scissors, rotulo: t('impressao.proximaColuna'), dica: t('impressao.proximaColunaDica') },
+                { id: 'colar' as const, Icone: CornerUpLeft, rotulo: t('impressao.puxarParaTras'), dica: t('impressao.puxarParaTrasDica') },
               ] : []),
-              { id: 'pagina' as const, Icone: FileDown, rotulo: 'Próxima página', dica: 'Começa uma folha nova a partir desta linha.' },
+              { id: 'pagina' as const, Icone: FileDown, rotulo: t('impressao.proximaPagina'), dica: t('impressao.proximaPaginaDica') },
             ]).map(({ id, Icone, rotulo, dica }) => (
               <button
                 key={id}
@@ -1014,7 +1015,7 @@ export const CifraPrintPage: React.FC = () => {
                 className={`flex items-center justify-center gap-1 px-2 py-1 font-bold border ${modo === id ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[var(--color-winxp-panel)] border-gray-400 hover:bg-white'}`}
                 title={dica}
               >
-                <Icone size={13} /> {modo === id ? 'Clique numa linha…' : rotulo}
+                <Icone size={13} /> {modo === id ? t('impressao.cliqueNumaLinha') : rotulo}
               </button>
             ))}
             {marcas.size > 0 && (
@@ -1022,23 +1023,23 @@ export const CifraPrintPage: React.FC = () => {
                 onClick={() => setMarcas(new Map())}
                 className="px-2 py-0.5 border border-gray-400 bg-[#ece9d8] hover:bg-white"
               >
-                Tirar as {marcas.size} marca{marcas.size > 1 ? 's' : ''}
+                {t('impressao.tirarMarcas', { n: marcas.size })}
               </button>
             )}
             <button
               onClick={() => setRascunho(textoEditado ?? corpoTexto)}
               className="flex items-center justify-center gap-1 px-2 py-1 font-bold border border-gray-400 bg-[var(--color-winxp-panel)] hover:bg-white"
-              title="Apagar trechos, juntar linhas, tirar o que não interessa"
+              title={t('impressao.editarTextoDica')}
             >
-              <Pencil size={13} /> Editar o texto
+              <Pencil size={13} /> {t('impressao.editarTexto')}
             </button>
             {editado && (
               <>
                 <p className="text-[10px] text-gray-600 leading-snug">
-                  Texto editado à mão: o tom e as tabs estão congelados como estavam.
+                  {t('impressao.textoEditadoAviso')}
                 </p>
                 <button onClick={() => setTextoEditado(null)} className="px-2 py-0.5 border border-gray-400 bg-[#ece9d8] hover:bg-white">
-                  ↺ Voltar ao texto original
+                  {t('impressao.voltarTextoOriginal')}
                 </button>
               </>
             )}
@@ -1048,7 +1049,7 @@ export const CifraPrintPage: React.FC = () => {
             onClick={() => setOpcoes(OPCOES_PADRAO)}
             className="bevel-out bg-[var(--color-winxp-panel)] px-2 py-1 font-bold border border-gray-400 hover:bg-white"
           >
-            ↺ Restaurar padrão
+            {t('impressao.restaurarPadrao')}
           </button>
         </aside>
 
@@ -1103,25 +1104,24 @@ export const CifraPrintPage: React.FC = () => {
         <div className="sem-impressao fixed inset-0 z-30 bg-black/50 flex items-center justify-center p-3">
           <div className="bevel-out bg-[var(--color-winxp-bg)] w-full max-w-3xl h-[85vh] flex flex-col p-2 gap-2">
             <div className="flex items-center gap-2">
-              <h2 className="flex-1 font-bold text-sm">Editar o texto da folha</h2>
-              <button onClick={() => setRascunho(null)} className="px-2 py-1 text-xs font-bold border border-gray-400 bg-[#ece9d8] hover:bg-white">Cancelar</button>
+              <h2 className="flex-1 font-bold text-sm">{t('impressao.dialogoTitulo')}</h2>
+              <button onClick={() => setRascunho(null)} className="px-2 py-1 text-xs font-bold border border-gray-400 bg-[#ece9d8] hover:bg-white">{t('comum.cancelar')}</button>
               <button
                 onClick={() => { setTextoEditado(rascunho); setRascunho(null); }}
                 className="px-3 py-1 text-xs font-bold border border-[#c05a10] bg-[#ff7f27] hover:brightness-105"
               >
-                Aplicar
+                {t('impressao.aplicar')}
               </button>
             </div>
             <p className="text-[11px] text-gray-700 leading-snug">
-              Apague o que não for tocar. As linhas de acorde continuam sendo reconhecidas
-              pela posição — mantenha o acorde sobre a sílaba, com espaços.
+              {t('impressao.dialogoNota')}
             </p>
             <textarea
               value={rascunho}
               onChange={e => setRascunho(e.target.value)}
               spellCheck={false}
               className="flex-1 min-h-0 bevel-in bg-white p-2 font-mono text-xs leading-relaxed outline-none resize-none whitespace-pre overflow-auto retro-scrollbar"
-              aria-label="Texto da cifra"
+              aria-label={t('impressao.dialogoAria')}
             />
           </div>
         </div>

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useT } from '../i18n';
 import type { Tuning } from '../engine/types';
 import { SCALE_FORMULAS, NOTE_NAMES_SHARP, NOTE_NAMES_FLAT } from '../engine/tunings';
 import { midiToNoteName, noteNameToPitchClass, shouldUseFlats } from '../engine/chordCalculator';
@@ -10,6 +11,7 @@ interface ScaleTrainerProps {
 export const ScaleTrainer: React.FC<ScaleTrainerProps> = ({
   selectedTuning
 }) => {
+  const t = useT();
   const numStrings = selectedTuning.strings.length;
   const maxFrets = 15; // scales are nice to see up to 15 frets!
 
@@ -63,7 +65,7 @@ export const ScaleTrainer: React.FC<ScaleTrainerProps> = ({
       
       {/* Box Header (XP look) */}
       <div className="bg-gradient-to-r from-[#0058e6] to-[#3a8bfb] text-white px-2 py-1 flex justify-between items-center font-bold text-sm select-none">
-        <span>Treinador de Escalas e Intervalos</span>
+        <span>{t('treinos.titulo')}</span>
         <span className="font-mono text-xs">{scaleRoot} {activeFormula.name}</span>
       </div>
 
@@ -94,7 +96,7 @@ export const ScaleTrainer: React.FC<ScaleTrainerProps> = ({
 
         {/* Scale select drop-down */}
         <div className="flex flex-col gap-1 justify-center">
-          <label className="text-xs font-bold font-mono text-gray-700" htmlFor="scale-select">Tipo de Escala:</label>
+          <label className="text-xs font-bold font-mono text-gray-700" htmlFor="scale-select">{t('treinos.tipoDeEscala')}</label>
           <select
             id="scale-select"
             value={selectedScaleIndex}
@@ -110,24 +112,24 @@ export const ScaleTrainer: React.FC<ScaleTrainerProps> = ({
         {/* Visual Settings & Scale Notes */}
         <div className="flex flex-col gap-1 font-mono text-xs justify-center">
           <div className="flex justify-between items-center mb-1">
-            <span className="font-bold text-gray-700">Visualizar por:</span>
+            <span className="font-bold text-gray-700">{t('treinos.visualizarPor')}</span>
             <div className="flex gap-1.5">
               <button
                 onClick={() => setDisplayMode('notes')}
                 className={`px-2 py-0.5 border text-[10px] font-bold cursor-pointer ${displayMode === 'notes' ? 'bg-[#0058e6] text-white border-[#002fa7]' : 'bg-[#ece9d8] border-[#808080] hover:bg-white'}`}
               >
-                Notas
+                {t('treinos.porNotas')}
               </button>
               <button
                 onClick={() => setDisplayMode('degrees')}
                 className={`px-2 py-0.5 border text-[10px] font-bold cursor-pointer ${displayMode === 'degrees' ? 'bg-[#0058e6] text-white border-[#002fa7]' : 'bg-[#ece9d8] border-[#808080] hover:bg-white'}`}
               >
-                Graus
+                {t('treinos.porGraus')}
               </button>
             </div>
           </div>
           <div className="bg-white border border-[#808080] p-1.5 text-[11px] font-bold text-gray-800 flex flex-wrap gap-1 leading-normal">
-            <span className="text-[#cc3300]">Notas:</span>
+            <span className="text-[#cc3300]">{t('treinos.notasRotulo')}</span>
             {scaleNotesList.map((n, idx) => (
               <span key={idx} className={n === scaleRoot ? "text-[#228b22] underline" : ""}>
                 {n}{idx < scaleNotesList.length - 1 ? "," : ""}
@@ -248,12 +250,12 @@ export const ScaleTrainer: React.FC<ScaleTrainerProps> = ({
 
       <div className="bg-[#d4d0c8] p-2.5 border border-[#808080] font-mono text-xs text-gray-700 leading-normal flex flex-col gap-1">
         <p>
-          <strong>Como estudar as escalas:</strong>
+          <strong>{t('treinos.comoEstudar')}</strong>
         </p>
         <ul className="list-disc pl-5 flex flex-col gap-1 mt-1 text-[11px]">
-          <li>Identifique as notas vermelhas no braço: elas são a <strong>Fundamental (Root)</strong> da escala.</li>
-          <li>Pratique tocando as notas na sequência da esquerda para a direita (subindo o tom) para memorizar a fôrma visual da escala no instrumento.</li>
-          <li>Alterne a visualização para <strong>Graus</strong> para entender a relação intervalar (Tônica, Terça, Quinta, Sétima, etc.), o que é a chave para compor e solar.</li>
+          <li>{t('treinos.passo1a')} <strong>{t('treinos.passo1forte')}</strong> {t('treinos.passo1b')}</li>
+          <li>{t('treinos.passo2')}</li>
+          <li>{t('treinos.passo3a')} <strong>{t('treinos.passo3forte')}</strong> {t('treinos.passo3b')}</li>
         </ul>
       </div>
 
