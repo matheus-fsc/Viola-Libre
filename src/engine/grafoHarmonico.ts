@@ -22,7 +22,7 @@
  */
 import type { PitchClass } from './types';
 import { parseChordString, noteNameToPitchClass } from './chordCalculator';
-import type { AcordeAnalisado, DeteccaoTom, PapelDeAcorde } from './detectKey';
+import type { AcordeAnalisado, DeteccaoTom, DetalheDeAcorde, PapelDeAcorde } from './detectKey';
 
 /**
  * Como a fundamental se moveu de um acorde para o outro.
@@ -39,8 +39,8 @@ export interface NoDoGrafo {
   papel: PapelDeAcorde;
   /** Grau no campo, quando o acorde é do tom. */
   grau?: string;
-  /** Explicação curta do papel, quando não é do campo. */
-  detalhe?: string;
+  /** Explicação curta do papel, quando não é do campo. Descritor, não frase pronta. */
+  detalhe?: DetalheDeAcorde;
   root: PitchClass;
   /** Quantas vezes o acorde aparece na cifra. */
   ocorrencias: number;
@@ -166,7 +166,9 @@ export function montarGrafo(chords: string[], deteccao: DeteccaoTom): GrafoHarmo
     nos.set(acorde, {
       id: acorde,
       papel: info?.papel ?? 'estranho',
-      grau: info?.papel === 'campo' ? info.detalhe : undefined,
+      // O grau é algarismo romano, que é o mesmo em qualquer idioma, então sai como texto.
+      // O resto é descritor, e quem desenha escolhe a língua.
+      grau: info?.papel === 'campo' && info.detalhe?.id === 'grau' ? info.detalhe.grau : undefined,
       detalhe: info?.papel !== 'campo' ? info?.detalhe : undefined,
       root,
       ocorrencias: 1,

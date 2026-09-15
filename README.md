@@ -202,6 +202,20 @@ O que fica de fora, de propósito:
 - **Identificador que o motor devolve.** `'Fácil' | 'Média' | 'Difícil'` é tipo, e a suíte
   de regressão compara com ele; a tradução acontece na fronteira, em `src/i18n/musica.ts`.
 
+### O motor não escreve frase
+
+`src/engine/detectKey.ts` analisa a cifra e tem coisas a dizer sobre ela («ii de um ii-V
+para vi», «cadência V→I tocada»). Ele devolve isso como **descritor**, não como texto: um
+`id` que diz o que aconteceu, mais os valores que entram na frase. Quem escreve a frase é
+`src/i18n/musica.ts`, no idioma da tela.
+
+O ganho não é só a tradução. O teste que afirma `detalhe.id === 'subV'` está afirmando o
+comportamento musical; o que afirmava a frase inteira quebrava quando alguém trocava uma
+vírgula, e passava despercebido quando a regra mudava e a frase por acaso continuava a
+mesma. Os nomes dos modos («jônio», «mixolídio») continuam em português dentro do motor
+porque ali eles são identificadores, e `musica.ts` os mapeia para Ionian e Mixolydian na
+hora de desenhar.
+
 Os documentos jurídicos traduzidos trazem, só na versão em inglês, a nota de que o texto em
 português prevalece em caso de divergência.
 

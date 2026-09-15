@@ -139,11 +139,54 @@ const COLECOES_COM_BEMOL = new Set<PitchClass>([5, 10, 3, 8, 1]); // F, Bb, Eb, 
 
 export type Confianca = 'alta' | 'media' | 'baixa';
 
+/*
+ * O motor NÃO escreve frase. Ele devolve descritor: um `id` que diz o que aconteceu e os
+ * valores que entram na frase. Quem desenha escolhe o idioma (ver `src/i18n/musica.ts`).
+ *
+ * O ganho não é só a tradução. O teste que afirma `id === 'cadencia'` está afirmando o
+ * comportamento musical; o que afirmava a frase inteira quebrava quando alguém trocava uma
+ * vírgula, e passava despercebido quando a regra mudava e a frase por acaso continuava.
+ */
+
 /** Um sinal de repouso que pontuou, com quanto valeu. Para o painel de auditoria. */
 export interface SinalDeRepouso {
-  nome: string;
+  id: 'cadencia' | 'terminaEm' | 'dominanteAparece' | 'comecaEm' | 'tonicaAparece';
+  /** Acordes citados na frase, já como estão escritos na cifra. */
+  acordes?: string[];
+  /** Para `tonicaAparece`: quantas vezes, de quantos acordes. */
+  vezes?: number;
+  total?: number;
   pontos: number;
 }
+
+/** Como um acorde se explica dentro de um trecho tonicizado. */
+export type ComoNoTrecho =
+  | { id: 'grau'; grau: string }
+  | { id: 'vDe'; grau: string }
+  | { id: 'dominante' }
+  | { id: 'iv7' }
+  | { id: 'emprestado' };
+
+/** Distância entre duas tônicas, em intervalo nomeado e direção. */
+export interface DistanciaDeTonica {
+  intervalo: 'mesma' | 'meioTom' | 'umTom' | 'tercaMenor' | 'tercaMaior' | 'quarta' | 'tritono';
+  direcao?: 'acima' | 'abaixo';
+}
+
+/** O que dizer sobre o papel de um acorde, sem escolher idioma. */
+export type DetalheDeAcorde =
+  | { id: 'grau'; grau: string }
+  | { id: 'subV'; alvo: string }
+  | { id: 'toniciza'; grau: string }
+  | { id: 'dominanteDoDominante'; alvo: string }
+  | { id: 'dimNotaComum'; grau: string }
+  | { id: 'dimMeioTom'; grau: string }
+  | { id: 'iiDeIIV'; grau: string }
+  | { id: 'iv7Blues' }
+  | { id: 'emprestimo'; fonte: 'paraleloMaior' | 'paraleloMenor' | 'menorSextaMaior' }
+  | { id: 'tonicizacao'; como: ComoNoTrecho; tom: string; distancia: DistanciaDeTonica }
+  /** Alvo sem grau no tom: o acorde é citado pelo nome que está na cifra. */
+  | { id: 'dominanteSeguinte' };
 
 /** O papel que um acorde da música cumpre num tom candidato. */
 export type PapelDeAcorde =
@@ -167,7 +210,7 @@ export interface AcordeAnalisado {
   variantes: string[];
   papel: PapelDeAcorde;
   /** Quando é do campo: o grau ('IV'). Quando é dominante: o alvo que ele toniciza. */
-  detalhe?: string;
+  detalhe?: DetalheDeAcorde;
 }
 
 /**
@@ -634,21 +677,16 @@ function ehIV7(esq: Esqueleto, tonic: PitchClass): boolean {
  */
 const MIN_TONICIZACAO = 3;
 
-/** Como dizer, em português de músico, que distância separa duas tônicas. */
-function descreveDistancia(local: PitchClass, casa: PitchClass): string {
+/** Que distância separa duas tônicas, como intervalo nomeado e direção. */
+function descreveDistancia(local: PitchClass, casa: PitchClass): DistanciaDeTonica {
   let d = (local - casa + 12) % 12;
   if (d > 6) d -= 12;
-  if (d === 0) return 'mesma tônica';
-  const nomes = [
-    '',
-    'meio tom',
-    'um tom',
-    'uma terça menor',
-    'uma terça maior',
-    'uma quarta',
-    'um trítono',
-  ];
-  return `${nomes[Math.abs(d)]} ${d > 0 ? 'acima' : 'abaixo'}`;
+  if (d === 0) return { intervalo: 'mesma' };
+  const nomes = ['', 'meioTom', 'umTom', 'tercaMenor', 'tercaMaior', 'quarta', 'tritono'] as const;
+  return {
+    intervalo: nomes[Math.abs(d)] as DistanciaDeTonica['intervalo'],
+    direcao: d > 0 ? 'acima' : 'abaixo',
+  };
 }
 
 /**
@@ -668,7 +706,7 @@ function lerTrechoEm(
   tonica: PitchClass,
   minor: boolean,
   casa: PitchClass,
-): Map<string, string> | null {
+): Map<string, DetalheDeAcorde> | null {
   const colecao = colecaoDe((minor ? (tonica + 3) % 12 : tonica) as PitchClass);
   // Os alvos são locais: o que o próprio trecho toca. Um dominante de passagem dentro da
   // frase resolve dentro da frase.
@@ -684,26 +722,29 @@ function lerTrechoEm(
   const nome = nomeDoTom(tonica, minor, comBemol);
   const distancia = descreveDistancia(tonica, casa);
 
-  const saida = new Map<string, string>();
+  const saida = new Map<string, DetalheDeAcorde>();
   for (const e of trecho) {
-    let como: string | null = null;
+    let como: ComoNoTrecho | null = null;
     if (ehDiatonico(e, colecao)) {
-      como = grauPorRaiz.get(e.root) ?? null;
+      const grau = grauPorRaiz.get(e.root);
+      como = grau ? { id: 'grau', grau } : null;
     } else {
       const dominante = alvoDoDominante(e, alvos);
       if (dominante) {
         const grau = grauPorRaiz.get(dominante.pc);
-        como = grau ? `V de ${grau}` : 'dominante';
+        como = grau ? { id: 'vDe', grau } : { id: 'dominante' };
       } else if (ehIV7(e, tonica)) {
-        como = 'IV7';
+        como = { id: 'iv7' };
       } else if (emprestimoDe(e, fontes)) {
         // Na própria tônica o empréstimo TEM nome: é o primeiro grau do paralelo. Dizer
         // "i" em vez de "emprestado" é o que faz o painel explicar em vez de rotular.
-        como = e.root === tonica ? (minor ? 'I' : 'i') : 'emprestado';
+        como = e.root === tonica
+          ? { id: 'grau', grau: minor ? 'I' : 'i' }
+          : { id: 'emprestado' };
       }
     }
     if (!como) return null;
-    saida.set(chaveDoEsqueleto(e), `${como} de ${nome} — ${distancia}`);
+    saida.set(chaveDoEsqueleto(e), { id: 'tonicizacao', como, tom: nome, distancia });
   }
   return saida;
 }
@@ -732,8 +773,8 @@ function tonicizacoesPassageiras(
   esqueletos: (Esqueleto | null)[],
   ehEstranho: (chave: string) => boolean,
   casa: PitchClass,
-): Map<string, string> {
-  const resultado = new Map<string, string>();
+): Map<string, DetalheDeAcorde> {
+  const resultado = new Map<string, DetalheDeAcorde>();
   const validos = esqueletos.filter((e): e is Esqueleto => e !== null);
 
   let i = 0;
@@ -829,10 +870,12 @@ function papelNaColecao(
  * Continua fora da PONTUAÇÃO, como o empréstimo sempre esteve — as três coleções somam onze
  * das doze notas, e dar-lhes voto faria qualquer candidato explicar quase tudo.
  */
+type FonteDeEmprestimo = Extract<DetalheDeAcorde, { id: 'emprestimo' }>['fonte'];
+
 function fontesDeEmprestimo(
   tonic: PitchClass,
   minor: boolean,
-): { nome: string; colecao: Set<PitchClass> }[] {
+): { fonte: FonteDeEmprestimo; colecao: Set<PitchClass> }[] {
   // Paralelo de um tom maior é o menor de mesma tônica, cuja coleção nasce uma terça menor
   // acima (Dó menor usa a coleção de Mib). E vice-versa.
   const paralela = colecaoDe((minor ? tonic : (tonic + 3) % 12) as PitchClass);
@@ -840,17 +883,22 @@ function fontesDeEmprestimo(
   // Sol). É o menor com sexta maior.
   const dorica = colecaoDe(((tonic + 10) % 12) as PitchClass);
   return [
-    { nome: minor ? 'vem do paralelo maior' : 'vem do paralelo menor', colecao: paralela },
-    { nome: 'vem do menor com sexta maior', colecao: dorica },
+    { fonte: minor ? 'paraleloMaior' : 'paraleloMenor', colecao: paralela },
+    { fonte: 'menorSextaMaior', colecao: dorica },
   ];
 }
 
-/** O acorde cabe em alguma das fontes de empréstimo? Devolve o nome da que explicou. */
+/** O grau como descritor, ou nada quando a raiz não tem grau no tom. */
+function grauDeRaiz(grau: string | undefined): DetalheDeAcorde | undefined {
+  return grau ? { id: 'grau', grau } : undefined;
+}
+
+/** O acorde cabe em alguma das fontes de empréstimo? Devolve qual delas explicou. */
 function emprestimoDe(
   esq: Esqueleto,
-  fontes: { nome: string; colecao: Set<PitchClass> }[],
-): string | null {
-  for (const f of fontes) if (ehDiatonico(esq, f.colecao)) return f.nome;
+  fontes: { fonte: FonteDeEmprestimo; colecao: Set<PitchClass> }[],
+): FonteDeEmprestimo | null {
+  for (const f of fontes) if (ehDiatonico(esq, f.colecao)) return f.fonte;
   return null;
 }
 
@@ -936,8 +984,8 @@ function pontuarTonica(
 
   const sinais: SinalDeRepouso[] = [];
   let score = 0;
-  const anota = (nome: string, pontos: number) => {
-    if (pontos !== 0) sinais.push({ nome, pontos });
+  const anota = (sinal: Omit<SinalDeRepouso, 'pontos'>, pontos: number) => {
+    if (pontos !== 0) sinais.push({ ...sinal, pontos });
   };
   const ehTonica = (e: Esqueleto) => e.root === tonic && (e.minor === minor || e.minor === null);
   const dominanteDaTonica = (tonic + 7) % 12;
@@ -948,7 +996,7 @@ function pontuarTonica(
     const cur = validos[i];
     if (ant.root === dominanteDaTonica && ant.dominant && ehTonica(cur)) {
       score += 6;
-      anota(`cadência V→I tocada (${ant.texto} → ${cur.texto})`, 6);
+      anota({ id: 'cadencia', acordes: [ant.texto, cur.texto] }, 6);
       break; // uma cadência já prova o ponto; repetir não prova mais
     }
   }
@@ -958,7 +1006,7 @@ function pontuarTonica(
   if (ultimo.root === tonic) {
     const p = ehTonica(ultimo) ? 10 : 4;
     score += p;
-    anota(`repouso: a música termina em ${ultimo.texto}`, p);
+    anota({ id: 'terminaEm', acordes: [ultimo.texto] }, p);
   }
 
   // O dominante existe em algum lugar? (sinal decisivo do menor: V maior sobre tônica
@@ -970,7 +1018,7 @@ function pontuarTonica(
   if (dominanteIdiomatico && oDominante) {
     const p = minor ? 5 : 3;
     score += p;
-    anota(`o dominante do tom aparece (${oDominante.texto})`, p);
+    anota({ id: 'dominanteAparece', acordes: [oDominante.texto] }, p);
   }
 
   // abertura
@@ -978,7 +1026,7 @@ function pontuarTonica(
   if (primeiro.root === tonic) {
     const p = ehTonica(primeiro) ? 5 : 2;
     score += p;
-    anota(`abertura: a música começa em ${primeiro.texto}`, p);
+    anota({ id: 'comecaEm', acordes: [primeiro.texto] }, p);
   }
 
   // frequência do acorde de tônica
@@ -986,7 +1034,7 @@ function pontuarTonica(
   const pFreq = Math.min(4, (ocorrencias / validos.length) * 12);
   score += pFreq;
   anota(
-    `o acorde de tônica aparece ${ocorrencias}x em ${validos.length}`,
+    { id: 'tonicaAparece', vezes: ocorrencias, total: validos.length },
     Math.round(pFreq * 10) / 10,
   );
 
@@ -1282,7 +1330,7 @@ export function detectKey(chords: string[]): DeteccaoTom | null {
           chord: esq.texto,
           variantes: grafias,
           papel: 'campo' as const,
-          detalhe: grauPorRaiz.get(esq.root) ?? undefined,
+          detalhe: grauDeRaiz(grauPorRaiz.get(esq.root)),
         };
       }
       if (papel === 'dominante') {
@@ -1292,27 +1340,31 @@ export function detectKey(chords: string[]): DeteccaoTom | null {
           // Sem grau, o alvo é outro DOMINANTE que a cadeia já explicou — a quinta da
           // quinta. Dizer "toniciza um grau do tom" ali era confessar que não se sabia
           // dizer qual; nomear o acorde de destino conta a história inteira.
-          const alvo = grau ?? `o ${textoPorRaiz.get(porQuinta.pc) ?? 'dominante seguinte'}`;
+          // Sem grau o alvo é citado pelo NOME que está na cifra, e sem nome sobra o
+          // descritor `dominanteSeguinte`, que a tela escreve no idioma dela.
+          const alvo = grau ?? textoPorRaiz.get(porQuinta.pc);
           return {
             chord: esq.texto,
             variantes: grafias,
             papel: 'dominante' as const,
             detalhe: porQuinta.sub
-              ? `subV, resolve em ${alvo}`
+              ? (alvo ? { id: 'subV' as const, alvo } : { id: 'dominanteSeguinte' as const })
               : grau
-                ? `toniciza ${grau}`
-                : `dominante do dominante, aponta ${alvo}`,
+                ? { id: 'toniciza' as const, grau }
+                : (alvo
+                    ? { id: 'dominanteDoDominante' as const, alvo }
+                    : { id: 'dominanteSeguinte' as const }),
           };
         }
         const dim = alvoDoDiminuto(esq, alvos, seguintes.get(esq.root))!;
-        const grau = grauPorRaiz.get(dim.pc) ?? 'um grau do tom';
+        const grau = grauPorRaiz.get(dim.pc) ?? '';
         return {
           chord: esq.texto,
           variantes: grafias,
           papel: 'dominante' as const,
           detalhe: dim.notaComum
-            ? `diminuto de nota comum, gira em torno de ${grau}`
-            : `diminuto, sobe meio tom para ${grau}`,
+            ? { id: 'dimNotaComum' as const, grau }
+            : { id: 'dimMeioTom' as const, grau },
         };
       }
       if (papel === 'preparacao') {
@@ -1321,7 +1373,7 @@ export function detectKey(chords: string[]): DeteccaoTom | null {
           chord: esq.texto,
           variantes: grafias,
           papel: 'preparacao' as const,
-          detalhe: `ii de um ii-V para ${grauPorRaiz.get(alvo) ?? 'o tom'}`,
+          detalhe: { id: 'iiDeIIV' as const, grau: grauPorRaiz.get(alvo) ?? '' },
         };
       }
       if (ehIV7(esq, c.tonic)) {
@@ -1329,7 +1381,7 @@ export function detectKey(chords: string[]): DeteccaoTom | null {
           chord: esq.texto,
           variantes: grafias,
           papel: 'emprestado' as const,
-          detalhe: 'IV com sétima, a subdominante de blues',
+          detalhe: { id: 'iv7Blues' as const },
         };
       }
       const emprestimo = emprestimoDe(esq, fontes);
@@ -1338,7 +1390,7 @@ export function detectKey(chords: string[]): DeteccaoTom | null {
           chord: esq.texto,
           variantes: grafias,
           papel: 'emprestado' as const,
-          detalhe: emprestimo,
+          detalhe: { id: 'emprestimo' as const, fonte: emprestimo },
         };
       }
       return { chord: esq.texto, variantes: grafias, papel: 'estranho' as const };

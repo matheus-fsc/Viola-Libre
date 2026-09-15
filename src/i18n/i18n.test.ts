@@ -127,6 +127,9 @@ describe('dicionários', () => {
       'documentos.priv5Cloudflare',
       'documentos.priv5YouTube',
       'documentos.priv5GitHub',
+      // Cifra de acorde e a palavra «Original», que os dois idiomas escrevem igual.
+      'musica.comoIv7',
+      'musica.descOriginal',
     ]);
     for (const chave of Object.keys(PT)) {
       if (iguaisDePropósito.has(chave)) continue;

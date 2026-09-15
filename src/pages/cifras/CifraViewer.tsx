@@ -32,7 +32,7 @@ import { getIsMobile, useIsMobile } from '../../hooks/useIsMobile';
 import { useImmersiveStore } from '../../stores/useImmersiveStore';
 import { MobileCifraBar, TransporteMobile, GrupoAjustes, LinhaAjuste, Stepper, BotaoFolha } from './MobileCifraBar';
 import { SeletorDeTom, GradeDeTons, SalvarTom } from './SeletorDeTom';
-import { descricaoDoTom } from './descricaoDoTom';
+import { descricaoDoTom } from '../../i18n/musica';
 import { estadoTomSalvo } from './tomSalvo';
 import { BarraDaLista } from './BarraDaLista';
 import { lerLista, posicaoNaLista } from '../../services/listaAberta';
@@ -1877,7 +1877,7 @@ export const CifraViewer: React.FC = () => {
               <span className="font-bold text-[10px] uppercase text-gray-500 shrink-0">{t('cifra.rotuloTom')}</span>
               <SeletorDeTom
                 songKey={songKey}
-                descricao={descricaoDoTom(deteccao)}
+                descricao={descricaoDoTom(deteccao, t)}
                 deteccao={deteccao}
                 offset={transposeOffset}
                 onSelect={setTransposeOffset}
@@ -2042,7 +2042,7 @@ export const CifraViewer: React.FC = () => {
                   <label className="hidden sm:inline font-bold text-[11px] uppercase tracking-wider text-gray-700">{t('cifra.rotuloTom')}</label>
                   <SeletorDeTom
                     songKey={songKey}
-                    descricao={descricaoDoTom(deteccao)}
+                    descricao={descricaoDoTom(deteccao, t)}
                     deteccao={deteccao}
                     offset={transposeOffset}
                     onSelect={setTransposeOffset}
@@ -2712,7 +2712,7 @@ export const CifraViewer: React.FC = () => {
               conteudo: (
                 <>
                   <GrupoAjustes>
-                    <LinhaAjuste rotulo={t('cifra.folhaTomDaMusica')} dica={descricaoDoTom(deteccao)}>
+                    <LinhaAjuste rotulo={t('cifra.folhaTomDaMusica')} dica={descricaoDoTom(deteccao, t)}>
                       <span className="font-bold text-xs bg-white border border-gray-400 px-2 py-1 text-[#002fa7]">{tomAtual}</span>
                     </LinhaAjuste>
                     <LinhaAjuste rotulo={t('cifra.folhaAjusteFino')} dica={t('cifra.folhaAjusteFinoDica')}>

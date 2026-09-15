@@ -217,6 +217,19 @@ What stays out, on purpose:
   regression suite compares against it; translation happens at the boundary, in
   `src/i18n/musica.ts`.
 
+### The engine does not write sentences
+
+`src/engine/detectKey.ts` analyses a chart and has things to say about it ("ii of a ii-V to
+vi", "V→I cadence played"). It returns those as a **descriptor**, not as text: an `id` for
+what happened, plus the values that go into the sentence. The sentence is written by
+`src/i18n/musica.ts`, in the language of the screen.
+
+The gain is not only translation. A test asserting `detalhe.id === 'subV'` asserts the
+musical behaviour; one asserting the whole sentence broke when somebody moved a comma, and
+stayed silent when the rule changed and the sentence happened to stay the same. Mode names
+("jônio", "mixolídio") stay in Portuguese inside the engine because there they are
+identifiers, and `musica.ts` maps them to Ionian and Mixolydian at render time.
+
 The translated legal documents carry, in the English version only, a note that the
 Portuguese text prevails in case of any divergence.
 

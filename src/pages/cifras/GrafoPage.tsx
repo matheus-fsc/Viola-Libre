@@ -10,6 +10,7 @@
  * saída para o papel.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { detalheDoAcorde, nomeDoTom } from '../../i18n/musica';
 import { useT, type Chave } from '../../i18n';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Maximize2, Minus, Music2, Plus } from 'lucide-react';
@@ -353,7 +354,7 @@ export function GrafoPage() {
           </span>
         </span>
         <span className="text-xs">
-          {t('grafo.tomLabel')} <strong className="text-[#002fa7]">{deteccao.nome}</strong>
+          {t('grafo.tomLabel')} <strong className="text-[#002fa7]">{nomeDoTom(deteccao, t)}</strong>
           <span className="text-gray-500"> · {t('grafo.confianca', { nivel: t(CONFIANCA[deteccao.confidence]) })}</span>
         </span>
       </div>
@@ -412,7 +413,7 @@ export function GrafoPage() {
           className="block h-auto w-full cursor-grab touch-none active:cursor-grabbing"
           style={{ maxHeight: '70vh' }}
           role="img"
-          aria-label={`Grafo harmônico de ${titulo} no tom de ${deteccao.nome}`}
+          aria-label={t('grafo.seoTitle', { musica: titulo })}
           onPointerDown={e => {
             // `setPointerCapture` lança quando o ponteiro não está ativo (acontece com
             // eventos sintéticos e quando o alvo sai da árvore). Deixar escapar aqui
@@ -614,7 +615,9 @@ function NoDesenhado({
       <title>
         {t('grafo.noTitulo', {
           acorde: no.id,
-          papel: no.grau ? t('grafo.noGrau', { grau: no.grau }) : no.detalhe ?? t(estilo.rotulo),
+          papel: no.grau
+            ? t('grafo.noGrau', { grau: no.grau })
+            : no.detalhe ? detalheDoAcorde(no.detalhe, t) : t(estilo.rotulo),
           vezes: no.ocorrencias,
         })}
       </title>

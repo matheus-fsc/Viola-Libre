@@ -16,6 +16,7 @@
  * caractere. Ver `ContaAberta`.
  */
 import { useState } from 'react';
+import { detalheDoAcorde, nomeDoTom, sinalDeRepouso } from '../../i18n/musica';
 import { useT, useIdioma, t, type Chave } from '../../i18n';
 import type { DeteccaoTom, CandidatoTom, PapelDeAcorde } from '../../engine/detectKey';
 
@@ -149,7 +150,7 @@ function SinaisDeRepouso({ candidato }: { candidato: CandidatoTom }) {
     <table className="w-full text-[11px] leading-tight">
       <tbody>
         {sinais.map(s => (
-          <tr key={s.nome}>
+          <tr key={s.id + (s.acordes?.join('') ?? '')}>
             <td className="pr-1.5 align-middle" style={{ width: '38%' }}>
               <span className="flex items-center gap-1">
                 <span className="w-6 shrink-0 text-right font-mono font-bold text-[#002fa7]">
@@ -163,7 +164,7 @@ function SinaisDeRepouso({ candidato }: { candidato: CandidatoTom }) {
                 </span>
               </span>
             </td>
-            <td className="py-0.5 align-middle text-gray-700">{s.nome}</td>
+            <td className="py-0.5 align-middle text-gray-700">{sinalDeRepouso(s, t)}</td>
           </tr>
         ))}
       </tbody>
@@ -219,12 +220,12 @@ function TabelaDeAcordes({ candidato }: { candidato: CandidatoTom }) {
                       key={x.chord}
                       className="inline-flex items-baseline gap-1 border px-1 py-0.5 leading-none"
                       style={{ background: estilo.fundo, borderColor: estilo.cor }}
-                      title={x.detalhe ? t('tom.acordeComDetalhe', { acorde: x.chord, detalhe: x.detalhe }) : x.chord}
+                      title={x.detalhe ? t('tom.acordeComDetalhe', { acorde: x.chord, detalhe: detalheDoAcorde(x.detalhe, t) }) : x.chord}
                     >
                       <span className="font-mono font-bold text-black">{x.chord}</span>
                       {x.detalhe && (
                         <span className="text-[9px]" style={{ color: estilo.cor }}>
-                          {x.detalhe}
+                          {detalheDoAcorde(x.detalhe, t)}
                         </span>
                       )}
                     </span>
@@ -255,7 +256,7 @@ function ContaAberta({ candidato, principal }: { candidato: CandidatoTom; princi
     <div className="border-b-2 border-[#d4d0c8] px-2 py-2 last:border-b-0">
       <div className="flex items-baseline justify-between gap-2">
         <span className="text-[12px] font-bold text-black">
-          {candidato.nome}
+          {nomeDoTom(candidato, t)}
           {!principal && (
             <span className="ml-1 text-[10px] font-normal text-gray-500">{t('tom.alternativa')}</span>
           )}
@@ -308,7 +309,7 @@ function CampoDoTom({ candidato, principal }: { candidato: CandidatoTom; princip
     <div className="border-b border-[#d4d0c8] px-1.5 py-1.5 last:border-b-0">
       <div className="flex items-baseline justify-between gap-2 pb-1">
         <span className={`text-[11px] font-bold ${principal ? 'text-[#002fa7]' : 'text-black'}`}>
-          {candidato.nome}
+          {nomeDoTom(candidato, t)}
           {principal && (
             <span className="ml-1 text-[9px] font-normal text-gray-500">{t('tom.maisProvavel')}</span>
           )}
@@ -387,7 +388,7 @@ export function TonsPossiveis({ deteccao }: { deteccao: DeteccaoTom | null }) {
 
       {deteccao.modulates && (
         <p className="px-1.5 pb-1 text-[10px] leading-snug text-[#cc3300]">
-          A música muda de tom ao longo dela
+          {t('musica.mudaDeTom')}
           {deteccao.regions.length > 0 && (
             <>
               :{' '}

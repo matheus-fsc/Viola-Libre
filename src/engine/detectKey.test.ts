@@ -191,15 +191,15 @@ describe('detectKey — substituto de trítono (subV)', () => {
     // `Am7 → Ab7 → Gm7 → Gb7 → F7M` de «Garota de Ipanema»: cromática, mas dentro de Fá.
     const r = detectKey(['F', 'Am', 'Ab7', 'Gm', 'Gb7', 'F', 'Gm', 'C7', 'F'])!;
     expect(r.key).toBe('F');
-    const sub = r.candidates[0].analise!.acordes.filter(x => x.detalhe?.startsWith('subV'));
+    const sub = r.candidates[0].analise!.acordes.filter(x => x.detalhe?.id === 'subV');
     expect(sub.map(x => x.chord).sort()).toEqual(['Ab7', 'Gb7']);
   });
 
   it('o subV declara em que grau resolve', () => {
     const r = detectKey(['F', 'Am', 'Ab7', 'Gm', 'Gb7', 'F', 'Gm', 'C7', 'F'])!;
     const acordes = r.candidates[0].analise!.acordes;
-    expect(acordes.find(x => x.chord === 'Gb7')!.detalhe).toBe('subV, resolve em I');
-    expect(acordes.find(x => x.chord === 'Ab7')!.detalhe).toBe('subV, resolve em ii');
+    expect(acordes.find(x => x.chord === 'Gb7')!.detalhe).toEqual({ id: 'subV', alvo: 'I' });
+    expect(acordes.find(x => x.chord === 'Ab7')!.detalhe).toEqual({ id: 'subV', alvo: 'ii' });
   });
 
   it('dominante sem alvo — nem por quinta nem por semitom — segue sem explicação', () => {
@@ -227,7 +227,7 @@ describe('detectKey — ii-V como unidade', () => {
   it('a preparação declara o grau que o par prepara', () => {
     const r = detectKey(['C', 'Bm7', 'E7', 'Am', 'F', 'G7', 'C', 'Bm7', 'E7', 'Am', 'G7', 'C'])!;
     const bm = r.candidates[0].analise!.acordes.find(x => x.chord === 'Bm7')!;
-    expect(bm.detalhe).toBe('ii de um ii-V para vi'); // E7 → Am, que é o vi de Dó
+    expect(bm.detalhe).toEqual({ id: 'iiDeIIV', grau: 'vi' }); // E7 → Am, que é o vi de Dó
   });
 
   it('BUG CORRIGIDO: o alvo vem da resolução do V, não de somar ao ii', () => {
@@ -239,7 +239,9 @@ describe('detectKey — ii-V como unidade', () => {
     ])!;
     for (const c of r.candidates) {
       for (const a of c.analise!.acordes) {
-        if (a.papel === 'preparacao') expect(a.detalhe).not.toContain('fora do campo');
+        // O alvo do ii-V tem de ser um grau DO TOM. Vazio significa "não soube dizer", e
+        // era exatamente o que o bug produzia.
+        if (a.papel === 'preparacao') expect(a.detalhe).toEqual({ id: 'iiDeIIV', grau: expect.stringMatching(/\S/) });
       }
     }
   });
@@ -409,7 +411,7 @@ describe('detectKey — baixo da barra (inversões)', () => {
     const com = detectKey(['C/Bb', 'C/Bb', 'F', 'G', 'C', 'F', 'G', 'C'])!;
     const doComSetima = com.candidates[0].analise!.acordes.find(a => a.chord === 'C/Bb')!;
     expect(doComSetima.papel).toBe('dominante');
-    expect(doComSetima.detalhe).toContain('IV');
+    expect(doComSetima.detalhe).toEqual({ id: 'toniciza', grau: 'IV' });
   });
 
   it('baixo ilegível não derruba a análise', () => {
@@ -518,9 +520,9 @@ describe('detectKey — a conta aberta (auditoria)', () => {
   it('o acorde do campo declara o grau, e o dominante declara o alvo', () => {
     const r = detectKey(['C', 'A7', 'Dm', 'G7', 'C', 'A7', 'Dm', 'G7', 'C'])!;
     const a = r.candidates[0].analise!;
-    expect(a.acordes.find(x => x.chord === 'C')!.detalhe).toBe('I');
-    expect(a.acordes.find(x => x.chord === 'Dm')!.detalhe).toBe('ii');
-    expect(a.acordes.find(x => x.chord === 'A7')!.detalhe).toContain('ii');
+    expect(a.acordes.find(x => x.chord === 'C')!.detalhe).toEqual({ id: 'grau', grau: 'I' });
+    expect(a.acordes.find(x => x.chord === 'Dm')!.detalhe).toEqual({ id: 'grau', grau: 'ii' });
+    expect(a.acordes.find(x => x.chord === 'A7')!.detalhe).toEqual({ id: 'toniciza', grau: 'ii' });
   });
 
   it('a análise só é montada para os candidatos que vão à tela', () => {
@@ -736,8 +738,7 @@ describe('detectKey — cadeia de dominantes (a quinta da quinta)', () => {
     const r = detectKey(['F7M', 'Gm7', 'C7', 'F7M', 'Eb7', 'Ab7', 'Gm7', 'C7', 'F7M', 'F7M'])!;
     const eb = r.candidates[0].analise!.acordes.find(x => x.chord === 'Eb7')!;
     expect(eb.papel).toBe('dominante');
-    expect(eb.detalhe).toContain('dominante do dominante');
-    expect(eb.detalhe).toContain('Ab7');
+    expect(eb.detalhe).toEqual({ id: 'dominanteDoDominante', alvo: 'Ab7' });
   });
 
   it('a cadeia não credita nada quando a ponta não resolve no tom', () => {
@@ -760,14 +761,14 @@ describe('detectKey — o diminuto', () => {
     const r = detectKey(['Dm', 'Gm', 'A7', 'Dm', 'Gm7', 'C#°', 'Dm', 'A7', 'Dm', 'Dm'])!;
     const dim = r.candidates[0].analise!.acordes.find(a => a.chord === 'C#°')!;
     expect(dim.papel).toBe('dominante');
-    expect(dim.detalhe).toContain('meio tom');
+    expect(dim.detalhe).toEqual({ id: 'dimMeioTom', grau: 'i' });
   });
 
   it('o diminuto de nota comum não vai a lugar nenhum — gira e volta', () => {
     const r = detectKey(['D', 'G', 'A7', 'D', 'D°', 'D6', 'G', 'A7', 'D', 'D'])!;
     const dim = r.candidates[0].analise!.acordes.find(a => a.chord === 'D°')!;
     expect(dim.papel).toBe('dominante');
-    expect(dim.detalhe).toContain('nota comum');
+    expect(dim.detalhe!.id).toBe('dimNotaComum');
   });
 });
 
@@ -778,7 +779,7 @@ describe('detectKey — IV7, a subdominante com sétima', () => {
     const r = detectKey(['C', 'C', 'F7', 'C', 'G', 'C', 'F7', 'C', 'C', 'C'])!;
     const iv7 = r.candidates[0].analise!.acordes.find(a => a.chord === 'F7')!;
     expect(iv7.papel).toBe('emprestado');
-    expect(iv7.detalhe).toContain('IV');
+    expect(iv7.detalhe).toEqual({ id: 'iv7Blues' });
   });
 
   it('quem RESOLVE descendo uma quinta continua sendo dominante secundário', () => {
@@ -796,7 +797,7 @@ describe('detectKey — empréstimo do menor com sexta maior', () => {
     const r = detectKey(['Am', 'Dm', 'E7', 'Am', 'Am6', 'Dm', 'E7', 'Am', 'Am', 'Am'])!;
     const m6 = r.candidates[0].analise!.acordes.find(a => a.chord === 'Am6')!;
     expect(m6.papel).toBe('emprestado');
-    expect(m6.detalhe).toContain('sexta maior');
+    expect(m6.detalhe).toEqual({ id: 'emprestimo', fonte: 'menorSextaMaior' });
   });
 });
 
@@ -817,10 +818,16 @@ describe('detectKey — tonicização passageira', () => {
     for (const acorde of ['F#7M', 'B7(9)', 'F#m7']) {
       const x = a.acordes.find(y => y.chord === acorde)!;
       expect(x.papel).toBe('tonicizacao');
-      expect(x.detalhe).toContain('F#');
-      expect(x.detalhe).toContain('meio tom acima');
+      expect(x.detalhe).toMatchObject({
+        id: 'tonicizacao',
+        tom: 'F#',
+        distancia: { intervalo: 'meioTom', direcao: 'acima' },
+      });
     }
-    expect(a.acordes.find(y => y.chord === 'B7(9)')!.detalhe).toContain('IV7');
+    expect(a.acordes.find(y => y.chord === 'B7(9)')!.detalhe).toMatchObject({
+      id: 'tonicizacao',
+      como: { id: 'iv7' },
+    });
   });
 
   it('a tonicização NÃO infla a cobertura do tom de casa', () => {
