@@ -10,7 +10,7 @@
 import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { ptBR } from './locales/pt-BR';
 import { en } from './locales/en';
-import { getIdioma, setIdioma, t, IDIOMAS, idiomaDasEtiquetas, tSeo } from './index';
+import { getIdioma, setIdioma, t, IDIOMAS, idiomaDasEtiquetas, tSeo, type Chave } from './index';
 
 type No = { [k: string]: string | No };
 
