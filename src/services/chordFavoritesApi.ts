@@ -9,7 +9,7 @@
 // depende da rede para acender) e a contagem pública vem do servidor.
 
 import { z } from 'zod';
-import api, { getUserHash } from './api';
+import api, { cabecalhoChavePublica, getUserHash } from './api';
 
 export interface ChordFavoriteEntry {
   fretsArray: number[];
@@ -171,7 +171,7 @@ export async function toggleChordFavorite(
     const { data } = await api.post<{ favorited: boolean; count: number }>(
       `/api/chords/${encodeURIComponent(chordId)}/favorite`,
       { user_hash: payload.user_hash, frets_array: payload.frets_array, song_slug: payload.song_slug },
-      { headers: { 'X-API-Key': import.meta.env.VITE_API_KEY ?? '' } }
+      { headers: cabecalhoChavePublica() }
     );
     if (data.favorited !== wanted) mine = setMine(chordId, songSlug, key, data.favorited);
     return { favorited: data.favorited, count: data.count, mine };

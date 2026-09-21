@@ -127,7 +127,7 @@ A aplicação sobe em `http://localhost:5173`.
 | Variável             | Descrição                                              |
 | -------------------- | ------------------------------------------------------ |
 | `VITE_API_BASE_URL`  | URL base da API (cifras, artistas, estatísticas).      |
-| `VITE_API_KEY`       | Chave para as rotas protegidas (POST de views, favoritos). |
+| `VITE_VIOLA_PUBLIC_KEY` | Chave das rotas de escrita baratas (POST de view, favorito, dificuldade, sync). Pública por construção — vai no bundle. **Não** é a chave de `/api/internal/*`, que fica só no servidor. O prefixo `VITE_` é obrigatório. |
 
 ### Scripts
 

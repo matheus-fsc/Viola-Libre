@@ -17,6 +17,44 @@ const api = axios.create({
   },
 });
 
+/**
+ * Chave das rotas de escrita baratas: view, favorito, dificuldade e sync de favoritos.
+ *
+ * É pública por construção — vai no bundle e qualquer pessoa a lê no DevTools. O que
+ * ela NÃO é mais é a chave que abre `/api/internal/*`: até 21/09/2026 era a mesma, e
+ * isso dava a quem abrisse o console acesso a `worker/submit-artists` e
+ * `worker/submit-songs`, ou seja, injeção de artistas e cifras no acervo. A chave
+ * interna agora vive só no servidor e nos workers, e não deve aparecer neste
+ * repositório nem no `.env` daqui.
+ *
+ * O prefixo `VITE_` não é decoração: o Vite só expõe ao cliente as variáveis que o
+ * têm. Uma chave nomeada `VIOLA_PUBLIC_KEY` chega aqui como `undefined` e o `|| ''`
+ * a transforma num 403 silencioso — o site segue de pé e simplesmente para de contar
+ * views e de gravar favoritos, sem erro em lugar nenhum. Daí o aviso em dev.
+ */
+const CHAVE_PUBLICA: string = import.meta.env.VITE_VIOLA_PUBLIC_KEY || '';
+
+if (import.meta.env.DEV && !CHAVE_PUBLICA) {
+  console.warn(
+    '[api] VITE_VIOLA_PUBLIC_KEY ausente — as rotas de escrita vão responder 403. ' +
+      'Confira o .env: a variável PRECISA do prefixo VITE_ para chegar ao cliente.',
+  );
+}
+
+/**
+ * Cabeçalho de autenticação das rotas protegidas pela chave pública.
+ *
+ * Função, e não constante: o objeto é entregue ao axios, e devolver sempre o mesmo
+ * deixaria um cabeçalho compartilhado ao alcance de qualquer interceptor.
+ *
+ * Um ponto só para todos os chamadores porque a alternativa já cobrou o preço: a
+ * leitura de `import.meta.env` estava repetida em cinco lugares, e a renomeação da
+ * variável quebrou os cinco de uma vez, sem que nada falhasse no build.
+ */
+export const cabecalhoChavePublica = (): Record<string, string> => ({
+  'X-API-Key': CHAVE_PUBLICA,
+});
+
 // Tipagens
 export interface Artist {
   id: number;
@@ -141,9 +179,18 @@ export const getGeneros = async (): Promise<string[]> => {
   return data;
 };
 
+/**
+ * Artistas em destaque de um gênero.
+ *
+ * A rota é `?genero=` e não `/{genero}/top` por causa da barra: "Gospel/Religioso" e
+ * "Hip Hop/Rap" são nomes reais de gênero, e como segmento de caminho a barra era lida
+ * como separador — nem codificada nem duplamente codificada ela casava com o nome
+ * guardado. O resultado é que os dois gêneros devolviam lista vazia, e Gospel/Religioso
+ * é o segundo maior do acervo. Na query string o problema não existe.
+ */
 export const getArtistsByGenre = async (genre: string): Promise<Artist[]> => {
   if (cache.artistasPorGenero[genre]) return cache.artistasPorGenero[genre];
-  const { data } = await api.get<Artist[]>(`/api/generos/${encodeURIComponent(genre)}/top`);
+  const { data } = await api.get<Artist[]>(`/api/generos/top?genero=${encodeURIComponent(genre)}`);
   cache.artistasPorGenero[genre] = data;
   return data;
 };
@@ -210,9 +257,7 @@ export const baixarCifraParaCache = async (artistSlug: string, songSlug: string)
 export const incrementView = async (artistSlug: string, songSlug: string): Promise<void> => {
   const safeSongSlug = songSlug.startsWith('/') ? songSlug.slice(1) : songSlug;
   await api.post(`/api/cifra/${artistSlug}/${safeSongSlug}/view`, {}, {
-    headers: {
-      'X-API-Key': import.meta.env.VITE_API_KEY ?? ''
-    }
+    headers: cabecalhoChavePublica(),
   });
 };
 
@@ -320,9 +365,7 @@ export const favoriteCifra = async (artistSlug: string, songSlug: string): Promi
   }
 
   const { data } = await api.post(`/api/cifra/${artistSlug}/${safeSongSlug}/favorite`, { user_hash: hash }, {
-    headers: {
-      'X-API-Key': import.meta.env.VITE_API_KEY ?? ''
-    }
+    headers: cabecalhoChavePublica(),
   });
 
   const parsed = toggleResponseSchema.safeParse(data);
@@ -391,7 +434,7 @@ export const syncFavoritesToServer = async (
     const { data } = await api.post<SyncFavoritesResult>(
       `/api/usuario/${hash}/favoritos/sync`,
       { favorites: favorites.slice(i, i + SYNC_BATCH_LIMIT) },
-      { headers: { 'X-API-Key': import.meta.env.VITE_API_KEY ?? '' } }
+      { headers: cabecalhoChavePublica() }
     );
     total.added += data?.added ?? 0;
     total.already_present += data?.already_present ?? 0;
@@ -403,9 +446,7 @@ export const syncFavoritesToServer = async (
 export const updateDifficulty = async (artistSlug: string, songSlug: string, difficulty: string): Promise<void> => {
   const safeSongSlug = songSlug.startsWith('/') ? songSlug.slice(1) : songSlug;
   await api.post(`/api/cifra/${artistSlug}/${safeSongSlug}/difficulty`, { difficulty }, {
-    headers: {
-      'X-API-Key': import.meta.env.VITE_API_KEY ?? ''
-    }
+    headers: cabecalhoChavePublica(),
   });
 };
 
