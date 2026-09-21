@@ -24,6 +24,14 @@ Disallow: /cifras/*/timing
 # Folha de impressão: mesma cifra de /cifras/artista/musica, só que formatada para papel.
 Disallow: /cifras/*/print
 
+# Grafo harmônico: uma LEITURA da cifra que já está indexada, não conteúdo próprio.
+# Uma página fina por cifra, multiplicada pelo acervo, gasta orçamento de rastreio à
+# toa — e o relatório de cobertura já mostrava 166 páginas em "rastreada, mas não
+# indexada". Bloquear aqui é seguro porque nenhuma delas chegou a ser indexada: elas
+# também carregam `noindex` (GrafoPage.tsx), que é o que vale para as que o Google
+# porventura já tenha visto.
+Disallow: /cifras/*/grafo
+
 # Resultado de busca interna: espaço de rastreamento infinito (uma URL por termo
 # digitado) e nenhuma delas tem conteúdo próprio — só recorta o que já está
 # indexado. `modo` é estado de UI, mesma página.

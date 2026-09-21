@@ -311,10 +311,15 @@ export function GrafoPage() {
   }, [dados, minimo]);
 
   const titulo = cifra?.title ?? prettifySlug(songSlug ?? '');
+  // Mesma regra da folha de impressão: o grafo é uma LEITURA da cifra que já está
+  // indexada em /cifras/artista/musica, não conteúdo próprio. Uma página fina por
+  // cifra, multiplicada pelo acervo, gasta orçamento de rastreio e ainda concorre com
+  // a própria cifra pela mesma busca.
   useSeo({
     title: t('grafo.seoTitle', { musica: titulo }),
     description: t('grafo.seoDescription', { musica: titulo }),
     path: `/cifras/${artistSlug}/${songSlug}/grafo`,
+    noindex: true,
   });
 
   const ativo = fixado ?? foco;

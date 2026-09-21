@@ -1531,10 +1531,26 @@ export const CifraViewer: React.FC = () => {
           description: `Cifra de ${cifra.title}, de ${artistName}, com os acordes desenhados no braço da viola caipira, violão e cavaquinho. Troque o tom e veja as variações de cada acorde.`,
           path: cifraPath,
         }
-      : // Enquanto carrega — ou quando a música não existe — não se escreve nada:
-        // gravar um título provisório deixaria "Carregando…" como o título indexado
-        // se o rastreador tirasse a foto naquele instante.
-        null,
+      : loading
+        ? // Enquanto carrega não se escreve nada: gravar um título provisório deixaria
+          // "Carregando…" como o título indexado se o rastreador tirasse a foto naquele
+          // instante.
+          null
+        : {
+            // Acabou de carregar e não veio cifra: esta URL não existe. A rota é um
+            // catch-all (`/cifras/:artistSlug/*`) e o Pages serve `index.html` com 200
+            // para qualquer caminho, então o servidor NÃO tem como devolver 404 aqui —
+            // o Google vê uma página bem-sucedida e a classifica como erro soft 404.
+            //
+            // Enquanto não houver uma camada capaz de responder o status certo, o
+            // `noindex` é o que impede que um espaço de URLs infinito entre no índice.
+            // Sem ele a página ainda herdava título e canônica do `index.html`, ou
+            // seja: cada endereço inventado se declarava uma cópia da home.
+            title: 'Cifra não encontrada',
+            description: 'Esta cifra não existe no acervo do Viola Libre.',
+            path: cifraPath,
+            noindex: true,
+          },
   );
   useJsonLd(
     useMemo(

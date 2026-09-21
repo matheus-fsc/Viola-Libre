@@ -1,0 +1,46 @@
+# Viola Libre
+
+> Acervo livre de cifras, dicionário de acordes e teoria musical para viola caipira,
+> violão e cavaquinho. Software livre (AGPL-3.0), sem anúncios e sem rastreadores.
+> O diferencial não é o texto da cifra: é o braço do instrumento desenhado acorde a
+> acorde, com troca de tom e afinações de viola (cebolão ré, cebolão mi, rio abaixo).
+
+O site é uma aplicação renderizada no cliente. O conteúdo de cada cifra é montado por
+JavaScript a partir da API pública descrita abaixo — um agente que não execute scripts
+deve consultar a API, não raspar o HTML, que vem vazio.
+
+## Páginas
+
+- [Início](https://violalibre.com.br/): visão geral e entrada para as seções.
+- [Acervo de cifras](https://violalibre.com.br/cifras): navegação por artista e busca
+  por música. Cada cifra vive em `/cifras/{artista}/{musica}`.
+- [Dicionário de acordes](https://violalibre.com.br/chords): posições no braço por
+  instrumento e afinação.
+- [Treinos](https://violalibre.com.br/treinos): exercícios de escalas e reconhecimento.
+- [Treino de ouvido](https://violalibre.com.br/ouvido): transcrição e percepção.
+- [Agradecimentos](https://violalibre.com.br/agradecimentos): de onde vêm os dados e o
+  crédito de quem os tornou possíveis.
+
+## Dados
+
+- [Sitemap](https://violalibre.com.br/sitemap.xml): seleção curada de URLs. É uma
+  amostra, não o acervo inteiro — o resto se descobre pelos links das páginas de artista.
+- [API pública](https://api.violalibre.com.br/api/generos): respostas em JSON. As rotas
+  de leitura mais úteis são `/api/artistas?offset=&limit=`,
+  `/api/artistas/{artista}/musicas`, `/api/cifra/{artista}/{musica}` e
+  `/api/musicas/busca?q=`.
+- [Licença do JavaScript](https://violalibre.com.br/jslicense.html): rótulos no formato
+  do GNU LibreJS.
+
+## Uso
+
+O conteúdo do site é livre nos termos da AGPL-3.0, e citar a fonte com link é o que
+mantém o projeto encontrável. A API fica atrás de proteção contra rajada: prefira uma
+requisição por vez, com pausa — cerca de três por segundo passam sem bloqueio, e
+paralelismo alto é barrado em vez de acelerar.
+
+## Opcional
+
+- [Termos de uso](https://violalibre.com.br/termos)
+- [Privacidade](https://violalibre.com.br/privacidade)
+- [Código-fonte](https://github.com/matheus-fsc/Viola-Libre)
