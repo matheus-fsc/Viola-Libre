@@ -7,10 +7,10 @@
  * para o texto de interface. São justamente os erros que passam pelo compilador e
  * aparecem na tela de quem usa.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { ptBR } from './locales/pt-BR';
 import { en } from './locales/en';
-import { getIdioma, setIdioma, t, IDIOMAS, idiomaDasEtiquetas} from './index';
+import { getIdioma, setIdioma, t, IDIOMAS, idiomaDasEtiquetas, tSeo } from './index';
 
 type No = { [k: string]: string | No };
 
@@ -207,5 +207,33 @@ describe('idiomaDasEtiquetas()', () => {
    */
   it('não trata idioma desconhecido como inglês', () => {
     expect(idiomaDasEtiquetas(['es-CL'])).not.toBe('en');
+  });
+});
+
+/*
+ * Em 21/09/2026 a busca do Google mostrava violalibre.com.br com o resumo em inglês:
+ * o renderizador roda com `navigator.language` em `en-US`, a interface montava em
+ * inglês e a meta description ia para o índice traduzida. Existe UMA URL por página e
+ * o conteúdo dela é português — o resumo tem de acompanhar o conteúdo, não quem bate
+ * na porta.
+ */
+describe('tSeo()', () => {
+  afterEach(() => setIdioma('pt-BR'));
+
+  it('fica em pt-BR mesmo com a interface em inglês', () => {
+    setIdioma('en');
+    expect(t('seo.desktop.description')).toBe(EN['seo.desktop.description']);
+    expect(tSeo('seo.desktop.description')).toBe(PT['seo.desktop.description']);
+  });
+
+  it('vale para todas as chaves de metadado, não só a home', () => {
+    setIdioma('en');
+    for (const chave of ['seo.chords.title', 'seo.chords.description', 'explorador.seoTitle']) {
+      expect(tSeo(chave as Chave), chave).toBe(PT[chave]);
+    }
+  });
+
+  it('interpola igual ao `t`', () => {
+    expect(tSeo('grafo.seoTitle', { musica: 'Tocando Em Frente' })).toContain('Tocando Em Frente');
   });
 });

@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { useT } from '../../i18n';
+import { tSeo, useT } from '../../i18n';
 import { InfiniteLoader } from '../../components/InfiniteLoader';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Flame, Heart, FileText, Mic2, Music, Guitar, TrendingUp } from 'lucide-react';
@@ -283,8 +283,8 @@ export const ArtistList: React.FC = () => {
   // barra; o noindex cobre quem chegar por um link compartilhado. A canônica aponta
   // sempre para /cifras limpo, que é a página que de fato existe.
   useSeo({
-    title: t('explorador.seoTitle'),
-    description: t('explorador.seoDescription'),
+    title: tSeo('explorador.seoTitle'),
+    description: tSeo('explorador.seoDescription'),
     path: '/cifras',
     noindex: Boolean(debouncedSearch) || Boolean(selectedLetter) || searchMode !== 'artistas',
   });

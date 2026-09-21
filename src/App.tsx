@@ -39,7 +39,7 @@ import { useSeo } from './hooks/useSeo';
 import { useDialog } from './hooks/useDialog';
 import { useJsonLd, websiteJsonLd } from './hooks/useJsonLd';
 import { tabSeo } from './utils/seoRoutes';
-import { useT } from './i18n';
+import { tSeo, useT } from './i18n';
 import { useImmersiveStore } from './stores/useImmersiveStore';
 import { useCifraFavorites, useFavoritesBootSync } from './hooks/useCifraFavorites';
 import { FavoritosDashboard } from './pages/favoritos/FavoritosDashboard';
@@ -280,7 +280,7 @@ function App() {
 
   // Metadados de busca das seções fixas. A subárvore de cifras responde pelos seus
   // (o título depende da música), então aqui ela recebe `null` para não sobrescrever.
-  useSeo(activeTab === 'cifras' ? null : tabSeo(t, activeTab));
+  useSeo(activeTab === 'cifras' ? null : tabSeo(tSeo, activeTab));
   // A caixa de busca do Google e a identidade do site pertencem à home, e só a ela:
   // repetir em toda rota não acrescenta nada e polui o head.
   useJsonLd(activeTab === 'desktop' ? websiteJsonLd : null);

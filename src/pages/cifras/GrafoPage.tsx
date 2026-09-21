@@ -11,7 +11,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { detalheDoAcorde, nomeDoTom } from '../../i18n/musica';
-import { useT, type Chave } from '../../i18n';
+import { tSeo, useT, type Chave } from '../../i18n';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Maximize2, Minus, Music2, Plus } from 'lucide-react';
 import { getCifra } from '../../services/api';
@@ -316,8 +316,8 @@ export function GrafoPage() {
   // cifra, multiplicada pelo acervo, gasta orçamento de rastreio e ainda concorre com
   // a própria cifra pela mesma busca.
   useSeo({
-    title: t('grafo.seoTitle', { musica: titulo }),
-    description: t('grafo.seoDescription', { musica: titulo }),
+    title: tSeo('grafo.seoTitle', { musica: titulo }),
+    description: tSeo('grafo.seoDescription', { musica: titulo }),
     path: `/cifras/${artistSlug}/${songSlug}/grafo`,
     noindex: true,
   });

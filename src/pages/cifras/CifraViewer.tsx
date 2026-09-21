@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState, useMemo, useRef } from 'react';
-import { useT } from '../../i18n';
+import { tSeo, useT } from '../../i18n';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Ellipsis, Eye, FileText, FolderOpen, Guitar, Heart, Music2, Pencil, Pin, Play, Printer, RotateCcw, Save, Share2, Video } from 'lucide-react';
 import {
@@ -1546,8 +1546,8 @@ export const CifraViewer: React.FC = () => {
             // `noindex` é o que impede que um espaço de URLs infinito entre no índice.
             // Sem ele a página ainda herdava título e canônica do `index.html`, ou
             // seja: cada endereço inventado se declarava uma cópia da home.
-            title: t('seo.cifraNaoEncontrada.title'),
-            description: t('seo.cifraNaoEncontrada.description'),
+            title: tSeo('seo.cifraNaoEncontrada.title'),
+            description: tSeo('seo.cifraNaoEncontrada.description'),
             path: cifraPath,
             noindex: true,
           },

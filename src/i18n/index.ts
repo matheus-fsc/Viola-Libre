@@ -169,6 +169,31 @@ export type Traduzir = (chave: Chave, vars?: Variaveis) => string;
  */
 export const t: Traduzir = (chave, vars) => interpolar(buscar(idiomaAtual, chave), vars);
 
+/**
+ * Tradução dos METADADOS DE BUSCA: sempre em pt-BR, independente da interface.
+ *
+ * Existe por causa de um resultado real do Google, em 21/09/2026. A busca mostrava
+ * violalibre.com.br com o resumo em INGLÊS — «Chord charts, a chord dictionary and
+ * music theory…», que é `seo.desktop.description` do `en.ts`. O renderizador do Google
+ * usa Chrome com `navigator.language` em `en-US`, então a detecção lhe dava inglês, o
+ * `useSeo` escrevia a meta description em inglês e era isso que ia para o índice.
+ *
+ * Não adianta mexer na detecção: um navegador em inglês DEVE receber a interface em
+ * inglês, e o rastreador do Google é, para todos os efeitos, um navegador em inglês.
+ * O problema é outro — existe UMA URL por página, e ela não pode mudar de idioma
+ * conforme quem bate na porta. O conteúdo indexável (nome do artista, título, a cifra)
+ * é português e não é traduzido; o resumo que aparece na busca tem de combinar com
+ * ele, ainda mais com 95% dos cliques vindo de Brasil e Portugal.
+ *
+ * Isto é medida de uma URL só. No dia em que houver `/en/...` com hreflang, cada URL
+ * passa a ter idioma próprio e esta função sai de cena — é o mesmo caminho que a nota
+ * de SEO no topo deste arquivo já aponta.
+ *
+ * Vale para `<title>`, description, Open Graph e dados estruturados. NÃO vale para
+ * texto de tela: quem escolheu inglês continua lendo inglês.
+ */
+export const tSeo: Traduzir = (chave, vars) => interpolar(buscar(IDIOMA_PADRAO, chave), vars);
+
 /** Idioma atual, reativo. */
 export function useIdioma(): Idioma {
   return useSyncExternalStore(inscrever, getIdioma, () => IDIOMA_PADRAO);
