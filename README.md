@@ -139,7 +139,7 @@ A aplicação sobe em `http://localhost:5173`.
 | `npm run test`    | Roda a suíte de testes (Vitest).                 |
 | `npm run lint`    | Verifica o código com ESLint.                    |
 | `npm run librejs:verify` | Confere se o build atende ao GNU LibreJS.  |
-| `npm run sitemap` | Regenera `public/sitemap.xml` a partir do acervo (bate na API). |
+| `npm run sitemap` | Regenera o índice e os pedaços do sitemap a partir do dump do acervo. |
 | `npm run sitemap:verify` | Confere o sitemap contra o `robots.txt` e os limites do protocolo. |
 
 ---
@@ -283,18 +283,33 @@ dicionários, sob `seo.*`); as rotas de cifra montam o seu a partir da música c
 > Ao criar uma rota nova, chame `useSeo` nela. Sem isso ela herda os metadados da
 > anterior, e o Google a trata como cópia.
 
-**Sitemap.** `public/sitemap.xml` é gerado (`npm run sitemap`), não escrito à mão — o
-acervo tem ~133 mil artistas e ~490 mil cifras, e uma lista manual envelhece no dia
-seguinte. A seleção é **curada**: páginas fixas, artistas em destaque por gênero e as
-músicas mais vistas e curtidas. Despejar meio milhão de URLs renderizadas no cliente
-gastaria o orçamento de rastreio sem indexar nada; o teto cresce por variável de
-ambiente (`SITEMAP_MAX_URLS`) conforme o site ganha autoridade.
+**Sitemap.** `public/sitemap.xml` é o **índice**, e `public/sitemap-N.xml` são os
+pedaços (45 mil URLs cada). Tudo gerado por `npm run sitemap`, não escrito à mão — o
+acervo tem 133.551 artistas e 1.021.268 cifras, e uma lista manual envelhece no dia
+seguinte.
 
-O gerador **não** roda no `npm run build`, de propósito: a API fica atrás de nginx +
-fail2ban e derruba rajadas — com concorrência 8, 80% das requisições falhavam *em
-silêncio*, produzindo um sitemap curto de aparência saudável. Ele faz uma requisição
-por vez, com pausa, e reporta a taxa de falha ao final. Quem mantém o arquivo atualizado
-é o cron em `.github/workflows/sitemap.yml`.
+A fonte é o dump do acervo (`/api/export/musicas.ndjson.gz`): 19 MB comprimidos numa
+requisição, a geração inteira em ~9 segundos. Antes a seleção vinha dos artistas em
+destaque por **gênero**, e isso limitava o sitemap sem que parecesse: só 7,8% dos
+artistas têm gênero, e as listas de destaque alcançam 6.358 — 4,76% do acervo. O teto de
+6.000 URLs não era estratégia, era o tamanho do balde.
+
+A seleção agora é por **rodízio**: a 1ª cifra de cada artista, depois a 2ª de cada, e
+assim por diante, com os rankings na frente. Percorrer o dump na ordem gastaria a cota
+nos primeiros milhares de artistas — um com 500 cifras levaria 500 vagas. Com o rodízio,
+as 200 mil URLs dão uma cifra a **cada um dos 133.551 artistas**. As páginas de artista
+entram com o que sobra: são índices, e o Google as acha pelos links de qualquer jeito.
+
+O teto continua em variável de ambiente (`SITEMAP_MAX_URLS`), e continua sendo escolha:
+as páginas ainda são renderizadas no cliente, e despejar o milhão inteiro gastaria o
+orçamento de rastreio em páginas que o Google não vai indexar.
+
+O gerador **não** roda no `npm run build`, de propósito: o sitemap muda quando o acervo
+muda, não quando o CSS muda. Se a API não responder, ele preserva os arquivos existentes
+em vez de escrever um curto — e compara o que o dump trouxe com o que o
+`/api/export/status` anuncia, porque um sitemap truncado tem aparência saudável e diz ao
+Google que as URLs ausentes saíram do ar. Quem mantém os arquivos atualizados é o cron em
+`.github/workflows/sitemap.yml`.
 
 `npm run sitemap:verify` roda no CI e cruza o sitemap com o `robots.txt`. Essa checagem
 existe por um bug que ficou vivo vários deploys: o `robots.txt` trazia `Disallow: /cifras`

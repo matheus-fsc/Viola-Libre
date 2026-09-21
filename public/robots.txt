@@ -19,10 +19,16 @@ Disallow: /minhascifras
 # Ferramentas de edição, não conteúdo. São a mesma cifra que já está indexada em
 # /cifras/artista/musica, só que numa tela de trabalho — indexar as duas seria
 # conteúdo duplicado.
-Disallow: /cifras/*/timing
+#
+# O `*/*/` casa os DOIS segmentos de /cifras/artista/musica antes do sufixo. Com um
+# `*` só, `/cifras/*/timing` pegava também /cifras/artista/timing — e o acervo tem
+# seis cifras chamadas «Timing» e «Print», que são páginas legítimas e estavam sendo
+# bloqueadas por engano. Quem achou foi o `npm run sitemap:verify`, quando o sitemap
+# cresceu o bastante para incluí-las.
+Disallow: /cifras/*/*/timing
 
 # Folha de impressão: mesma cifra de /cifras/artista/musica, só que formatada para papel.
-Disallow: /cifras/*/print
+Disallow: /cifras/*/*/print
 
 # Grafo harmônico: uma LEITURA da cifra que já está indexada, não conteúdo próprio.
 # Uma página fina por cifra, multiplicada pelo acervo, gasta orçamento de rastreio à
@@ -30,7 +36,7 @@ Disallow: /cifras/*/print
 # indexada". Bloquear aqui é seguro porque nenhuma delas chegou a ser indexada: elas
 # também carregam `noindex` (GrafoPage.tsx), que é o que vale para as que o Google
 # porventura já tenha visto.
-Disallow: /cifras/*/grafo
+Disallow: /cifras/*/*/grafo
 
 # Resultado de busca interna: espaço de rastreamento infinito (uma URL por termo
 # digitado) e nenhuma delas tem conteúdo próprio — só recorta o que já está

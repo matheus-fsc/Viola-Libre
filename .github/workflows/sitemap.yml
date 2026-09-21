@@ -39,25 +39,29 @@ jobs:
       - name: Instalar dependências
         run: npm ci
 
-      # A geração é lenta de propósito (uma requisição por vez, com pausa). Ver o
-      # comentário sobre ritmo em scripts/sitemap-shared.mjs: aumentar a concorrência
-      # não deixa mais rápido, deixa incompleto em silêncio.
+      # Desde que a API expõe o dump do acervo, a geração inteira leva ~9 segundos:
+      # uma requisição de 19 MB no lugar das 133.551 que a versão por artista fazia.
+      # O timeout generoso fica para o caso de a API estar lenta.
       - name: Gerar o sitemap
         run: npm run sitemap
-        timeout-minutes: 30
+        timeout-minutes: 15
 
       - name: Conferir contra o robots.txt
         run: npm run sitemap:verify
 
+      # `sitemap.xml` é o índice e `sitemap-N.xml` são os pedaços. O `git add -A` cobre
+      # pedaço que passou a existir E pedaço que o gerador apagou por ter sobrado de uma
+      # rodada maior — um `git add` de caminhos não registraria a remoção, e o arquivo
+      # órfão continuaria sendo publicado com URLs de uma geração que não existe mais.
       - name: Commitar se houve mudança
         run: |
-          if git diff --quiet -- public/sitemap.xml; then
+          if git diff --quiet -- 'public/sitemap*.xml'; then
             echo "Sitemap sem alterações — nada a commitar."
             exit 0
           fi
           git config user.name  'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
-          git add public/sitemap.xml
+          git add -A -- 'public/sitemap*.xml'
           git commit -m 'chore(sitemap): atualiza a partir do acervo
 
           Gerado por .github/workflows/sitemap.yml.'
