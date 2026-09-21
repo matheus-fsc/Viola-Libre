@@ -126,6 +126,10 @@ export const ptBR = {
       title: 'Minhas Cifras',
       description: 'Monte e edite o seu próprio roteiro de acordes, guardado no seu navegador.',
     },
+    cifraNaoEncontrada: {
+      title: 'Cifra não encontrada',
+      description: 'Esta cifra não existe no acervo do Viola Libre.',
+    },
     preferencias: {
       title: 'Preferências',
       description: 'Instrumento, idioma, exibição das cifras e autorização de serviços de terceiros. Tudo guardado só neste navegador.',

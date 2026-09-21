@@ -10,7 +10,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ptBR } from './locales/pt-BR';
 import { en } from './locales/en';
-import { getIdioma, setIdioma, t, IDIOMAS } from './index';
+import { getIdioma, setIdioma, t, IDIOMAS, idiomaDasEtiquetas} from './index';
 
 type No = { [k: string]: string | No };
 
@@ -166,5 +166,46 @@ describe('t()', () => {
       setIdioma(id);
       expect(getIdioma()).toBe(id);
     }
+  });
+});
+
+/*
+ * A detecção de idioma não tinha teste, e foi por aí que o site passou a abrir em
+ * inglês para quase todo mundo: a regra era "português se começar com pt, senão
+ * inglês". O único teste que encostava no assunto rodava no Node, onde
+ * `navigator.language` não existe — e o caminho do `navigator` vazio era justamente
+ * o que devolvia o padrão certo, escondendo o erro.
+ */
+describe('idiomaDasEtiquetas()', () => {
+  it('reconhece português em qualquer região', () => {
+    for (const etiqueta of ['pt', 'pt-BR', 'pt-PT', 'PT-br', 'pt_BR']) {
+      expect(idiomaDasEtiquetas([etiqueta]), etiqueta).toBe('pt-BR');
+    }
+  });
+
+  it('reconhece inglês em qualquer região', () => {
+    for (const etiqueta of ['en', 'en-US', 'en-GB', 'EN', 'en_US']) {
+      expect(idiomaDasEtiquetas([etiqueta]), etiqueta).toBe('en');
+    }
+  });
+
+  it('respeita a ordem de preferência, e não só a primeira etiqueta', () => {
+    expect(idiomaDasEtiquetas(['es-AR', 'pt-BR', 'en-US'])).toBe('pt-BR');
+    expect(idiomaDasEtiquetas(['es-AR', 'en-US', 'pt-BR'])).toBe('en');
+  });
+
+  it('não escolhe idioma nenhum quando não reconhece', () => {
+    expect(idiomaDasEtiquetas(['es-AR', 'fr-FR', 'it-IT'])).toBeNull();
+    expect(idiomaDasEtiquetas([])).toBeNull();
+    expect(idiomaDasEtiquetas([''])).toBeNull();
+  });
+
+  /*
+   * O caso que quebrou. Aparelho em inglês não é o mesmo que aparelho sem idioma, mas
+   * aparelho em espanhol também não é aparelho em inglês — e era assim que a regra
+   * antiga o tratava.
+   */
+  it('não trata idioma desconhecido como inglês', () => {
+    expect(idiomaDasEtiquetas(['es-CL'])).not.toBe('en');
   });
 });

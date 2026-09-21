@@ -44,8 +44,52 @@ function ehIdioma(valor: unknown): valor is Idioma {
 }
 
 /**
+ * O idioma que uma lista de etiquetas BCP 47 pede, ou `null` se nenhuma for daqui.
+ *
+ * A comparação é pela subetiqueta primária, e não pela string inteira, porque o que o
+ * navegador entrega varia: `pt-BR`, `pt-PT` e `pt` do lado de cá, `en-GB`, `EN` e
+ * (em WebView antiga) `en_US` do lado de lá.
+ *
+ * Separada e exportada para poder ser testada sozinha. A versão anterior decidia
+ * dentro de `idiomaInicial()`, que só roda com um `navigator` de verdade — e por isso
+ * o único teste que encostava no assunto passava no Node, onde `navigator.language`
+ * não existe, justamente pelo caminho que escondia o erro.
+ */
+export function idiomaDasEtiquetas(etiquetas: readonly string[]): Idioma | null {
+  for (const etiqueta of etiquetas) {
+    if (!etiqueta) continue;
+    const primaria = etiqueta.toLowerCase().replace(/_/g, '-').split('-')[0];
+    if (primaria === 'pt') return 'pt-BR';
+    if (primaria === 'en') return 'en';
+  }
+  return null;
+}
+
+/** A lista de preferências do navegador, da mais desejada para a menos. */
+function etiquetasDoNavegador(): readonly string[] {
+  if (typeof navigator === 'undefined') return [];
+  // `languages` é a lista inteira; `language` é só a primeira, e é o que sobra em
+  // WebView antiga. Quem tem o sistema em espanhol com português em segundo lugar
+  // precisa que a lista toda seja lida, senão recebe o padrão sem nunca ser consultado.
+  const lista = navigator.languages;
+  if (Array.isArray(lista) && lista.length > 0) return lista;
+  return navigator.language ? [navigator.language] : [];
+}
+
+/**
  * Escolha guardada primeiro; só depois o navegador. Uma vez escolhido, o idioma é do
  * usuário e não volta a ser adivinhado.
+ *
+ * Quando o navegador não pede nem português nem inglês, vale `IDIOMA_PADRAO`. Antes
+ * valia inglês, e era o bug que fazia o site abrir em inglês para quase todo mundo:
+ * a regra era "português se começar com pt, senão inglês", então bastava o aparelho
+ * estar em espanhol, francês ou italiano — ou em inglês por preferência do dono, o
+ * caso mais comum entre quem desenvolve — para a moldura vir em inglês por cima de
+ * uma cifra em português. `IDIOMA_PADRAO` existia mas era inalcançável num navegador
+ * real, porque só era usado quando `navigator.language` vinha vazio.
+ *
+ * O acervo não é traduzido: nome de artista, título e a cifra continuam em português.
+ * Uma interface em português por cima disso é coerente; uma em inglês, não.
  */
 function idiomaInicial(): Idioma {
   try {
@@ -54,10 +98,7 @@ function idiomaInicial(): Idioma {
   } catch {
     /* modo privado ou storage bloqueado: cai na detecção */
   }
-  // `navigator` existe no Node moderno mas sem `language`, então os dois precisam de guarda.
-  const doNavegador = (typeof navigator !== 'undefined' && navigator.language) || '';
-  if (doNavegador.toLowerCase().startsWith('pt')) return 'pt-BR';
-  return doNavegador ? 'en' : IDIOMA_PADRAO;
+  return idiomaDasEtiquetas(etiquetasDoNavegador()) ?? IDIOMA_PADRAO;
 }
 
 /*

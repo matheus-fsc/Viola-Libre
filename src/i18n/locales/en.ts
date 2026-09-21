@@ -122,6 +122,10 @@ export const en: Dicionario = {
       title: 'My Charts',
       description: 'Build and edit your own chord sheet, kept in your own browser.',
     },
+    cifraNaoEncontrada: {
+      title: 'Chord chart not found',
+      description: 'This chord chart is not in the Viola Libre collection.',
+    },
     preferencias: {
       title: 'Preferences',
       description: 'Instrument, language, chart display and third-party service permissions. All of it kept in this browser only.',

@@ -1546,8 +1546,8 @@ export const CifraViewer: React.FC = () => {
             // `noindex` é o que impede que um espaço de URLs infinito entre no índice.
             // Sem ele a página ainda herdava título e canônica do `index.html`, ou
             // seja: cada endereço inventado se declarava uma cópia da home.
-            title: 'Cifra não encontrada',
-            description: 'Esta cifra não existe no acervo do Viola Libre.',
+            title: t('seo.cifraNaoEncontrada.title'),
+            description: t('seo.cifraNaoEncontrada.description'),
             path: cifraPath,
             noindex: true,
           },
