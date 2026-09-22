@@ -1,11 +1,25 @@
-# Viola Libre
+<p align="center">
+  <img src="./public/android-chrome-192x192.png" alt="" width="128">
+</p>
 
-**The Open, Mathematical Chord Book** for viola caipira, guitar, cavaquinho and other
-string instruments.
+<h1 align="center">Viola Libre</h1>
 
-[English](./README.en.md) · [Português](./README.md)
+<p align="center">
+  <strong>The Open, Mathematical Chord Book</strong> for viola caipira, guitar,
+  cavaquinho and other string instruments.
+</p>
 
-[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](./LICENSE)
+<p align="center">
+  <a href="https://violalibre.com.br"><strong>violalibre.com.br</strong></a>
+  ·
+  <a href="./README.en.md">English</a>
+  ·
+  <a href="./README.md">Português</a>
+</p>
+
+<p align="center">
+  <a href="./LICENSE"><img alt="License: AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue.svg"></a>
+</p>
 
 Unlike rigid systems, Viola Libre **computes** chord shapes from intervals and semitone
 equations. That is what makes it possible to switch tuning instantly (Cebolão Ré, Cebolão

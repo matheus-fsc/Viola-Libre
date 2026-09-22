@@ -1,10 +1,25 @@
-# Viola Libre
+<p align="center">
+  <img src="./public/android-chrome-192x192.png" alt="" width="128">
+</p>
 
-**O Cifrário Aberto e Matemático** para viola caipira, violão, cavaquinho e outros instrumentos de corda.
+<h1 align="center">Viola Libre</h1>
 
-[Português](./README.md) · [English](./README.en.md)
+<p align="center">
+  <strong>O Cifrário Aberto e Matemático</strong> para viola caipira, violão,
+  cavaquinho e outros instrumentos de corda.
+</p>
 
-[![Licença: AGPL-3.0](https://img.shields.io/badge/licen%C3%A7a-AGPL--3.0-blue.svg)](./LICENSE)
+<p align="center">
+  <a href="https://violalibre.com.br"><strong>violalibre.com.br</strong></a>
+  ·
+  <a href="./README.md">Português</a>
+  ·
+  <a href="./README.en.md">English</a>
+</p>
+
+<p align="center">
+  <a href="./LICENSE"><img alt="Licença: AGPL-3.0" src="https://img.shields.io/badge/licen%C3%A7a-AGPL--3.0-blue.svg"></a>
+</p>
 
 Diferente de sistemas engessados, o Viola Libre **calcula** as posições dos acordes a partir de
 intervalos e equações de semitons. Isso permite trocar de afinação instantaneamente (Cebolão Ré,
