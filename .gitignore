@@ -43,6 +43,11 @@ zap-scan-export/
 
 # Graphify: versiona o knowledge graph, ignora o cache local
 graphify-out/cache/
+# Metadados locais do graphify: guardam a raiz do projeto e o interpretador
+# COM O CAMINHO DESTA MÁQUINA. Versionados, chegavam a cada clone apontando para
+# um diretório que só existe aqui. O graphify os regrava sozinho ao rodar.
+graphify-out/.graphify_root
+graphify-out/.graphify_python
 
 # Prompts e notas para os agentes de backend — material de trabalho, não do app
 docs/

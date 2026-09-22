@@ -18,7 +18,7 @@ O projeto tem 89 arquivos / ~114 mil palavras. Um `grep` cego é caro e perde re
 | `graph.json` | Grafo completo (node-link + hyperedges) para consulta programática com `jq`/python. | Grátis (offline) |
 | `manifest.json` | Mapa arquivo → hash (mtime, ast_hash, semantic_hash). Serve para detectar arquivos que mudaram desde a build. | Grátis |
 | `graph.html` | Visualização interativa (para humanos, não para agentes). | — |
-| `.graphify_root` / `.graphify_python` | Metadados internos do graphify (raiz e interpretador). | — |
+| `.graphify_root` / `.graphify_python` | Metadados internos do graphify (raiz e interpretador). **Fora do versionamento**: guardam caminho absoluto da máquina que rodou a build. O graphify os recria ao rodar; num clone recém-feito eles não existem, e não faz falta. | — |
 
 O grafo foi construído num commit específico (campo `built_at_commit` em `graph.json`).
 **Ele é um retrato do passado** — sempre confirme contra o código atual antes de editar.
