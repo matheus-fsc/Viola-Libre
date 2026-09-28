@@ -1,4 +1,4 @@
-import api from './api';
+import api, { cabecalhoChavePublica } from './api';
 
 export interface TimingLoop {
   label: string;
@@ -160,7 +160,18 @@ export async function fetchTimings(slug: string): Promise<TimingContribution[]> 
 }
 
 export async function voteTiming(timingId: string): Promise<{ votes: number }> {
-  const { data } = await api.post<{ votes: number }>(`/api/timings/${timingId}/vote`, {});
+  // O voto exige a chave pública; ENVIAR o timing, não. Conferido no `openapi.json` do
+  // servidor: `POST /api/timings/{timing_id}/vote` declara `APIKeyHeader`, enquanto
+  // `POST /api/timings/{song_slug}` não declara segurança nenhuma. A assimetria é
+  // proposital — votar é barato de repetir, e é o que se protege contra automação.
+  //
+  // Sem o cabeçalho a rota respondia 403 e o contador não subia, sem erro visível em
+  // lugar nenhum. Era o único chamador do front que pedia uma rota protegida sem a chave.
+  const { data } = await api.post<{ votes: number }>(
+    `/api/timings/${timingId}/vote`,
+    {},
+    { headers: cabecalhoChavePublica() }
+  );
   return data;
 }
 
