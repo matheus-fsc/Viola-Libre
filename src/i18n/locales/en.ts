@@ -132,6 +132,11 @@ export const en: Dicionario = {
     },
   },
 
+  manutencao: {
+    titulo: 'Quick maintenance.',
+    texto: 'The server is running its daily backup and will be back in a few minutes.',
+    sozinho: 'No need to reload: the page refreshes itself once it is back.',
+  },
   app: {
     pularConteudo: 'Skip to content',
     navSecoes: 'Site sections',

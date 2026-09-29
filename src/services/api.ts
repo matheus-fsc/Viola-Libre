@@ -1,6 +1,14 @@
 import axios from 'axios';
+import type { InternalAxiosRequestConfig } from 'axios';
 import { z } from 'zod';
 import { guardarCifra, lerCifra } from './cifraCache';
+import {
+  aguardarParaRepetir,
+  ehManutencao,
+  entrouEmManutencao,
+  mensagemDaApi,
+  saiuDaManutencao,
+} from './manutencao';
 
 /**
  * Um pedido abortado não é uma falha: é o resultado esperado de o usuário ter digitado mais
@@ -16,6 +24,53 @@ const api = axios.create({
     'Content-Type': 'application/json',
   },
 });
+
+/**
+ * Janela de manutenção da API: repetir em silêncio em vez de mostrar erro.
+ *
+ * Durante o backup diário toda rota responde 503 com `{"status":"maintenance"}`. É uma
+ * parada planejada de poucos minutos, e a requisição que falhou pode simplesmente ser
+ * refeita quando a API voltar — sem reload, sem o usuário precisar fazer nada. O aviso na
+ * tela (ver `AvisoDeManutencao`) existe só para a espera não parecer travamento.
+ *
+ * Só métodos IDEMPOTENTES são repetidos. O 503 vem antes de a aplicação rodar, então
+ * repetir um POST seria seguro hoje — mas essa é uma garantia do middleware, não do
+ * contrato, e ela some no dia em que a manutenção passar a ser parcial. Um `view`
+ * duplicado é inofensivo; um toggle de favorito repetido desfaz o que o usuário pediu.
+ * Escrita continua falhando como antes, e quem chama já trata isso mantendo o estado
+ * local (ver o catch de `toggleChordFavorite`).
+ */
+/** A config original, com o contador de tentativas que o interceptor carimba nela. */
+type RepetivelConfig = InternalAxiosRequestConfig & { _tentativas?: number };
+
+api.interceptors.response.use(
+  resposta => {
+    // Respondeu: a janela acabou, se é que estava aberta.
+    saiuDaManutencao();
+    return resposta;
+  },
+  async (erro: unknown) => {
+    const config = (erro as { config?: RepetivelConfig }).config;
+    const resposta = (erro as { response?: { status?: number; data?: unknown } }).response;
+    if (!config || !ehManutencao(resposta?.status, resposta?.data)) throw erro;
+
+    entrouEmManutencao(mensagemDaApi(resposta?.data));
+
+    const metodo = (config.method ?? 'get').toLowerCase();
+    if (metodo !== 'get' && metodo !== 'head') throw erro;
+
+    const jaTentou = config._tentativas ?? 0;
+    if (!(await aguardarParaRepetir(jaTentou))) {
+      // Esgotada a paciência, a janela deixa de ser a explicação: cinco minutos já não são
+      // "poucos". Baixar o aviso devolve a tela ao caminho de erro normal, em vez de
+      // deixar no ar uma promessa de volta rápida que a evidência não sustenta mais.
+      saiuDaManutencao();
+      throw erro;
+    }
+    config._tentativas = jaTentou + 1;
+    return api.request(config);
+  },
+);
 
 /**
  * Chave das rotas de escrita baratas: view, favorito, dificuldade e sync de favoritos.

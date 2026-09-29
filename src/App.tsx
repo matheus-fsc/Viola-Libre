@@ -50,6 +50,7 @@ import { TermosDeUso } from './pages/termos/TermosDeUso';
 import { PoliticaPrivacidade } from './pages/documentos/PoliticaPrivacidade';
 import { Agradecimentos } from './pages/documentos/Agradecimentos';
 import { Preferencias } from './pages/preferencias/Preferencias';
+import { AvisoDeManutencao } from './components/AvisoDeManutencao';
 
 // Onde mora o fonte e o texto da licença. O "Sobre" aponta pra cá; os Termos de Uso têm as
 // suas próprias cópias porque são página estática e não devem depender deste módulo.
@@ -676,6 +677,10 @@ function App() {
           tarefas e vai direto ao conteúdo. Sem ele, chegar na cifra por teclado custa
           percorrer toda a navegação — em toda página, toda vez. */}
       <a href="#conteudo" className="skip-link">{t('app.pularConteudo')}</a>
+      {/* Acima de tudo, inclusive da área de trabalho: durante o backup diário nada que
+          dependa da API funciona, e descobrir isso por uma cifra em branco é pior do que
+          ler uma linha dizendo o que está acontecendo. Não renderiza nada fora da janela. */}
+      <AvisoDeManutencao />
       {/* Com uma aba aberta, a janela flutua sobre a própria área de trabalho desfocada.
           Fora na rota de timing, que ocupa a viewport inteira e não deixa nada à mostra. */}
       {activeTab !== 'desktop' && !isTimingRoute && <DesktopBackdrop />}

@@ -136,6 +136,13 @@ export const ptBR = {
     },
   },
 
+  // A API sai do ar por alguns minutos no backup diário do banco. É parada planejada, e o
+  // site se recupera sozinho — o texto existe para que a espera não pareça defeito.
+  manutencao: {
+    titulo: 'Manutenção rápida.',
+    texto: 'O servidor está fazendo o backup diário e volta em alguns minutos.',
+    sozinho: 'Não precisa recarregar: a página se atualiza sozinha quando voltar.',
+  },
   app: {
     pularConteudo: 'Pular para o conteúdo',
     navSecoes: 'Seções do site',
