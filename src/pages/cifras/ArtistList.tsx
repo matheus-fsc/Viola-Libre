@@ -548,16 +548,16 @@ export const ArtistList: React.FC = () => {
             que lá sobra largura e ver tudo de uma vez é melhor. */}
         <div className="flex flex-nowrap md:flex-wrap gap-2 mb-4 p-2 bg-[var(--color-winxp-panel)] bevel-out overflow-x-auto md:overflow-x-visible touch-pan-x overscroll-x-contain no-scrollbar [&>button]:shrink-0">
           <button
-            onClick={() => { setSearchMode('artistas'); setSelectedGenero(null); }}
-            className={`px-3 py-1 text-sm font-bold border transition-colors ${searchMode === 'artistas' ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#e0dfd6] text-black border-gray-400 hover:bg-gray-300'}`}
-          >
-            {t('explorador.modoArtistas')}
-          </button>
-          <button
             onClick={() => { setSearchMode('musicas'); setSelectedGenero(null); }}
             className={`px-3 py-1 text-sm font-bold border transition-colors ${searchMode === 'musicas' ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#e0dfd6] text-black border-gray-400 hover:bg-gray-300'}`}
           >
             {t('explorador.modoMusicas')}
+          </button>
+          <button
+            onClick={() => { setSearchMode('artistas'); setSelectedGenero(null); }}
+            className={`px-3 py-1 text-sm font-bold border transition-colors ${searchMode === 'artistas' ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#e0dfd6] text-black border-gray-400 hover:bg-gray-300'}`}
+          >
+            {t('explorador.modoArtistas')}
           </button>
           {/* "+ Views" e "+ Likes" eram dois modos irmãos disputando espaço com os outros
               três. Viram um só: Populares abre o ranking (visualizações por padrão) e a
