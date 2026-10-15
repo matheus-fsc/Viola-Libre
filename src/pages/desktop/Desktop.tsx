@@ -243,7 +243,7 @@ function useSugestoes(q: string, modo: 'artistas' | 'musicas'): { itens: Sugesta
 
 const SearchWindow: React.FC<{ className?: string }> = ({ className = '' }) => {
   const [q, setQ] = useState('');
-  const [modo, setModo] = useState<'artistas' | 'musicas'>('artistas');
+  const [modo, setModo] = useState<'artistas' | 'musicas'>('musicas');
   const navigate = useNavigate();
   const t = useT();
   const { itens: sugestoes, carregando } = useSugestoes(q, modo);
@@ -280,8 +280,8 @@ const SearchWindow: React.FC<{ className?: string }> = ({ className = '' }) => {
       </h2>
       <form onSubmit={submit} className="p-2 flex flex-col gap-2">
         <div className="flex gap-1">
-          {tab('artistas', t('desktop.abaArtistas'))}
           {tab('musicas', t('desktop.abaMusicas'))}
+          {tab('artistas', t('desktop.abaArtistas'))}
         </div>
         <div className="flex items-stretch gap-1">
           <input
