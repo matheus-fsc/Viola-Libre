@@ -301,6 +301,8 @@ export const ptBR = {
     videoTocar: 'Tocar vídeo',
     videoMostrar: 'Mostrar vídeo',
     videoRecolher: 'Recolher (o áudio continua)',
+    videoArrastar: 'Arraste para mover',
+    videoRedimensionar: 'Arraste para redimensionar',
     videoFechar: 'Fechar vídeo',
     videoNaoReconhecido: 'O link da source não é um vídeo reconhecido do YouTube.',
     videoFalhouPlayer: 'Não foi possível carregar o player do YouTube.',

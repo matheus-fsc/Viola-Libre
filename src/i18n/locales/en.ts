@@ -289,6 +289,8 @@ export const en: Dicionario = {
     videoTocar: 'Play the video',
     videoMostrar: 'Show the video',
     videoRecolher: 'Collapse (the audio keeps playing)',
+    videoArrastar: 'Drag to move',
+    videoRedimensionar: 'Drag to resize',
     videoFechar: 'Close the video',
     videoNaoReconhecido: 'The source link is not a recognized YouTube video.',
     videoFalhouPlayer: 'The YouTube player could not be loaded.',
