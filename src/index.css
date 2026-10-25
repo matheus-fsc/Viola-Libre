@@ -215,6 +215,13 @@ body {
     scroll-behavior: auto !important;
   }
 }
+/* Pulo da estrela de Favoritos na barra de título: cresce, passa um pouco e assenta. */
+@keyframes vl-pulo {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.45) rotate(-12deg); }
+  70% { transform: scale(0.9) rotate(4deg); }
+  100% { transform: scale(1) rotate(0); }
+}
 :root[data-desempenho] *,
 :root[data-desempenho] *::before,
 :root[data-desempenho] *::after {

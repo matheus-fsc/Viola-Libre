@@ -3,7 +3,7 @@
  * Copyright (C) 2026 Matheus Coelho
  * Licenciado sob a GNU AGPL-3.0 — veja o arquivo LICENSE na raiz do projeto.
  */
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import type { Instrument, Tuning, Voicing } from './engine/types';
 import { PRESET_INSTRUMENTS, NOTE_NAMES_SHARP, NOTE_NAMES_FLAT } from './engine/tunings';
@@ -36,6 +36,7 @@ import { ArrowLeft, Settings } from 'lucide-react';
 import { useTabNavigation, tabFromPathname } from './hooks/useTabNavigation';
 import { minimizarJanela, lerJanelaMinimizada, limparJanelaMinimizada } from './services/janelaMinimizada';
 import { useSeo } from './hooks/useSeo';
+import { useSpringValue } from './hooks/useSpringValue';
 import { useDialog } from './hooks/useDialog';
 import { useJsonLd, websiteJsonLd } from './hooks/useJsonLd';
 import { tabSeo } from './utils/seoRoutes';
@@ -245,6 +246,63 @@ function App() {
     if (activeTab !== 'desktop') limparJanelaMinimizada();
   }, [activeTab]);
 
+  // ── Animação da janela ────────────────────────────────────────────────────────────
+  // Uma mola só, `p` de 0 a 1, onde 1 é a janela no lugar. O que muda é o destino:
+  // - minimizar e restaurar levam a janela até o botão da barra de tarefas e de volta,
+  //   o gesto do XP que diz ONDE ela foi parar (sem ele, minimizar parece fechar);
+  // - fechar só encolhe um pouco e some no lugar, porque ela não vai para lugar nenhum.
+  // A navegação acontece quando a mola chega: a janela some, e só então a rota muda.
+  // Modo desempenho e "reduzir movimento" pulam direto para o fim (useSpringValue).
+  const janelaRef = useRef<HTMLDivElement>(null);
+  const botaoBarraRef = useRef<HTMLButtonElement>(null);
+  type Destino = { tipo: 'fechar' } | { tipo: 'barra'; dx: number; dy: number; sx: number; sy: number };
+  const destinoJanela = useRef<Destino>({ tipo: 'fechar' });
+  const animandoJanela = useRef(false);
+  const janelaMola = useSpringValue((bruto) => {
+    const el = janelaRef.current;
+    if (!el) return;
+    const p = Math.min(Math.max(bruto, 0), 1);
+    if (p >= 1) {
+      el.style.transform = '';
+      el.style.opacity = '';
+      el.style.transformOrigin = '';
+      el.style.pointerEvents = '';
+      return;
+    }
+    const q = 1 - p;
+    const d = destinoJanela.current;
+    el.style.pointerEvents = 'none';
+    if (d.tipo === 'fechar') {
+      el.style.transformOrigin = 'center top';
+      el.style.transform = `scale(${0.92 + 0.08 * p})`;
+      el.style.opacity = String(p);
+    } else {
+      // Canto superior esquerdo da janela até o do botão, e o tamanho até o dele.
+      el.style.transformOrigin = '0 0';
+      el.style.transform = `translate(${d.dx * q}px, ${d.dy * q}px) scale(${1 - (1 - d.sx) * q}, ${1 - (1 - d.sy) * q})`;
+      // Some no fim do trajeto, não no começo: o olho precisa ver para onde ela vai.
+      el.style.opacity = String(Math.min(1, p * 2.5 + 0.1));
+    }
+  }, 1);
+
+  /** Destino "barra de tarefas", se o botão existir na tela (no celular não existe). */
+  const destinoNaBarra = (): Destino => {
+    const j = janelaRef.current?.getBoundingClientRect();
+    const b = botaoBarraRef.current?.getBoundingClientRect();
+    if (!j || !b || b.width === 0 || j.width === 0) return { tipo: 'fechar' };
+    return { tipo: 'barra', dx: b.left - j.left, dy: b.top - j.top, sx: b.width / j.width, sy: b.height / j.height };
+  };
+
+  const sairComAnimacao = (destino: Destino, depois: () => void) => {
+    if (animandoJanela.current) return;
+    animandoJanela.current = true;
+    destinoJanela.current = destino;
+    janelaMola.ir(0, () => {
+      animandoJanela.current = false;
+      depois();
+    });
+  };
+
   /** `_` — guarda onde a pessoa estava e mostra a área de trabalho. */
   const minimizarParaDesktop = React.useCallback(() => {
     minimizarJanela(pathname + search);
@@ -257,10 +315,27 @@ function App() {
     navigate('/');
   }, [navigate]);
 
+  // Restaurar marca a origem e navega; a janela nasce no botão e cresce até o lugar dela
+  // no layout effect abaixo, antes da primeira pintura.
+  const restaurarDaBarra = useRef(false);
   const restaurarJanela = React.useCallback((rota: string) => {
     limparJanelaMinimizada();
+    restaurarDaBarra.current = true;
     navigate(rota);
   }, [navigate]);
+  React.useLayoutEffect(() => {
+    if (!restaurarDaBarra.current || activeTab === 'desktop') return;
+    restaurarDaBarra.current = false;
+    destinoJanela.current = destinoNaBarra();
+    janelaMola.definir(0);
+    janelaMola.ir(1);
+    // destinoNaBarra lê só refs; a dependência real é a troca de aba.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, janelaMola]);
+
+  // ☆ dá um pulo ao ser clicado. A chave nova remonta o ícone e reinicia a animação CSS,
+  // que o modo desempenho desliga junto com as outras.
+  const [pulosEstrela, setPulosEstrela] = useState(0);
 
   // Qual seção está lá dentro, para o botão da barra de tarefas dizer o que vai restaurar.
   const secaoMinimizada = rotaMinimizada
@@ -720,7 +795,7 @@ function App() {
         /* Maximizada no telefone: sem canto arredondado e sem borda lateral, porque o
            arredondado é afordância de janela *restaurada*. Do `md` para cima ela volta a
            flutuar sobre o desktop, com moldura nos quatro lados. */
-        <div className={`w-full bg-[#ece9d8] border-x-0 border-b-0 border-t-[3px] md:border-[3px] border-[#0058e6] md:rounded-t-lg shadow-2xl flex flex-col ${isTimingRoute ? 'flex-1 min-h-0' : ''}`}>
+        <div ref={janelaRef} className={`w-full bg-[#ece9d8] border-x-0 border-b-0 border-t-[3px] md:border-[3px] border-[#0058e6] md:rounded-t-lg shadow-2xl flex flex-col ${isTimingRoute ? 'flex-1 min-h-0' : ''}`}>
 
           {/* App bar do celular, no lugar da barra de título.
               Minimizar e fechar são afordâncias de *janela*: num telefone não existe o gesto
@@ -780,7 +855,7 @@ function App() {
               {/* Minimizar GUARDA a janela: a rota exata volta pelo botão "Restaurar
                   janela" na barra de tarefas. É o que o separa do ✕ ao lado. */}
               <button
-                onClick={minimizarParaDesktop}
+                onClick={() => sairComAnimacao(destinoNaBarra(), minimizarParaDesktop)}
                 className="w-[21px] h-[21px] rounded bg-[#0058e6] border border-white flex items-center justify-center font-bold text-xs hover:bg-[#3a8bfb] focus:outline-none cursor-pointer"
                 aria-label={t('app.minimizarAria', { secao: t(`abas.${activeTab}`) })}
                 title={t('app.minimizarDica')}
@@ -788,16 +863,16 @@ function App() {
               <span aria-hidden="true">_</span>
               </button>
               <button 
-                onClick={() => goToTab('favorites')}
+                onClick={() => { setPulosEstrela(n => n + 1); goToTab('favorites'); }}
                 className={`w-[21px] h-[21px] rounded border flex items-center justify-center font-bold text-xs focus:outline-none cursor-pointer ${activeTab === 'favorites' ? 'bg-[#ff7f27] border-white text-white' : 'bg-[#0058e6] border-white hover:bg-[#3a8bfb]'}`}
                 title={t('app.abrirFavoritos')}
               >
-                <StarIcon className="w-3.5 h-3.5" fill={activeTab === 'favorites' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" />
+                <StarIcon key={pulosEstrela} className={`w-3.5 h-3.5 ${pulosEstrela > 0 ? 'animate-[vl-pulo_380ms_ease-out]' : ''}`} fill={activeTab === 'favorites' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" />
               </button>
               {/* Fechar descarta: volta pro início SEM deixar nada para restaurar. Quem
                   clica num ✕ está pedindo pra sair de onde está, não pra ler um "Sobre". */}
               <button
-                onClick={fecharJanela}
+                onClick={() => sairComAnimacao({ tipo: 'fechar' }, fecharJanela)}
                 className="w-[21px] h-[21px] rounded bg-[#cc3300] border border-white flex items-center justify-center font-bold text-xs hover:bg-red-500 focus:outline-none cursor-pointer"
                 aria-label={t('app.fecharAria')}
                 title={t('app.fecharDica')}
@@ -1542,6 +1617,7 @@ function App() {
                 Fica levantado (e não afundado como as outras abas ativas) porque, embora a
                 aba atual seja a área de trabalho, o que ele oferece é sair dela. */}
             <button
+              ref={botaoBarraRef}
               onClick={() => (rotaMinimizada ? restaurarJanela(rotaMinimizada) : goToTab('desktop'))}
               className={`h-[28px] px-3 border text-xs font-mono font-bold rounded flex items-center gap-1.5 select-none cursor-pointer ${
                 activeTab === 'desktop' && !rotaMinimizada
