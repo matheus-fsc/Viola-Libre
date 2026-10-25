@@ -19,6 +19,7 @@ import {
   isImportedList,
   moveKey,
   planoDeDescarteDaLista,
+  precisaPuxarDoServidor,
   normalizeCategoryName,
   parseImportedFile,
   prettifySlug,
@@ -733,5 +734,25 @@ describe('estante já danificada se conserta na leitura', () => {
       }],
     });
     expect(parsed.data?.entries[0].categoryIds).toEqual(['c2', 'c1', 'c3']);
+  });
+});
+
+describe('precisaPuxarDoServidor', () => {
+  it('identidade conhecida sempre pergunta, mesmo com a estante vazia', () => {
+    expect(precisaPuxarDoServidor(emptyStore(), false)).toBe(true);
+  });
+
+  it('identidade nova e estante vazia não pergunta: é o caso dos robôs', () => {
+    expect(precisaPuxarDoServidor(emptyStore(), true)).toBe(false);
+  });
+
+  it('identidade nova com favorito local pergunta, para poder empurrá-lo', () => {
+    const store = addEntry(emptyStore(), entry('joao-bosco', 'o-bebado-a-equilibrista'));
+    expect(precisaPuxarDoServidor(store, true)).toBe(true);
+  });
+
+  it('identidade nova com remoção pendente pergunta, para resolvê-la', () => {
+    const store = { ...emptyStore(), pendingRemovals: ['joao-bosco/o-bebado-a-equilibrista'] };
+    expect(precisaPuxarDoServidor(store, true)).toBe(true);
   });
 });

@@ -21,6 +21,7 @@ import type { Chave, Variaveis } from '../i18n';
 import {
   favoriteCifra,
   getUserFavorites,
+  identidadeDesconhecidaDoServidor,
   getUserHash,
   isValidUserHash,
   setUserHash,
@@ -859,7 +860,18 @@ export async function toggleCifraFavorite(
  *   4. FUNDE, ignorando o que está pendente de remoção, para não ressuscitar na tela o que
  *      o usuário acabou de tirar.
  */
+/**
+ * Vale perguntar ao servidor? Não quando a identidade é desconhecida dele E não há nada
+ * local para empurrar nem remoção para resolver: a resposta seria vazia e o sync não
+ * teria o que fazer com ela.
+ */
+export function precisaPuxarDoServidor(store: FavoritesStore, identidadeDesconhecida: boolean): boolean {
+  if (!identidadeDesconhecida) return true;
+  return store.entries.length > 0 || store.pendingRemovals.length > 0;
+}
+
 export async function syncFavoritesFromServer(): Promise<FavoritesStore> {
+  if (!precisaPuxarDoServidor(getStore(), identidadeDesconhecidaDoServidor())) return getStore();
   let remote: FavoritedSong[];
   try {
     remote = await getUserFavorites();

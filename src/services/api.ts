@@ -349,6 +349,29 @@ export const isValidUserHash = (value: unknown): value is string => userHashSche
 const randomUserHash = (): string =>
   Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join('');
 
+/**
+ * true enquanto o hash deste navegador nasceu nesta carga de página. Um hash que acabou
+ * de ser sorteado não tem como ter nada no servidor: ninguém favoritou nada com ele ainda.
+ */
+let hashSorteadoAgora = false;
+
+/**
+ * O servidor não pode conhecer esta identidade: não há hash guardado, ou o guardado foi
+ * sorteado agora. Não cria hash, ao contrário de `getUserHash`.
+ *
+ * Existe por causa dos robôs que renderizam JS: cada visita deles chega sem storage,
+ * ganha um hash novo e perguntava ao servidor pelos favoritos de ninguém. Eram ~53 mil
+ * requisições por dia em /api/usuario/favoritos, todas com resposta vazia.
+ */
+export const identidadeDesconhecidaDoServidor = (): boolean => {
+  if (hashSorteadoAgora) return true;
+  try {
+    return !isValidUserHash(localStorage.getItem(USER_HASH_KEY));
+  } catch {
+    return true;
+  }
+};
+
 export const getUserHash = (): string => {
   let stored: string | null = null;
   try {
@@ -359,6 +382,7 @@ export const getUserHash = (): string => {
   if (isValidUserHash(stored)) return stored;
 
   const hash = randomUserHash();
+  hashSorteadoAgora = true;
   try {
     localStorage.setItem(USER_HASH_KEY, hash);
   } catch { /* idem */ }
@@ -376,6 +400,8 @@ export const setUserHash = (hash: string): boolean => {
   } catch {
     return false;
   }
+  // Identidade restaurada de backup: o servidor pode ter os favoritos dela.
+  hashSorteadoAgora = false;
   return true;
 };
 
