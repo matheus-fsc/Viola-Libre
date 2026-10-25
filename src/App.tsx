@@ -856,28 +856,32 @@ function App() {
                   janela" na barra de tarefas. É o que o separa do ✕ ao lado. */}
               <button
                 onClick={() => sairComAnimacao(destinoNaBarra(), minimizarParaDesktop)}
-                className="w-[21px] h-[21px] rounded bg-[#0058e6] border border-white flex items-center justify-center font-bold text-xs hover:bg-[#3a8bfb] focus:outline-none cursor-pointer"
+                className="group w-[21px] h-[21px] rounded bg-[#0058e6] border border-white flex items-center justify-center font-bold text-xs hover:bg-[#3a8bfb] focus:outline-none cursor-pointer overflow-hidden"
                 aria-label={t('app.minimizarAria', { secao: t(`abas.${activeTab}`) })}
                 title={t('app.minimizarDica')}
               >
-              <span aria-hidden="true">_</span>
+              {/* O traço desce e sai por baixo, e volta por cima: é para lá (a barra de
+                  tarefas) que a janela vai. */}
+              <span aria-hidden="true" className="inline-block group-hover:animate-[vl-descer_520ms_ease-in-out]">_</span>
               </button>
               <button 
                 onClick={() => { setPulosEstrela(n => n + 1); goToTab('favorites'); }}
-                className={`w-[21px] h-[21px] rounded border flex items-center justify-center font-bold text-xs focus:outline-none cursor-pointer ${activeTab === 'favorites' ? 'bg-[#ff7f27] border-white text-white' : 'bg-[#0058e6] border-white hover:bg-[#3a8bfb]'}`}
+                className={`group w-[21px] h-[21px] rounded border flex items-center justify-center font-bold text-xs focus:outline-none cursor-pointer ${activeTab === 'favorites' ? 'bg-[#ff7f27] border-white text-white' : 'bg-[#0058e6] border-white hover:bg-[#3a8bfb]'}`}
                 title={t('app.abrirFavoritos')}
               >
-                <StarIcon key={pulosEstrela} className={`w-3.5 h-3.5 ${pulosEstrela > 0 ? 'animate-[vl-pulo_380ms_ease-out]' : ''}`} fill={activeTab === 'favorites' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" />
+                <StarIcon key={pulosEstrela} className={`w-3.5 h-3.5 transition-transform duration-200 group-hover:rotate-[-12deg] group-hover:scale-110 ${pulosEstrela > 0 ? 'animate-[vl-pulo_380ms_ease-out]' : ''}`} fill={activeTab === 'favorites' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" />
               </button>
               {/* Fechar descarta: volta pro início SEM deixar nada para restaurar. Quem
                   clica num ✕ está pedindo pra sair de onde está, não pra ler um "Sobre". */}
               <button
                 onClick={() => sairComAnimacao({ tipo: 'fechar' }, fecharJanela)}
-                className="w-[21px] h-[21px] rounded bg-[#cc3300] border border-white flex items-center justify-center font-bold text-xs hover:bg-red-500 focus:outline-none cursor-pointer"
+                className="group w-[21px] h-[21px] rounded bg-[#cc3300] border border-white flex items-center justify-center font-bold text-xs hover:bg-red-500 focus:outline-none cursor-pointer"
                 aria-label={t('app.fecharAria')}
                 title={t('app.fecharDica')}
               >
-                <span aria-hidden="true">✕</span>
+                {/* Gira um quarto de volta ao passar e encolhe ao apertar: descartar, não
+                    guardar. A janela, ao fechar, encolhe do mesmo jeito. */}
+                <span aria-hidden="true" className="inline-block transition-transform duration-200 group-hover:rotate-90 group-active:scale-75">✕</span>
               </button>
             </div>
           </div>

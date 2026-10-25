@@ -215,6 +215,14 @@ body {
     scroll-behavior: auto !important;
   }
 }
+/* Traço do minimizar: desce e sai por baixo, volta por cima. O botão corta o que
+   passa da borda (overflow-hidden), então parece afundar na barra de tarefas. */
+@keyframes vl-descer {
+  0% { transform: translateY(0); opacity: 1; }
+  45% { transform: translateY(9px); opacity: 0; }
+  46% { transform: translateY(-9px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
 /* Pulo da estrela de Favoritos na barra de título: cresce, passa um pouco e assenta. */
 @keyframes vl-pulo {
   0% { transform: scale(1); }
