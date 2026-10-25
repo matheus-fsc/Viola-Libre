@@ -8,6 +8,8 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import './index.css'
+// Marca o <html> com o modo desempenho antes da primeira pintura, se estiver ligado.
+import './stores/useDesempenhoStore'
 import App from './App.tsx'
 import { CifraPrintPage } from './pages/cifras/CifraPrintPage.tsx'
 import { registrarServiceWorker } from './registrarSW.ts'

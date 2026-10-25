@@ -10,6 +10,7 @@ import {
   type Amostra,
   type EstadoMola,
 } from '../engine/motion';
+import { animacoesDesligadas } from '../stores/useDesempenhoStore';
 
 /** Folga entre a janela e a borda da tela quando ela volta para dentro. */
 const MARGEM = 8;
@@ -35,9 +36,6 @@ interface Geometria {
   w: number;
 }
 
-function prefereMenosMovimento(): boolean {
-  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-}
 
 function ler(chave: string): Geometria | null {
   try {
@@ -132,7 +130,7 @@ export function useFloatingWindow({ chave, inicial, baseOcupada = 0 }: Opcoes) {
       pintar();
       gravar(chave, geo.current);
     };
-    if (prefereMenosMovimento()) { fim(); return; }
+    if (animacoesDesligadas()) { fim(); return; }
     let anterior: number | null = null;
     const passo = (ts: number) => {
       const dt = anterior === null ? 1 / 60 : Math.min((ts - anterior) / 1000, 0.1);
@@ -268,11 +266,17 @@ export function useFloatingWindow({ chave, inicial, baseOcupada = 0 }: Opcoes) {
 
   const ponteiro = { onPointerMove, onPointerUp, onPointerCancel: onPointerUp };
 
+  /** Leva a janela de volta para dentro da tela, depois de ela mudar de altura sozinha. */
+  const reassentar = useCallback(() => {
+    if (!gesto.current) assentar(dentro(geo.current));
+  }, [assentar, dentro]);
+
   return {
     janelaRef,
     /** Espalhe na barra de título. */
     barra: { onPointerDown: (e: React.PointerEvent<HTMLElement>) => comecar('mover', e), ...ponteiro },
     /** Espalhe na alça do canto. */
     canto: { onPointerDown: (e: React.PointerEvent<HTMLElement>) => comecar('redimensionar', e), ...ponteiro },
+    reassentar,
   };
 }

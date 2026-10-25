@@ -203,7 +203,8 @@ body {
 
 /* Respeita quem pediu menos animação no sistema. As pulsações do braço e as
    transições do tema são decorativas; para quem tem sensibilidade vestibular
-   elas não são. */
+   elas não são. O modo desempenho das Preferências (`data-desempenho` no <html>)
+   desliga o mesmo conjunto, para quem tem aparelho fraco. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -213,6 +214,14 @@ body {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+:root[data-desempenho] *,
+:root[data-desempenho] *::before,
+:root[data-desempenho] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
 }
 
 /* TimingEditor — top block (player | wizards+trechos), desktop layout. A dedicated class

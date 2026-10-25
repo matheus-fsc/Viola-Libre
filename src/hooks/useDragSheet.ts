@@ -9,13 +9,11 @@ import {
   type Amostra,
   type EstadoMola,
 } from '../engine/motion';
+import { animacoesDesligadas } from '../stores/useDesempenhoStore';
 
 /** Quanto o dedo anda antes de virar arraste. Abaixo disso é toque, e o clique segue. */
 const FOLGA_TOQUE = 6;
 
-function prefereMenosMovimento(): boolean {
-  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-}
 
 interface Opcoes {
   /** true enquanto a folha deve estar na tela. Em false ela desce e chama `onSaiu`. */
@@ -38,8 +36,9 @@ interface Opcoes {
  * que é quem monta o conteúdo das folhas.
  *
  * O CSS de `prefers-reduced-motion` no index.css não alcança animação feita em JS, então
- * a checagem é aqui: com ela ligada a folha só aparece e some, e o arraste continua
- * funcionando (é o dedo que move, não uma animação).
+ * a checagem é aqui (`animacoesDesligadas`, que soma o sistema e o modo desempenho): com
+ * ela a folha só aparece e some, e o arraste continua funcionando (é o dedo que move,
+ * não uma animação).
  */
 export function useDragSheet({ aberta, onFechar, onSaiu }: Opcoes) {
   const folhaRef = useRef<HTMLDivElement>(null);
@@ -76,7 +75,7 @@ export function useDragSheet({ aberta, onFechar, onSaiu }: Opcoes) {
 
   const animarPara = useCallback((alvo: number, aoChegar?: () => void) => {
     parar();
-    if (prefereMenosMovimento()) {
+    if (animacoesDesligadas()) {
       estado.current = { x: alvo, v: 0 };
       pintar();
       aoChegar?.();

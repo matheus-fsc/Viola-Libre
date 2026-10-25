@@ -69,6 +69,7 @@ import {
 } from '../../services/cifraFavorites';
 import { shortestTranspose } from '../../engine/transposeKey';
 import { MOLA_EMBALO, stepSpring, type EstadoMola } from '../../engine/motion';
+import { animacoesDesligadas } from '../../stores/useDesempenhoStore';
 import { useCifraFavorites } from '../../hooks/useCifraFavorites';
 import {
   frontShapesFor,
@@ -617,8 +618,8 @@ export const CifraViewer: React.FC = () => {
     // músico deu a partida, quer o tempo da música já). Depois que ele rola a mão, volta
     // a 0 e uma mola sem quique leva de volta a 1: a rolagem pega embalo em vez de sair
     // do repouso na velocidade cheia, que dá um tranco visível. Quem pediu menos
-    // movimento no sistema fica sem a rampa.
-    const semRampa = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    // movimento (no sistema ou no modo desempenho) fica sem a rampa.
+    const semRampa = animacoesDesligadas();
     let embalo: EstadoMola = { x: 1, v: 0 };
     const step = (ts: number) => {
       rafRef.current = requestAnimationFrame(step);

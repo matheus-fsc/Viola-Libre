@@ -22,6 +22,7 @@ import { SeletorDeIdioma } from '../../components/SeletorDeIdioma';
 import { SeletorDeNotacao } from '../../components/SeletorDeNotacao';
 import { YouTubeJsConsentControl } from '../../components/YouTubeJsGate';
 import { useVisualizationStore } from '../../stores/useVisualizationStore';
+import { sistemaPedeMenosMovimento, useDesempenhoStore } from '../../stores/useDesempenhoStore';
 import { useT } from '../../i18n';
 
 interface Props {
@@ -87,6 +88,8 @@ export const Preferencias: React.FC<Props> = ({ instrument, onInstrumentChange }
   const navigate = useNavigate();
   const stringOrder = useVisualizationStore(s => s.stringOrder);
   const setStringOrder = useVisualizationStore(s => s.setStringOrder);
+  const desempenho = useDesempenhoStore(s => s.ligado);
+  const setDesempenho = useDesempenhoStore(s => s.setLigado);
 
   return (
     <div className="p-2 sm:p-4">
@@ -160,6 +163,30 @@ export const Preferencias: React.FC<Props> = ({ instrument, onInstrumentChange }
                   {t('preferencias.cordasNota')}
                 </p>
               </div>
+            </Secao>
+
+            <Secao titulo={t('preferencias.desempenhoTitulo')} nota={t('preferencias.desempenhoNota')}>
+              <div className="flex flex-wrap gap-px">
+                <Opcao
+                  rotulo={t('preferencias.animacoesLigadas')}
+                  legenda={t('preferencias.animacoesLigadasNota')}
+                  selecionado={!desempenho}
+                  onClick={() => setDesempenho(false)}
+                />
+                <Opcao
+                  rotulo={t('preferencias.modoDesempenho')}
+                  legenda={t('preferencias.modoDesempenhoNota')}
+                  selecionado={desempenho}
+                  onClick={() => setDesempenho(true)}
+                />
+              </div>
+              {/* Sem isto, quem tem "reduzir movimento" ligado no aparelho escolheria
+                  "Animações" e não veria animação nenhuma, sem saber por quê. */}
+              {sistemaPedeMenosMovimento() && (
+                <p className="px-0.5 text-[9px] text-gray-500 select-none leading-tight">
+                  {t('preferencias.desempenhoSistema')}
+                </p>
+              )}
             </Secao>
 
             <Secao titulo={t('preferencias.terceirosTitulo')} nota={t('preferencias.terceirosNota')}>
