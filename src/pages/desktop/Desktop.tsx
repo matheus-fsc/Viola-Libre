@@ -5,6 +5,7 @@ import { StarIcon } from '../../components/Icons';
 import { IconNotepad } from '../../components/FretboardDiagram';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useCifraFavorites } from '../../hooks/useCifraFavorites';
+import { useMaisBuscadas } from '../../hooks/useMaisBuscadas';
 import { useIdioma, useT } from '../../i18n';
 import {
   getTopSongs,
@@ -12,6 +13,7 @@ import {
   getArtistsPaginated,
   searchSongsGlobal,
   registrarEscolhaNaBusca,
+  getMaisBuscadas,
   isAbortError,
   type Artist,
   type GlobalSearchResult,
@@ -66,11 +68,12 @@ function useShortcuts(): Shortcut[] {
   ];
 }
 
-type TopMode = 'vistas' | 'curtidas';
+type TopMode = 'vistas' | 'curtidas' | 'buscadas';
 
 const TOP_FETCHERS: Record<TopMode, () => Promise<GlobalSearchResult[]>> = {
   vistas: getTopSongs,
   curtidas: getTopLikes,
+  buscadas: getMaisBuscadas,
 };
 
 /**
@@ -249,6 +252,11 @@ const SearchWindow: React.FC<{ className?: string }> = ({ className = '' }) => {
   const navigate = useNavigate();
   const t = useT();
   const { itens: sugestoes, carregando } = useSugestoes(q, modo);
+  // Campo vazio e focado na aba Músicas: em vez de nada, o que as pessoas mais escolhem.
+  // Ajuda quem não lembra o nome exato e chegou aqui para "ver o que tem".
+  const [focado, setFocado] = useState(false);
+  const buscadas = useMaisBuscadas();
+  const mostrarBuscadas = focado && modo === 'musicas' && q.trim() === '' && buscadas.length > 0;
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -280,7 +288,14 @@ const SearchWindow: React.FC<{ className?: string }> = ({ className = '' }) => {
         <Search size={14} className="shrink-0" />
         {t('desktop.buscarTitulo')}
       </h2>
-      <form onSubmit={submit} className="p-2 flex flex-col gap-2">
+      <form
+        onSubmit={submit}
+        onFocus={() => setFocado(true)}
+        // Só fecha quando o foco sai do formulário inteiro: clicar numa sugestão move o
+        // foco para o link dela, e fechar ali sumiria com o link antes do clique valer.
+        onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFocado(false); }}
+        className="p-2 flex flex-col gap-2"
+      >
         <div className="flex gap-1">
           {tab('musicas', t('desktop.abaMusicas'))}
           {tab('artistas', t('desktop.abaArtistas'))}
@@ -311,6 +326,26 @@ const SearchWindow: React.FC<{ className?: string }> = ({ className = '' }) => {
             Sem isso o usuário digita e fica vendo nomes velhos por segundos numa conexão
             lenta, sem sinal de que algo mudou. Esmaecer diz "isto já não vale" sem sumir com
             o conteúdo, que seria pior: piscar a lista a cada tecla. */}
+        {mostrarBuscadas && (
+          <div>
+            <p className="px-1 pb-0.5 text-[10px] font-bold uppercase tracking-wider text-gray-500 select-none">
+              {t('desktop.maisBuscadas')}
+            </p>
+            <ul className="bevel-in bg-white max-h-64 overflow-y-auto retro-scrollbar">
+              {buscadas.slice(0, 6).map(s => (
+                <li key={s.id}>
+                  <Link
+                    to={`/cifras/${s.artist_slug}/${s.slug}`}
+                    className="flex flex-col px-2 py-1.5 hover:bg-[#316ac5] hover:text-white group"
+                  >
+                    <span className="text-sm font-bold truncate">{s.title}</span>
+                    <span className="text-xs text-gray-500 group-hover:text-gray-200 truncate">{s.artist_name}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {carregando && sugestoes.length === 0 && (
           <p className="px-2 py-1.5 text-xs text-gray-500 italic">{t('comum.buscando')}</p>
         )}
@@ -347,6 +382,9 @@ const SearchWindow: React.FC<{ className?: string }> = ({ className = '' }) => {
 const EmAltaPanel: React.FC<{ className?: string }> = ({ className = '' }) => {
   const [mode, setMode] = useState<TopMode>('vistas');
   const { songs, hasAny } = useTopSongs(mode);
+  // A aba só existe quando há o que mostrar: nas primeiras semanas do contador a lista
+  // vem vazia, e uma aba que abre em branco parece defeito.
+  const temBuscadas = useMaisBuscadas().length > 0;
   const t = useT();
 
   if (!hasAny) return null;
@@ -377,6 +415,7 @@ const EmAltaPanel: React.FC<{ className?: string }> = ({ className = '' }) => {
       <div className="flex gap-1 p-1.5 pb-0">
         {tab('vistas', t('desktop.maisVistas'), <Flame size={13} className={mode === 'vistas' ? 'text-orange-300' : 'text-orange-500'} />)}
         {tab('curtidas', t('desktop.maisCurtidas'), <Heart size={13} className={mode === 'curtidas' ? 'text-red-300' : 'text-red-500'} />)}
+        {temBuscadas && tab('buscadas', t('desktop.maisBuscadas'), <Search size={13} className={mode === 'buscadas' ? 'text-white' : 'text-[#0058e6]'} />)}
       </div>
 
       <ol className="bevel-in bg-white m-1.5 p-1 flex-1 overflow-y-auto retro-scrollbar">

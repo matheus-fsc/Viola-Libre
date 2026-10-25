@@ -235,6 +235,26 @@ export const getTopSongs = async (): Promise<GlobalSearchResult[]> => {
   return data;
 };
 
+/**
+ * As músicas mais escolhidas na busca nos últimos 30 dias (`busca_escolhas` no servidor).
+ *
+ * Guarda a PROMESSA, não só o resultado: a aba do "Em alta" e as sugestões do campo de
+ * busca pedem a lista ao mesmo tempo na abertura da home, e sem isso seriam dois
+ * requests. Falhou, esquece, para a próxima tentativa refazer.
+ */
+let maisBuscadasEmVoo: Promise<GlobalSearchResult[]> | null = null;
+export const getMaisBuscadas = (): Promise<GlobalSearchResult[]> => {
+  if (!maisBuscadasEmVoo) {
+    maisBuscadasEmVoo = api.get<GlobalSearchResult[]>('/api/rankings/mais-buscadas')
+      .then(({ data }) => (Array.isArray(data) ? data : []))
+      .catch(err => {
+        maisBuscadasEmVoo = null;
+        throw err;
+      });
+  }
+  return maisBuscadasEmVoo;
+};
+
 export const getTopLikes = async (): Promise<GlobalSearchResult[]> => {
   if (cache.topLikes) return cache.topLikes;
   const { data } = await api.get<GlobalSearchResult[]>('/api/rankings/top-likes');

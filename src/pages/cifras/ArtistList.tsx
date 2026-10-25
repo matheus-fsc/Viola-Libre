@@ -5,6 +5,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { Flame, Heart, FileText, Mic2, Music, Guitar, TrendingUp } from 'lucide-react';
 import { useListScrollRestoration, useRestoredItemCount } from '../../hooks/useListScrollRestoration';
 import { useSeo } from '../../hooks/useSeo';
+import { useMaisBuscadas } from '../../hooks/useMaisBuscadas';
 
 // ─── Genre flag SVGs ──────────────────────────────────────────────────────────
 // Simplified cute flags used as button backgrounds in the genre grid.
@@ -251,6 +252,7 @@ export const ArtistList: React.FC = () => {
   const [retryTick, setRetryTick] = useState(0);
 
   const [songResults, setSongResults] = useState<GlobalSearchResult[]>([]);
+  const maisBuscadas = useMaisBuscadas();
   const [loadingSongs, setLoadingSongs] = useState(false);
   const [hasSearchedSongs, setHasSearchedSongs] = useState(false);
 
@@ -703,9 +705,36 @@ export const ArtistList: React.FC = () => {
                   {t('explorador.buscandoMusicas')}
                 </div>
               ) : !hasSearchedSongs ? (
-                <div className="flex items-center justify-center h-full text-sm text-gray-500">
-                  {t('explorador.digiteDoisCaracteres')}
-                </div>
+                maisBuscadas.length > 0 ? (
+                  // Antes de digitar, as mais escolhidas na busca: um ponto de partida em
+                  // vez de um aviso sozinho no meio da tela.
+                  <div className="flex flex-col gap-2">
+                    <p className="text-sm text-gray-500">{t('explorador.digiteDoisCaracteres')}</p>
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 select-none">
+                      {t('explorador.maisBuscadas')}
+                    </h3>
+                    {maisBuscadas.slice(0, 10).map((song, i) => (
+                      <Link
+                        key={song.id}
+                        data-item-lista={i}
+                        to={`/cifras/${song.artist_slug}/${song.slug}`}
+                        className="flex items-center p-2 hover:bg-[#316ac5] hover:text-white cursor-pointer select-none group border border-transparent hover:border-dotted hover:border-white transition-none text-inherit no-underline"
+                      >
+                        <div className="w-6 font-bold text-gray-600 group-hover:text-white">
+                          {t('comum.ordinal', { n: i + 1 })}
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-sm font-bold">{song.title}</span>
+                          <span className="text-xs text-gray-500 group-hover:text-gray-200">{song.artist_name}</span>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center h-full text-sm text-gray-500">
+                    {t('explorador.digiteDoisCaracteres')}
+                  </div>
+                )
               ) : (
                 <div className="flex flex-col gap-2">
                   {songResults.slice(0, visibleCount).map((song, i) => (
