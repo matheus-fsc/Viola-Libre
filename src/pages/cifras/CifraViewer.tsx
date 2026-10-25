@@ -68,6 +68,7 @@ import {
   isFavorited as isCifraFavorited,
 } from '../../services/cifraFavorites';
 import { shortestTranspose } from '../../engine/transposeKey';
+import { MOLA_EMBALO, stepSpring, type EstadoMola } from '../../engine/motion';
 import { useCifraFavorites } from '../../hooks/useCifraFavorites';
 import {
   frontShapesFor,
@@ -612,6 +613,13 @@ export const CifraViewer: React.FC = () => {
       setUserSeeking(false);
       return;
     }
+    // Embalo: fração da velocidade alvo que o motor usa agora. O play começa em 1 (o
+    // músico deu a partida, quer o tempo da música já). Depois que ele rola a mão, volta
+    // a 0 e uma mola sem quique leva de volta a 1: a rolagem pega embalo em vez de sair
+    // do repouso na velocidade cheia, que dá um tranco visível. Quem pediu menos
+    // movimento no sistema fica sem a rampa.
+    const semRampa = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let embalo: EstadoMola = { x: 1, v: 0 };
     const step = (ts: number) => {
       rafRef.current = requestAnimationFrame(step);
       if (prevTimeRef.current === null) prevTimeRef.current = ts;
@@ -634,8 +642,10 @@ export const CifraViewer: React.FC = () => {
         driveYRef.current = actualY;
         appliedYRef.current = actualY;
         if (map.length >= 2) elapsedRef.current = timeAtY(map, actualY);
+        embalo = { x: semRampa ? 1 : 0, v: 0 };
       } else {
-        const mult = scrollMultRef.current;
+        if (embalo.x < 1) embalo = stepSpring(embalo, 1, MOLA_EMBALO, dt / 1000);
+        const mult = scrollMultRef.current * Math.min(Math.max(embalo.x, 0), 1);
         elapsedRef.current += (dt / 1000) * mult;
         let targetY: number;
         if (map.length >= 2) {

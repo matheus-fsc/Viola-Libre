@@ -13,6 +13,7 @@
  */
 import { useEffect, useState, type ReactNode } from 'react';
 import { useT } from '../../i18n';
+import { useDragSheet } from '../../hooks/useDragSheet';
 import { ChevronDown, ChevronRight, FastForward, Gauge, Hand, Pause, Rewind, RotateCcw, Settings, SkipBack, X } from 'lucide-react';
 
 /** Abre uma folha com o conteúdo dado. */
@@ -51,55 +52,28 @@ interface Props {
 }
 
 export function MobileCifraBar({ destinos, aberto, onAbrir, rolando, transporte }: Props) {
-  const t = useT();
-  const folha = destinos.find((d): d is DestinoFolha => d.tipo === 'folha' && d.id === aberto);
-
-  // Esc fecha — teclado físico existe em tablet e é o que o usuário tenta primeiro.
-  useEffect(() => {
-    if (!folha) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onAbrir(null); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [folha, onAbrir]);
+  // A folha fica montada enquanto desce: `aberto` vira null no começo da saída, e quem
+  // segura o id até a mola terminar é `saindo`. O ajuste é durante o render (e não num
+  // efeito) para não haver um frame com a folha já desmontada.
+  const [saindo, setSaindo] = useState<string | null>(null);
+  const [anterior, setAnterior] = useState(aberto);
+  if (aberto !== anterior) {
+    setAnterior(aberto);
+    setSaindo(aberto === null ? anterior : null);
+  }
+  const idVisivel = aberto ?? saindo;
+  const folha = destinos.find((d): d is DestinoFolha => d.tipo === 'folha' && d.id === idVisivel);
 
   return (
     <>
       {folha && (
-        <>
-          <div
-            onClick={() => onAbrir(null)}
-            className="fixed inset-0 z-40 bg-black/40 md:hidden"
-            aria-hidden
-          />
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label={folha.rotulo}
-            className="fixed inset-x-0 bottom-0 z-50 md:hidden bevel-out bg-[var(--color-winxp-panel)] border-t-2 border-white max-h-[75vh] flex flex-col pb-[env(safe-area-inset-bottom)]"
-          >
-            <button
-              onClick={() => onAbrir(null)}
-              className="shrink-0 py-2 flex justify-center cursor-pointer"
-              aria-label={t('comum.fechar')}
-            >
-              <span className="block w-10 h-1 bg-[#808080] rounded-full" />
-            </button>
-
-            <div className="shrink-0 winxp-gradient-blue text-white px-3 py-1.5 flex items-center justify-between select-none">
-              <span className="font-bold text-xs">{folha.rotulo}</span>
-              <button
-                onClick={() => onAbrir(null)}
-                className="bevel-out bg-[var(--color-winxp-panel)] text-black px-2 py-0.5 text-[10px] font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="overflow-y-auto retro-scrollbar p-2 flex flex-col gap-2">
-              {folha.conteudo}
-            </div>
-          </div>
-        </>
+        <Folha
+          key={folha.id}
+          folha={folha}
+          aberta={aberto === folha.id}
+          onFechar={() => onAbrir(null)}
+          onSaiu={() => setSaindo(null)}
+        />
       )}
 
       {/* A barra some quando a folha está aberta: a folha já ocupa o alcance do polegar,
@@ -135,6 +109,67 @@ export function MobileCifraBar({ destinos, aberto, onAbrir, rolando, transporte 
           )}
         </div>
       )}
+    </>
+  );
+}
+
+function Folha({ folha, aberta, onFechar, onSaiu }: {
+  folha: DestinoFolha;
+  aberta: boolean;
+  onFechar(): void;
+  onSaiu(): void;
+}) {
+  const t = useT();
+  const { folhaRef, fundoRef, alca } = useDragSheet({ aberta, onFechar, onSaiu });
+
+  // Esc fecha — teclado físico existe em tablet e é o que o usuário tenta primeiro.
+  useEffect(() => {
+    if (!aberta) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onFechar(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [aberta, onFechar]);
+
+  return (
+    <>
+      <div
+        ref={fundoRef}
+        onClick={onFechar}
+        className={`fixed inset-0 z-40 bg-black/40 md:hidden opacity-0 ${aberta ? '' : 'pointer-events-none'}`}
+        aria-hidden
+      />
+      <div
+        ref={folhaRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={folha.rotulo}
+        className="fixed inset-x-0 bottom-0 z-50 md:hidden bevel-out bg-[var(--color-winxp-panel)] border-t-2 border-white max-h-[75vh] flex flex-col pb-[env(safe-area-inset-bottom)] will-change-transform"
+      >
+        {/* Alça e cabeçalho arrastam; `touch-none` impede o navegador de tomar o gesto
+            como rolagem e cancelar o ponteiro no meio. */}
+        <button
+          {...alca}
+          onClick={onFechar}
+          className="shrink-0 py-2 flex justify-center cursor-grab active:cursor-grabbing touch-none"
+          aria-label={t('comum.fechar')}
+        >
+          <span className="block w-10 h-1 bg-[#808080] rounded-full" />
+        </button>
+
+        <div {...alca} className="shrink-0 winxp-gradient-blue text-white px-3 py-1.5 flex items-center justify-between select-none touch-none">
+          <span className="font-bold text-xs">{folha.rotulo}</span>
+          <button
+            onClick={onFechar}
+            className="bevel-out bg-[var(--color-winxp-panel)] text-black px-2 py-0.5 text-[10px] font-bold active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="overflow-y-auto retro-scrollbar p-2 flex flex-col gap-2">
+          {folha.conteudo}
+        </div>
+      </div>
     </>
   );
 }
