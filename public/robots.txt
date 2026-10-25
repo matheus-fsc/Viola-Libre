@@ -44,4 +44,12 @@ Disallow: /cifras/*/*/grafo
 Disallow: /*?*busca=
 Disallow: /*?*modo=
 
+# AhrefsBot: índice de uma ferramenta de SEO paga, não de um buscador. Não traz
+# visitante nem pesa no Google, no Bing ou na Apple, e era quase metade de todo o
+# tráfego do site e da API (262 mil requisições num dia de outubro de 2026). Grupo
+# próprio de propósito: um robô segue só o grupo mais específico que o nomeia, então
+# isto não mexe nas regras de `User-agent: *` acima.
+User-agent: AhrefsBot
+Disallow: /
+
 Sitemap: https://violalibre.com.br/sitemap.xml
