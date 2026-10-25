@@ -144,6 +144,7 @@ import {
   isAbortError,
   getArtistsPaginated,
   searchSongsGlobal,
+  registrarEscolhaNaBusca,
   getTopSongs,
   getTopLikes,
   getGeneros,
@@ -712,6 +713,8 @@ export const ArtistList: React.FC = () => {
                       key={song.id}
                       data-item-lista={i}
                       to={`/cifras/${song.artist_slug}/${song.slug}`}
+                      onClick={() => registrarEscolhaNaBusca(search, song.id)}
+                      onAuxClick={() => registrarEscolhaNaBusca(search, song.id)}
                       className="flex items-center p-2 hover:bg-[#316ac5] hover:text-white cursor-pointer select-none group border border-transparent hover:border-dotted hover:border-white transition-none text-inherit no-underline"
                     >
                       <div className="mr-3 text-gray-500 group-hover:text-white">

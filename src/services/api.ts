@@ -213,6 +213,21 @@ export const searchSongsGlobal = async (query: string, signal?: AbortSignal): Pr
   return data;
 };
 
+/**
+ * Conta que quem buscou `termo` escolheu esta música. É o que alimenta o desempate por
+ * popularidade da busca e a lista de mais buscadas.
+ *
+ * Dispara e esquece: é estatística, não funcionalidade, então nunca atrasa a navegação
+ * nem mostra erro. O servidor só conta escolha que a própria busca ofereceu para o termo,
+ * uma vez por pessoa, música e dia, e ignora robô.
+ */
+export const registrarEscolhaNaBusca = (termo: string, songId: number): void => {
+  const q = termo.trim();
+  if (q.length < 2) return;
+  api.post('/api/busca/escolha', { q, song_id: songId }, { headers: cabecalhoChavePublica() })
+    .catch(() => { /* sem rede ou rota fora do ar: a busca segue igual */ });
+};
+
 export const getTopSongs = async (): Promise<GlobalSearchResult[]> => {
   if (cache.songs['top']) return cache.songs['top'] as unknown as GlobalSearchResult[];
   const { data } = await api.get<GlobalSearchResult[]>('/api/rankings/top-musicas');

@@ -11,6 +11,7 @@ import {
   getTopLikes,
   getArtistsPaginated,
   searchSongsGlobal,
+  registrarEscolhaNaBusca,
   isAbortError,
   type Artist,
   type GlobalSearchResult,
@@ -189,7 +190,8 @@ const BlissBackdrop: React.FC = () => (
  * consultas separadas. Então a escolha fica explícita pro usuário em vez de a home decidir
  * por ele e devolver zero resultado quando ele digitou a outra coisa.
  */
-type Sugestao = { to: string; titulo: string; sub?: string };
+/** `songId` só nas músicas: é o que a escolha na busca registra. */
+type Sugestao = { to: string; titulo: string; sub?: string; songId?: number };
 
 /**
  * Sugestões enquanto se digita, para a pessoa escolher sem trocar de tela.
@@ -218,7 +220,7 @@ function useSugestoes(q: string, modo: 'artistas' | 'musicas'): { itens: Sugesta
             .then(p => (p.artists ?? []).map((a: Artist) => ({ to: `/cifras/${a.slug}`, titulo: a.name, sub: a.genre ?? undefined })))
         : searchSongsGlobal(termo, ctrl.signal)
             .then(rs => (rs ?? []).slice(0, 6).map((s: GlobalSearchResult) => ({
-              to: `/cifras/${s.artist_slug}/${s.slug}`, titulo: s.title, sub: s.artist_name,
+              to: `/cifras/${s.artist_slug}/${s.slug}`, titulo: s.title, sub: s.artist_name, songId: s.id,
             })));
 
       pedido
@@ -318,6 +320,9 @@ const SearchWindow: React.FC<{ className?: string }> = ({ className = '' }) => {
               <li key={s.to}>
                 <Link
                   to={s.to}
+                  // onAuxClick cobre o clique do meio ("abrir em nova aba"), que também é escolha.
+                  onClick={() => s.songId && registrarEscolhaNaBusca(q, s.songId)}
+                  onAuxClick={() => s.songId && registrarEscolhaNaBusca(q, s.songId)}
                   className="flex flex-col px-2 py-1.5 hover:bg-[#316ac5] hover:text-white group"
                 >
                   <span className="text-sm font-bold truncate">{s.titulo}</span>
