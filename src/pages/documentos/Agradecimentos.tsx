@@ -24,7 +24,7 @@ export const Agradecimentos: React.FC = () => {
       <Section n={1} title={t('documentos.agradSecAmigos')}>
         <Lista>
           <li>
-            <Link href="https://ernopolis.neocities.org/">Ernopolis</Link>
+            Ernopolis
             {t('documentos.agradErnopolis')}
           </li>
           <li>
