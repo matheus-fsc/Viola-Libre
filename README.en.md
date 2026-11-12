@@ -130,7 +130,7 @@ These are the most connected nodes in the codebase, and understanding them unloc
 
 ### Requirements
 
-- **Node.js 20+** and npm
+- **Node.js 20.19+, 22.13+ or 24+** and npm (the floor comes from Vite and ESLint; CI runs on 24, the `.nvmrc` version)
 
 ### Steps
 

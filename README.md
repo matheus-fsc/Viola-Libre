@@ -119,7 +119,8 @@ São os nós mais conectados do código — entendê-los abre o resto:
 
 ### Pré-requisitos
 
-- **Node.js 20+** e npm
+- **Node.js 20.19+, 22.13+ ou 24+** e npm (o piso vem do Vite e do ESLint; o CI roda na 24,
+  que é a versão do `.nvmrc`)
 
 ### Passos
 

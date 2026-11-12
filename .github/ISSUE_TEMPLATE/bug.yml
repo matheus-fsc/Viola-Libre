@@ -1,0 +1,31 @@
+name: Bug
+description: Algo não funciona como deveria.
+labels: [bug]
+body:
+  - type: textarea
+    id: o-que
+    attributes:
+      label: O que aconteceu
+      description: E o que você esperava que acontecesse.
+    validations:
+      required: true
+  - type: textarea
+    id: passos
+    attributes:
+      label: Como reproduzir
+      placeholder: |
+        1. Abrir https://violalibre.com.br/cifras/...
+        2. Clicar em ...
+        3. Ver ...
+    validations:
+      required: true
+  - type: input
+    id: ambiente
+    attributes:
+      label: Navegador e aparelho
+      placeholder: Chrome 140 no Android, Firefox 143 no Windows...
+  - type: textarea
+    id: extra
+    attributes:
+      label: Prints ou mensagens de erro
+      description: Se houver algo no console do navegador (F12), cole aqui.

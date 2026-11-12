@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Vulnerabilidade de segurança
+    url: https://github.com/matheus-fsc/Viola-Libre/security/advisories/new
+    about: Reporte em privado. Não abra issue pública para falhas de segurança.
+  - name: Remoção de letra ou cifra
+    url: https://violalibre.com.br/termos
+    about: Titulares de direitos pedem remoção pelo e-mail dos Termos de Uso.

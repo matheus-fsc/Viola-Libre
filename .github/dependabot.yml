@@ -1,0 +1,30 @@
+# Atualização de dependências.
+#
+# Semanal e agrupada: um PR por ecossistema com tudo que é minor/patch, em vez de dezenas
+# de PRs soltos que ninguém revisa. Major vem separado, porque é onde algo quebra
+# (Vite, React, TypeScript e ESLint mudam de major com frequência). O CI roda em cada PR,
+# então lint, testes, build e LibreJS já dizem se a atualização passa.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: America/Sao_Paulo
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore(deps)
+    groups:
+      menores:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: chore(ci)
+    groups:
+      actions:
+        patterns: ["*"]

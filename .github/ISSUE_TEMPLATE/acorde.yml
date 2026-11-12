@@ -1,0 +1,33 @@
+name: Acorde ou voicing errado
+description: Um acorde com notas erradas, forma estranha ou nome trocado.
+labels: [motor]
+body:
+  - type: input
+    id: acorde
+    attributes:
+      label: Acorde
+      placeholder: "F7M(9), B°, D/F#..."
+    validations:
+      required: true
+  - type: input
+    id: instrumento
+    attributes:
+      label: Instrumento e afinação
+      placeholder: Viola caipira, Cebolão em Ré
+    validations:
+      required: true
+  - type: textarea
+    id: problema
+    attributes:
+      label: O que está errado
+      description: A forma que apareceu e a que você esperava (casas da corda mais grave para a mais aguda, x para corda abafada).
+      placeholder: |
+        Apareceu: x-3-2-0-1-0
+        Esperava: x-3-5-5-5-3
+    validations:
+      required: true
+  - type: input
+    id: cifra
+    attributes:
+      label: Cifra onde aparece (se for o caso)
+      placeholder: https://violalibre.com.br/cifras/...
