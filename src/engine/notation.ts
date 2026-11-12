@@ -24,8 +24,9 @@ export const NOTATION_STANDARDS: { id: NotationStandard; label: string }[] = [
 
 export const DEFAULT_NOTATION: NotationStandard = 'pt-BR';
 
-/** Cada linha é um grupo de sinônimos, em ordem de preferência para cada padrão. */
-const GRUPOS: { ptBR: string[]; intl: string[] }[] = [
+/** Cada linha é um grupo de sinônimos, em ordem de preferência para cada padrão.
+ *  Exportado para o teste que confere, contra CHORD_FORMULAS, que sinônimos têm as mesmas notas. */
+export const GRUPOS:{ ptBR: string[]; intl: string[] }[] = [
   { ptBR: ['7M', 'Maj7'], intl: ['Maj7', '7M'] },                                  // 7M=21  Maj7=0
   { ptBR: ['m7(5-)', 'm7(b5)'], intl: ['m7(b5)', 'm7(5-)'] },                       // 7 / 3
   { ptBR: ['7(5-)', '7(b5)'], intl: ['7(b5)', '7(5-)'] },                           // convenção

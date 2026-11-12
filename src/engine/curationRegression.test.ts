@@ -6,7 +6,7 @@
  * um violeiro — então servem de âncora: qualquer mexida no scoring ou na ordenação de
  * `calculateVoicings` é medida por quão perto do topo essas escolhas continuam aparecendo.
  *
- * O dump vive na raiz do repo (`curadoria_dump.json`, gerado do banco de produção). Se ele
+ * O dump vive em `__fixtures__/curadoria_dump.json` (gerado do banco de produção). Se ele
  * não estiver presente o teste é pulado, para não quebrar clone limpo / CI sem o fixture.
  */
 import { describe, it, expect } from 'vitest';
@@ -36,7 +36,7 @@ type CuratedRow = {
  */
 const IGNORED_EDITORS = new Set(['wilson_simonal']);
 
-const DUMP = path.resolve(__dirname, '../../curadoria_dump.json');
+const DUMP = path.resolve(__dirname, '__fixtures__/curadoria_dump.json');
 const allRows: CuratedRow[] = fs.existsSync(DUMP) ? JSON.parse(fs.readFileSync(DUMP, 'utf8')) : [];
 const rows = allRows.filter(r => !IGNORED_EDITORS.has(r.editor_name ?? ''));
 

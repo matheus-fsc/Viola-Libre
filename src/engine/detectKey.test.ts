@@ -913,7 +913,7 @@ describe('detectKey — troca de modo (a tônica que fica e a terça que troca)'
  * curadoria humana que ainda não existe. Afirmam-se invariantes e a propriedade central:
  * 100% dos rótulos têm que ser tons possíveis, contra 50% de impossíveis do `matches[0]`.
  */
-const dumpPath = path.resolve(__dirname, '../../tons_dump.json');
+const dumpPath = path.resolve(__dirname, '__fixtures__/tons_dump.json');
 const temDump = fs.existsSync(dumpPath);
 
 describe.skipIf(!temDump)('detectKey — regressão sobre o acervo', () => {

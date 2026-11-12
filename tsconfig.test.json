@@ -5,7 +5,7 @@
     "lib": ["ES2023", "DOM"],
     "module": "esnext",
     /* Testes rodam no Node (vitest), então diferente do app eles podem ler arquivos —
-       a regressão de curadoria carrega o dump JSON da raiz do repo. */
+       a regressão de curadoria carrega o dump JSON de src/engine/__fixtures__. */
     "types": ["node", "vite/client"],
     "skipLibCheck": true,
 
