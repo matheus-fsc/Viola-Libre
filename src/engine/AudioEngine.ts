@@ -34,9 +34,15 @@ export interface InstrumentVoice {
 // --- Built-in Voices ---
 
 /** Default oscillator-based voice (triangle wave with envelope) */
+// O id sai da forma de onda: fixo, as quatro variantes do registro dividiam o mesmo id, e
+// procurar a senoidal por id devolvia a triangular.
+const WAVE_NAMES: Partial<Record<OscillatorType, string>> = {
+  triangle: 'Triângulo', sine: 'Senoidal', square: 'Quadrada', sawtooth: 'Dente de serra',
+};
+
 export class OscillatorVoice implements InstrumentVoice {
-  readonly id = 'oscillator-triangle';
-  readonly name = 'Oscilador (Triângulo)';
+  readonly id: string;
+  readonly name: string;
 
   private waveType: OscillatorType;
   private attackTime: number;
@@ -50,6 +56,8 @@ export class OscillatorVoice implements InstrumentVoice {
     maxGain?: number;
   }) {
     this.waveType = options?.waveType ?? 'triangle';
+    this.id = `oscillator-${this.waveType}`;
+    this.name = `Oscilador (${WAVE_NAMES[this.waveType] ?? this.waveType})`;
     this.attackTime = options?.attackTime ?? 0.015;
     this.releaseTime = options?.releaseTime ?? 0.05;
     this.maxGain = options?.maxGain ?? 0.3;
@@ -142,7 +150,10 @@ export class SoundFontVoice implements InstrumentVoice {
   name: string;
   instrumentName: InstrumentName;
   private player: Soundfont.Player | null = null;
-  private isLoading = false;
+  // A promessa do carregamento em curso, e não um booleano: um acorde dispara 5-6 notas no
+  // mesmo instante, e com a flag só a primeira esperava o download; as demais achavam
+  // `player` nulo e sumiam, e o primeiro clique soava uma nota só.
+  private loading: Promise<void> | null = null;
 
   constructor(id: string, name: string, instrumentName: InstrumentName) {
     this.id = id;
@@ -150,16 +161,16 @@ export class SoundFontVoice implements InstrumentVoice {
     this.instrumentName = instrumentName;
   }
 
-  async load(ctx: AudioContext) {
-    if (!this.player && !this.isLoading) {
-      this.isLoading = true;
-      try {
-        this.player = await Soundfont.instrument(ctx, this.instrumentName);
-      } catch (err) {
-        console.error(`Failed to load soundfont ${this.instrumentName}`, err);
-      }
-      this.isLoading = false;
+  load(ctx: AudioContext): Promise<void> {
+    if (this.player) return Promise.resolve();
+    if (!this.loading) {
+      this.loading = Soundfont.instrument(ctx, this.instrumentName)
+        .then(p => { this.player = p; })
+        .catch(err => { console.error(`Failed to load soundfont ${this.instrumentName}`, err); })
+        // Solta a promessa ao terminar: se falhou (offline), o próximo clique tenta de novo.
+        .finally(() => { this.loading = null; });
     }
+    return this.loading;
   }
 
   play(ctx: AudioContext, frequency: number, durationSec: number, delaySec: number = 0): void {
