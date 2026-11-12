@@ -12,16 +12,23 @@ export const TimingEditorPage: React.FC = () => {
   const { artistSlug, songSlug } = useParams<{ artistSlug: string; songSlug: string }>();
   const navigate = useNavigate();
 
-  const [cifra, setCifra] = useState<CifraDetail | null>(null);
-  const [loading, setLoading] = useState(true);
+  // O resultado guarda de qual música ele é: `loading` sai da comparação com a rota atual,
+  // em vez de um setLoading(true) no começo do efeito, que custava um render em cascata.
+  const chave = `${artistSlug}/${songSlug}`;
+  const [resultado, setResultado] = useState<{ chave: string; cifra: CifraDetail | null } | null>(null);
+  const loading = resultado?.chave !== chave;
+  const cifra = loading ? null : resultado.cifra;
 
   useEffect(() => {
     if (!artistSlug || !songSlug) return;
-    setLoading(true);
+    let cancelado = false;
     getCifra(artistSlug, songSlug)
-      .then(setCifra)
-      .catch(console.error)
-      .finally(() => setLoading(false));
+      .then(c => { if (!cancelado) setResultado({ chave: `${artistSlug}/${songSlug}`, cifra: c }); })
+      .catch(err => {
+        console.error(err);
+        if (!cancelado) setResultado({ chave: `${artistSlug}/${songSlug}`, cifra: null });
+      });
+    return () => { cancelado = true; };
   }, [artistSlug, songSlug]);
 
   const lines = useMemo(() => {

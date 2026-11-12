@@ -8,6 +8,7 @@ import { useYouTubeJsAllowed } from '../hooks/useYouTubeJsAllowed';
 import { useFloatingWindow } from '../hooks/useFloatingWindow';
 import { useSpringValue } from '../hooks/useSpringValue';
 import { getIsMobile } from '../hooks/useIsMobile';
+import { useLatest } from '../hooks/useLatest';
 
 // Estados do player do YouTube que interessam aqui (a API devolve números crus).
 const YT_STATE_PLAYING = 1;
@@ -69,8 +70,7 @@ export const SourceVideoPanel: React.FC<SourceVideoPanelProps> = ({
   const playerRef = useRef<YTPlayer | null>(null);
   // O callback do pai não precisa ser estável: guardá-lo num ref evita que uma
   // nova referência a cada render destrua e recrie o player no meio da música.
-  const onDurationRef = useRef(onDurationDetected);
-  onDurationRef.current = onDurationDetected;
+  const onDurationRef = useLatest(onDurationDetected);
 
   const videoId = extractYouTubeId(videoUrl);
 
@@ -110,7 +110,8 @@ export const SourceVideoPanel: React.FC<SourceVideoPanelProps> = ({
       playerRef.current = null;
       wrap.replaceChildren();
     };
-  }, [videoId, ytAllowed]);
+    // onDurationRef vem do useLatest, identidade fixa: não recria o player.
+  }, [videoId, ytAllowed, onDurationRef]);
 
   const togglePlay = useCallback(() => {
     const p = playerRef.current;

@@ -17,6 +17,7 @@ import {
   type ResumoDoCache,
 } from '../../services/cifraCache';
 import { baixarLista, type ProgressoDownload, type ResultadoDownload } from '../../services/baixarLista';
+import { useLatest } from '../../hooks/useLatest';
 
 /** Quanto ~N cifras devem ocupar. Aproximado por natureza — ver `BYTES_POR_CIFRA_ESTIMADO`. */
 export const estimarTamanho = (n: number): string => formatarBytes(n * BYTES_POR_CIFRA_ESTIMADO);
@@ -38,8 +39,7 @@ export function useCacheDeCifras(todas: readonly string[]): CacheDeCifras {
   const [espaco, setEspaco] = useState<{ usado: number; total: number } | null>(null);
   const [progresso, setProgresso] = useState<ProgressoDownload | null>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const todasRef = useRef(todas);
-  todasRef.current = todas;
+  const todasRef = useLatest(todas);
 
   const medir = () => {
     void resumoDoCache().then(setResumo);

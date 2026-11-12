@@ -138,7 +138,10 @@ export function FavoritosDashboard() {
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   // Chave + variáveis, não a frase: ver a nota no tipo de erro dos serviços.
   const [shareError, setShareError] = useState<number | null>(null);
-  const [copiado, setCopiado] = useState(false);
+  // Guarda QUAL link foi copiado: ao mudar as gavetas ou o nome, o link muda e o "copiado"
+  // se apaga sozinho, sem um efeito para desligá-lo.
+  const [linkCopiado, setLinkCopiado] = useState<string | null>(null);
+  const copiado = linkCopiado !== null && linkCopiado === shareUrl;
   /** Gavetas marcadas para ir no link. */
   const [shareCats, setShareCats] = useState<ReadonlySet<string>>(new Set());
   /** As cifras que não estão em gaveta nenhuma entram também? */
@@ -374,6 +377,8 @@ export function FavoritosDashboard() {
 
   const abrirCompartilhar = () => {
     if (shareOpen) { setShareOpen(false); return; }
+    // Reabrir começa sem o "copiado" da vez anterior, mesmo que o link saia igual.
+    setLinkCopiado(null);
     setExportOpen(false);
     setOfflineOpen(false);
     if (selection.kind === 'category') {
@@ -426,7 +431,6 @@ export function FavoritosDashboard() {
   useEffect(() => {
     if (!shareOpen || paraCompartilhar.length === 0) return;
     let cancelado = false;
-    setCopiado(false);
 
     void encodeLista(buildSharedFile(store, paraCompartilhar, shareNome)).then(token => {
       if (cancelado) return;
@@ -446,8 +450,8 @@ export function FavoritosDashboard() {
     if (!shareUrl) return;
     try {
       await navigator.clipboard.writeText(shareUrl);
-      setCopiado(true);
-      window.setTimeout(() => setCopiado(false), 2500);
+      setLinkCopiado(shareUrl);
+      window.setTimeout(() => setLinkCopiado(null), 2500);
     } catch {
       // Sem permissão ou fora de contexto seguro. O link está à vista no campo ao lado,
       // então dá para copiar à mão — é isso que a mensagem manda fazer.

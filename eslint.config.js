@@ -30,12 +30,9 @@ export default defineConfig([
           caughtErrorsIgnorePattern: '^_',
         },
       ],
-      // Regras novas do React Compiler (react-hooks v7): apontam padrões que hoje
-      // funcionam (reset de estado ao trocar de prop, refs carregando estado entre
-      // renders). Mantidas como aviso — visíveis no editor/lint, mas não reprovam o
-      // CI — para refatorar de forma incremental, sem risco de regressão agora.
-      'react-hooks/set-state-in-effect': 'warn',
-      'react-hooks/refs': 'warn',
+      // As regras do React Compiler (react-hooks v7) ficaram em aviso enquanto o débito
+      // herdado era pago. Pago, voltam ao padrão (erro): as quatro exceções que restam
+      // estão no CifraViewer, cada uma com o motivo ao lado do eslint-disable.
     },
   },
 ])

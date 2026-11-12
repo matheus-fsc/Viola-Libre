@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useState } from 'react';
 import type { TimingRegion } from '../services/timingRegions';
 
 export interface AutoScrollResult {
@@ -19,7 +19,10 @@ export function useAutoScroll(regions: TimingRegion[], currentTime: number): Aut
   // Carries the last known scrollToLine across renders where no region covers currentTime (a
   // gap between sections, or before the first one starts) — so playback through a gap holds
   // position instead of yanking the view back to the top.
-  const lastScrollToLine = useRef<number | null>(null);
+  // Estado, não ref: é valor exibido, e o React só garante consistência para o que passa pelo
+  // estado. Ajustado durante o render, o padrão do React para estado derivado de prop; como
+  // só muda quando a linha muda, o re-render extra acontece uma vez por troca de região.
+  const [lastScrollToLine, setLastScrollToLine] = useState<number | null>(null);
 
   const active = regions.find(r =>
     r.startLine != null && r.endLine != null && r.startTime != null && r.endTime != null &&
@@ -27,8 +30,8 @@ export function useAutoScroll(regions: TimingRegion[], currentTime: number): Aut
   ) ?? null;
 
   if (active) {
-    lastScrollToLine.current = active.startLine!;
+    if (active.startLine !== lastScrollToLine) setLastScrollToLine(active.startLine);
     return { activeRegionId: active.id, scrollToLine: active.startLine! };
   }
-  return { activeRegionId: null, scrollToLine: lastScrollToLine.current };
+  return { activeRegionId: null, scrollToLine: lastScrollToLine };
 }

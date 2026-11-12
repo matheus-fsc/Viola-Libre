@@ -71,6 +71,7 @@ import { shortestTranspose } from '../../engine/transposeKey';
 import { MOLA_EMBALO, stepSpring, type EstadoMola } from '../../engine/motion';
 import { animacoesDesligadas } from '../../stores/useDesempenhoStore';
 import { useCifraFavorites } from '../../hooks/useCifraFavorites';
+import { useLatest } from '../../hooks/useLatest';
 import {
   frontShapesFor,
   readVoicingOrderMode,
@@ -159,6 +160,18 @@ function fmtTime(sec: number): string {
    tinha o que fazer solta neste arquivo, e lá ficou testável. Dois defeitos foram
    corrigidos na mudança — a leitura da terça por `suffix.includes('m')` e o tom menor
    reconhecido só por `endsWith('m')`. Ver os testes em `detectKey.test.ts`. */
+
+/** A prévia que o editor de timing deixou para esta música. Storage bloqueado ou JSON
+ *  corrompido valem como "sem prévia": é um atalho de revisão, não dado de que se dependa. */
+function lerPreviaTiming(songSlug: string | undefined): TimingContribution | null {
+  if (!songSlug) return null;
+  try {
+    const guardado = localStorage.getItem(`viola_preview_timing_${songSlug}`);
+    return guardado ? JSON.parse(guardado) : null;
+  } catch {
+    return null;
+  }
+}
 
 /** Qual frase mostrar para cada falha do modal de sequência. */
 const ERRO_SEQ = {
@@ -301,7 +314,12 @@ export const CifraViewer: React.FC = () => {
   const [loopA, setLoopA] = useState<number | null>(null);
   const [loopB, setLoopB] = useState<number | null>(null);
   const [maxScroll, setMaxScroll] = useState(0);
-  const [previewTiming, setPreviewTiming] = useState<TimingContribution | null>(null);
+  // A prévia vem do editor de timing pelo localStorage, e é de UMA música: o estado guarda
+  // de qual, e trocar de rota relê no próprio render, sem o render extra de um efeito.
+  const [previa, setPrevia] = useState(() => ({ slug: songSlug, timing: lerPreviaTiming(songSlug) }));
+  if (songSlug && previa.slug !== songSlug) setPrevia({ slug: songSlug, timing: lerPreviaTiming(songSlug) });
+  const previewTiming = previa.timing;
+  const setPreviewTiming = (timing: TimingContribution | null) => setPrevia({ slug: songSlug, timing });
   const [bestTiming, setBestTiming] = useState<TimingContribution | null>(null);
   // Source em vídeo: painel aberto sob demanda e duração medida no player (só existe
   // depois que o músico abre o vídeo — ninguém carrega um iframe do YouTube sem pedir).
@@ -338,20 +356,15 @@ export const CifraViewer: React.FC = () => {
   const lastGestureRef = useRef(-Infinity);
   const seekingRef = useRef(false);
   const totalTimeRef = useRef(0);
-  const videoDurationRef = useRef<number | null>(null);
-  videoDurationRef.current = videoDuration;
+  const videoDurationRef = useLatest(videoDuration);
   const lastClockAtRef = useRef(0);
   const railRef = useRef<HTMLDivElement>(null);
   const railDragRef = useRef(false);
-  // Mirror mutable values for rAF closure (updated each render)
-  const scrollMultRef = useRef(scrollMult);
-  const loopARef = useRef(loopA);
-  const loopBRef = useRef(loopB);
-  const cifraForRaf = useRef(cifra);
-  scrollMultRef.current = scrollMult;
-  loopARef.current = loopA;
-  loopBRef.current = loopB;
-  cifraForRaf.current = cifra;
+  // Espelhos para o laço do rAF, que vive entre renders e precisa ler o valor atual.
+  const scrollMultRef = useLatest(scrollMult);
+  const loopARef = useLatest(loopA);
+  const loopBRef = useLatest(loopB);
+  const cifraForRaf = useLatest(cifra);
 
   useEffect(() => {
     const engine = AudioEngine.getInstance();
@@ -460,6 +473,9 @@ export const CifraViewer: React.FC = () => {
     if (tomAplicadoRef.current === chave) return;
     tomAplicadoRef.current = chave;
     const salvo = findEntry(favoritesStore, artistSlug, songSlug)?.transpose ?? 0;
+    // Exceção consciente: o tom salvo só pode ser aplicado depois que a cifra chega (o efeito
+    // de carga zera a transposição) e uma vez por música, controlado pelo ref acima.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (salvo !== 0) setTransposeOffset(salvo);
     // `favoritesStore` de propósito FORA das dependências: ele muda a cada escrita na
     // estante (salvar o tom, favoritar, sincronizar), e reagir a isso reaplicaria o tom
@@ -608,6 +624,10 @@ export const CifraViewer: React.FC = () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
       prevTimeRef.current = null;
+      // Exceção consciente: desligar a rolagem desmonta o laço do rAF, e o estado exibido
+      // (seção atual, "procurando") sai junto com os refs do motor, no mesmo passo. Levar
+      // isto ao render separaria os dois.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCurrentSection(null);
       prevSectionRef.current = null;
       seekingRef.current = false;
@@ -703,7 +723,8 @@ export const CifraViewer: React.FC = () => {
     };
     rafRef.current = requestAnimationFrame(step);
     return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
-  }, [autoScroll]);
+    // Os espelhos do useLatest têm identidade fixa: declarados, não reiniciam o laço.
+  }, [autoScroll, cifraForRaf, loopARef, loopBRef, scrollMultRef, videoDurationRef]);
 
   // Marca o gesto no primeiro sinal — antes mesmo da página se mover — para o
   // motor não disputar o primeiro pixel do arraste com o dedo do músico.
@@ -974,6 +995,11 @@ export const CifraViewer: React.FC = () => {
 
   // Reset BPM/scroll/loop ao trocar de música
   useEffect(() => {
+    // Exceção consciente: o reset mexe em estado e em uma dúzia de refs do motor de rolagem,
+    // que não podem ser escritos no render. A saída limpa é remontar a tela por música
+    // (`key` na rota), mas isso refaria também a carga e o player; fica para quando houver
+    // teste de componente que segure a mudança.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLocalBpm(null);
     setAutoScroll(false);
     setShowVideo(false);
@@ -1014,13 +1040,6 @@ export const CifraViewer: React.FC = () => {
 
   useEffect(() => {
     if (songSlug) fetchBestTiming(songSlug).then(setBestTiming).catch(() => {});
-  }, [songSlug]);
-
-  useEffect(() => {
-    if (!songSlug) return;
-    const stored = localStorage.getItem(`viola_preview_timing_${songSlug}`);
-    if (!stored) { setPreviewTiming(null); return; }
-    try { setPreviewTiming(JSON.parse(stored)); } catch { setPreviewTiming(null); }
   }, [songSlug]);
 
   const buildSeqData = (): SequenciaData => ({
@@ -1501,6 +1520,10 @@ export const CifraViewer: React.FC = () => {
     // Medir custa carregar o JS não-livre do YouTube e contar ao Google qual
     // vídeo está sendo estudado. Não dá para fazer isso escondido atrás de um
     // botão que só diz "Rolar": pergunta-se uma vez, e a resposta fica valendo.
+    // Exceção consciente: a pergunta nasce da combinação de rolagem ligada, vídeo sem duração
+    // e consentimento pendente, que muda por vários caminhos; o efeito é o único ponto que
+    // vê todos.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (ytConsent === 'nao-perguntado') { setAskScrollConsent(true); return; }
     if (ytConsent === 'nao') return;
 

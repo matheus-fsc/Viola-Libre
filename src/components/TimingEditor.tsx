@@ -170,8 +170,11 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
 
   // Community
   const [contributions, setContributions] = useState<TimingContribution[]>([]);
-  const [loadingContribs, setLoadingContribs] = useState(false);
   const [communityLoaded, setCommunityLoaded] = useState(false);
+  // Derivado, não estado próprio: a aba só lê isto quando está aberta, e aberta sem dados
+  // carregados é exatamente "carregando". Com um setLoading(true) no efeito, o primeiro
+  // render da aba mostrava "sem contribuições" por um quadro antes do "carregando".
+  const loadingContribs = !communityLoaded;
 
   // O player do YouTube depende de JS não-livre e só carrega sob consentimento.
   const ytAllowed = useYouTubeJsAllowed();
@@ -251,7 +254,9 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
     }).catch(() => { /* sem player: o editor segue com a duração digitada à mão */ });
 
     return () => { cancelled = true; clearYtPlayer(); };
-  }, [mediaUrl, mediaType, ytAllowed]);
+    // As ações do usePlayerStore são criadas uma vez com o store e nunca mudam de
+    // identidade: declará-las não faz o efeito rodar mais vezes.
+  }, [mediaUrl, mediaType, ytAllowed, clearYtPlayer, registerYtPlayer, setPlayerReady]);
 
   // ── Audio polling (tick delegated to store) ────────────────────────────────
   useEffect(() => {
@@ -264,16 +269,14 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
       usePlayerStore.getState().tick(audio.currentTime);
     }, 250);
     return () => { clearInterval(id); registerAudio(null); };
-  }, [mediaType, mediaUrl]);
+  }, [mediaType, mediaUrl, registerAudio]);
 
   // ── Community ─────────────────────────────────────────────────────────────
   useEffect(() => {
     if (activeTab !== 'community' || communityLoaded) return;
-    setLoadingContribs(true);
     fetchTimings(slug)
       .then(data => { setContributions(data); setCommunityLoaded(true); })
-      .catch(() => setCommunityLoaded(true))
-      .finally(() => setLoadingContribs(false));
+      .catch(() => setCommunityLoaded(true));
   }, [activeTab, communityLoaded, slug]);
 
   // Keep the active lyric line visible while sequentially syncing (karaoke-style auto-advance)

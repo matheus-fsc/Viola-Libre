@@ -103,8 +103,18 @@ export const AssistedModeOverlay: React.FC = () => {
   // ── Countdown state (UI-local — not in store) ──────────────────────────────
   const [countdown, setCountdown] = useState<number | null>(null);
 
+  // O ponto de partida do contador é reposto no render, quando muda qualquer coisa que o
+  // efeito abaixo observa: a mesma chave de antes, sem o render extra de um setState no
+  // corpo do efeito. O efeito fica só com os timers, que avançam o contador por callback.
+  const chaveContagem = `${active}|${phase}|${showCountdown}|${mode}`;
+  const [chaveVista, setChaveVista] = useState<string | null>(null);
+  if (chaveContagem !== chaveVista) {
+    setChaveVista(chaveContagem);
+    setCountdown(active && phase === 'armed' && showCountdown ? 3 : null);
+  }
+
   useEffect(() => {
-    if (!active || phase !== 'armed') { setCountdown(null); return; }
+    if (!active || phase !== 'armed') return;
 
     if (!showCountdown) {
       beginRecording();
@@ -112,12 +122,12 @@ export const AssistedModeOverlay: React.FC = () => {
     }
 
     // 3-2-1 countdown
-    setCountdown(3);
     const t1 = setTimeout(() => setCountdown(2), 1000);
     const t2 = setTimeout(() => setCountdown(1), 2000);
     const t3 = setTimeout(() => { setCountdown(null); beginRecording(); }, 3000);
     return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
-  }, [active, phase, showCountdown, mode]); // beginRecording is stable (Zustand action)
+    // beginRecording é ação do Zustand: identidade estável, não reinicia a contagem.
+  }, [active, phase, showCountdown, mode, beginRecording]);
 
   // ── Keyboard shortcuts (only while active) ────────────────────────────────
   useEffect(() => {

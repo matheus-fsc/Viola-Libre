@@ -366,11 +366,19 @@ function App() {
 
   // Popup "em construção" — abas/rotas que ainda não estão prontas
   const [wipPopup, setWipPopup] = useState<string | null>(null);
-  useEffect(() => {
-    if (activeTab === 'ear') setWipPopup('ear');
-    else if (activeTab === 'minhascifras') setWipPopup('minhascifras');
-    else if (isTimingRoute) setWipPopup('timing');
-  }, [activeTab, isTimingRoute]);
+  // Abre ao ENTRAR numa rota em construção. Ajustado durante o render, comparando com a
+  // última rota vista, em vez de num efeito: o efeito pintava a tela sem o aviso e logo
+  // renderizava de novo para mostrá-lo. Fechar o aviso não o reabre, porque a rota vista
+  // continua a mesma; só uma navegação para outra rota em construção o traz de volta.
+  const wipDaRota = activeTab === 'ear' ? 'ear'
+    : activeTab === 'minhascifras' ? 'minhascifras'
+    : isTimingRoute ? 'timing'
+    : null;
+  const [wipVisto, setWipVisto] = useState<string | null>(null);
+  if (wipDaRota !== wipVisto) {
+    setWipVisto(wipDaRota);
+    if (wipDaRota) setWipPopup(wipDaRota);
+  }
 
   // Os dois diálogos do App vivem como JSX condicional, não como componentes, então os
   // hooks ficam aqui e são ligados/desligados pelo `active`. As funções de fechar
@@ -644,18 +652,22 @@ function App() {
   // default for this chord on this instrument+tuning. Dictionary curation has no song
   // context, so it always uses the global (song_slug = null) scope.
   const dictionaryChordId = rootName ? buildChordId(selectedInst.id, selectedTuning.id, chordDisplayName) : null;
-  const [chordRankings, setChordRankings] = useState<ChordRankEntry[]>([]);
+  // As curadorias guardam de qual acorde são. Sem isso, as do acorde anterior ficavam na tela
+  // durante o fetch e podiam acender um selo "curado" falso num card do acorde novo, se um
+  // frets_array coincidisse. Antes isso se evitava limpando o estado no começo do efeito, o
+  // que custava um render; comparar o id descarta as antigas já no primeiro render.
+  const [rankingsCarregados, setRankingsCarregados] = useState<{ id: string; entries: ChordRankEntry[] } | null>(null);
+  const chordRankings = useMemo(
+    () => (rankingsCarregados && rankingsCarregados.id === dictionaryChordId ? rankingsCarregados.entries : []),
+    [rankingsCarregados, dictionaryChordId],
+  );
 
   useEffect(() => {
-    // Clear synchronously on every chord change — otherwise the previous chord's
-    // rankings stay in state during the fetch and can flash a false "curado" badge
-    // on the new chord's cards if a frets_array happens to coincide.
-    setChordRankings([]);
     if (!dictionaryChordId) return;
     let cancelled = false;
     getChordRankings(dictionaryChordId)
-      .then(entries => { if (!cancelled) setChordRankings(entries); })
-      .catch(() => { if (!cancelled) setChordRankings([]); });
+      .then(entries => { if (!cancelled) setRankingsCarregados({ id: dictionaryChordId, entries }); })
+      .catch(() => { if (!cancelled) setRankingsCarregados({ id: dictionaryChordId, entries: [] }); });
     return () => { cancelled = true; };
   }, [dictionaryChordId]);
 
@@ -683,7 +695,7 @@ function App() {
     try {
       await rankChord(dictionaryChordId, voicing.frets);
       const entries = await getChordRankings(dictionaryChordId, { forceRefresh: true });
-      setChordRankings(entries);
+      setRankingsCarregados({ id: dictionaryChordId, entries });
     } catch (err) {
       console.error('Falha ao curar acorde:', err);
     } finally {
@@ -709,7 +721,7 @@ function App() {
         reordered.map((c, i) => rankChord(dictionaryChordId, c.fretsArray, { scoreBoost: reordered.length - i }))
       );
       const entries = await getChordRankings(dictionaryChordId, { forceRefresh: true });
-      setChordRankings(entries);
+      setRankingsCarregados({ id: dictionaryChordId, entries });
     } catch (err) {
       console.error('Falha ao reordenar curadoria:', err);
     } finally {
