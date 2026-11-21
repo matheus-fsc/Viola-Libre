@@ -11,6 +11,7 @@ export function withoutFingerpicking(
 ): { phrases: TimingPhrase[]; removedDuration: number } {
   const cuts: Array<{ start: number; end: number }> = [];
   const ordered = [...phrases].sort((a, b) => a.startTime - b.startTime);
+  const seenLyricLines = new Set<number>();
   let previousLyric: TimingPhrase | undefined;
   for (const phrase of ordered) {
     const type = lineTypes[phrase.lineIndex];
@@ -18,7 +19,9 @@ export function withoutFingerpicking(
       cuts.push({ start: phrase.startTime, end: phrase.endTime });
     }
     if (type !== 'lyric') continue;
-    if (previousLyric && previousLyric.endTime < phrase.startTime) {
+    // Na volta a uma letra já cantada, só os tempos explícitos de tab justificam cortar a pausa.
+    if (previousLyric && previousLyric.endTime < phrase.startTime &&
+      (phrase.lineIndex >= previousLyric.lineIndex || !seenLyricLines.has(phrase.lineIndex))) {
       const first = Math.min(previousLyric.lineIndex, phrase.lineIndex);
       const last = Math.max(previousLyric.lineIndex, phrase.lineIndex);
       const between = lineTypes.slice(first + 1, last);
@@ -26,6 +29,7 @@ export function withoutFingerpicking(
         cuts.push({ start: previousLyric.endTime, end: phrase.startTime });
       }
     }
+    seenLyricLines.add(phrase.lineIndex);
     previousLyric = phrase;
   }
 
@@ -76,7 +80,7 @@ export function stepYAtTime(anchors: readonly LineScrollAnchor[], t: number, tra
   return easeScrollY(earlier[previous]?.y ?? 0, y, elapsedMs, transitionMs);
 }
 
-export function stepTimeAtY(anchors: readonly LineScrollAnchor[], y: number): number {
+export function stepTimeAtY(anchors: readonly LineScrollAnchor[], y: number, referenceTime?: number): number {
   let next: LineScrollAnchor | undefined;
   let last: LineScrollAnchor | undefined;
   for (const anchor of anchors) {
@@ -88,5 +92,18 @@ export function stepTimeAtY(anchors: readonly LineScrollAnchor[], y: number): nu
       last = anchor;
     }
   }
-  return (next ?? last)?.startTime ?? 0;
+  let match = next ?? last;
+  if (match && referenceTime !== undefined) {
+    // A posição escolhe a linha, e o relógio distingue as passagens por ela.
+    let distance = Math.abs(match.startTime - referenceTime);
+    for (const anchor of anchors) {
+      if (anchor.y !== match.y) continue;
+      const candidate = Math.abs(anchor.startTime - referenceTime);
+      if (candidate < distance || (candidate === distance && anchor.startTime < match.startTime)) {
+        match = anchor;
+        distance = candidate;
+      }
+    }
+  }
+  return match?.startTime ?? 0;
 }

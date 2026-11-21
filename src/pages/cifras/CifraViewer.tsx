@@ -121,8 +121,9 @@ const USER_SCROLL_EPS = 2;
 // terminar antes de retomar, senão o rolamento briga com o dedo do músico.
 const SETTLE_MS = 900;
 const LINE_TRANSITION_MS = 300;
+const LINE_REPEAT_MS = 1500;
 const LINE_HIGHLIGHT = 'cifra-line-playing';
-type ViewerLineAnchor = LineScrollAnchor & { highlight: HTMLElement[] };
+type ViewerLineAnchor = LineScrollAnchor & { lineIndex: number; highlight: HTMLElement[] };
 // Salto dos atalhos ← / →.
 const NUDGE_SEC = 5;
 // Fatia do tempo repartida pela altura da página (o resto vai pela densidade de
@@ -339,6 +340,15 @@ export const CifraViewer: React.FC = () => {
   const showTabs = prefersTabs && !tabsForcedHidden;
   const toggleTabs = () => setPrefersTabs(value => !value);
   const lineMode = (timingMedia?.phrases?.length ?? 0) >= (scrollChoice && !previewTiming ? 1 : 2);
+  const [lineRepeat, setLineRepeat] = useState<{ timing: TimingContribution } | null>(null);
+  const showLineRepeat = lineMode && lineRepeat !== null && lineRepeat.timing === timingMedia;
+  useEffect(() => {
+    if (!lineRepeat) return;
+    const timer = window.setTimeout(() => {
+      setLineRepeat(current => current === lineRepeat ? null : current);
+    }, LINE_REPEAT_MS);
+    return () => window.clearTimeout(timer);
+  }, [lineRepeat]);
   let syncLabel: string | null = null;
   if (timingMedia && (lineMode || scrollChoice)) {
     syncLabel = internalTiming ? t('cifra.linhaSincronizadaSemDedilhado')
@@ -376,6 +386,7 @@ export const CifraViewer: React.FC = () => {
   const prevTimeRef = useRef<number | null>(null);
   const chordMapRef = useRef<Array<{ chordY: number; time: number }>>([]);
   const lineMapRef = useRef<ViewerLineAnchor[]>([]);
+  const mappedTimingRef = useRef<TimingContribution | null>(null);
   const lineMotionRef = useRef<{ from: number; to: number; start: number } | null>(null);
   const lineLoopRef = useRef<{ a?: number; b?: number }>({});
   const videoClockRef = useRef<SourceVideoClock | null>(null);
@@ -585,7 +596,7 @@ export const CifraViewer: React.FC = () => {
     appliedYRef.current = y;
     const lines = lineMapRef.current;
     const map = chordMapRef.current;
-    if (lines.length) elapsedRef.current = stepTimeAtY(lines, y);
+    if (lines.length) elapsedRef.current = stepTimeAtY(lines, y, elapsedRef.current);
     else if (map.length >= 2) elapsedRef.current = timeAtY(map, y);
     else {
       const maxScrollY = document.documentElement.scrollHeight - window.innerHeight;
@@ -736,7 +747,7 @@ export const CifraViewer: React.FC = () => {
     if (lineMapRef.current.length) {
       const currentTime = window.scrollY === appliedYRef.current
         ? elapsedRef.current
-        : stepTimeAtY(lineMapRef.current, window.scrollY);
+        : stepTimeAtY(lineMapRef.current, window.scrollY, elapsedRef.current);
       seekToTime(currentTime + delta);
       return;
     }
@@ -751,12 +762,18 @@ export const CifraViewer: React.FC = () => {
     const lines = lineMapRef.current;
     let y = window.scrollY;
     if (lines.length) {
-      const time = y === appliedYRef.current ? elapsedRef.current : stepTimeAtY(lines, y);
+      const time = y === appliedYRef.current ? elapsedRef.current : stepTimeAtY(lines, y, elapsedRef.current);
       lineLoopRef.current[point] = time;
       y = Math.max(0, stepYAtTime(lines, time));
     }
     if (point === 'a') setLoopA(y);
     else setLoopB(y);
+  };
+
+  const clearLoop = () => {
+    lineLoopRef.current = {};
+    setLoopA(null);
+    setLoopB(null);
   };
 
   // Barra de posição: a fração vertical do clique/arraste vira posição na cifra.
@@ -829,7 +846,8 @@ export const CifraViewer: React.FC = () => {
         scrollStartRef.current = null;
         lastGestureRef.current = -Infinity;
         videoSeekRef.current = null;
-        if (start.reanchor && window.scrollY === 0) {
+        // O topo também pode ser a posição de uma linha cantada mais adiante.
+        if (start.reanchor && window.scrollY === 0 && (!lineMapRef.current.length || elapsedRef.current === 0)) {
           elapsedRef.current = driveYRef.current = appliedYRef.current = 0;
           setElapsedDisplay(0);
         } else if (start.reanchor || !lineMapRef.current.length || window.scrollY !== appliedYRef.current) {
@@ -865,7 +883,7 @@ export const CifraViewer: React.FC = () => {
         ratedClock = clock;
         if (settling) {
           if (moved) {
-            elapsedRef.current = stepTimeAtY(lines, actualY);
+            elapsedRef.current = stepTimeAtY(lines, actualY, elapsedRef.current);
             manualLineSeek = true;
           }
           appliedYRef.current = actualY;
@@ -873,6 +891,7 @@ export const CifraViewer: React.FC = () => {
         } else {
           if (manualLineSeek && lastGestureRef.current !== -Infinity) seekVideo(elapsedRef.current);
           manualLineSeek = false;
+          const previousTime = elapsedRef.current;
           const videoTime = clock?.readTime();
           const pending = videoSeekRef.current;
           if (videoTime !== undefined && Number.isFinite(videoTime)) {
@@ -884,12 +903,14 @@ export const CifraViewer: React.FC = () => {
             elapsedRef.current += (dt / 1000) * rate;
           }
           const duration = totalTimeRef.current;
-          elapsedRef.current = Math.min(elapsedRef.current, duration);
+          const nextTime = Math.min(elapsedRef.current, duration);
+          elapsedRef.current = nextTime;
           const la = loopARef.current;
           const lb = loopBRef.current;
           if (la !== null || lb !== null) {
-            const start = la === null ? 0 : lineLoopRef.current.a ?? stepTimeAtY(lines, la);
-            const end = lb === null ? duration : lineLoopRef.current.b ?? stepTimeAtY(lines, lb);
+            // Fixa os pontos recuperados por posição para que o avanço do relógio não troque a passagem do loop.
+            const start = la === null ? 0 : (lineLoopRef.current.a ??= stepTimeAtY(lines, la, nextTime));
+            const end = lb === null ? duration : (lineLoopRef.current.b ??= stepTimeAtY(lines, lb, nextTime));
             if (end > start && elapsedRef.current >= end) {
               elapsedRef.current = start;
               seekVideo(start);
@@ -899,6 +920,16 @@ export const CifraViewer: React.FC = () => {
           // O relógio escolhe a linha. O tempo real da animação mantém o salto curto em qualquer velocidade.
           let motion = lineMotionRef.current;
           if (motion?.to !== target) {
+            const timing = mappedTimingRef.current;
+            // O aviso acompanha o avanço do relógio porque voltar no loop ou mover a tela também pode subir a cifra.
+            if (timing && !pending && target < actualY && elapsedRef.current === nextTime && nextTime > previousTime) {
+              const previous = lines[currentPhraseIndex(lines, previousTime)];
+              const current = lines[currentPhraseIndex(lines, nextTime)];
+              if (previous && current && current.lineIndex < previous.lineIndex &&
+                lines.some(line => line.lineIndex === current.lineIndex && line.startTime < current.startTime)) {
+                setLineRepeat({ timing });
+              }
+            }
             motion = { from: actualY, to: target, start: ts };
             lineMotionRef.current = motion;
           }
@@ -1286,6 +1317,7 @@ export const CifraViewer: React.FC = () => {
     setScrollChoice(null);
     setScrollChooser(null);
     setAskScrollConsent(false);
+    setLineRepeat(null);
     scrollStartRef.current = null;
     setShowVideo(false);
     setVideoDuration(null);
@@ -1467,7 +1499,6 @@ export const CifraViewer: React.FC = () => {
     });
   }, [displayHtml, cifra]);
 
-  const mappedTimingRef = useRef<TimingContribution | null>(null);
   useEffect(() => {
     if (!lineMode || !timingMedia) {
       mappedTimingRef.current = null;
@@ -1504,14 +1535,14 @@ export const CifraViewer: React.FC = () => {
         // Uma linha de tab recolhida ainda tem tempo. Usa a próxima linha visível como apoio.
         const mapped = rows.get(phrase.lineIndex) ??
           rows.get(visibleIndices.find(index => index > phrase.lineIndex) ?? visibleIndices.at(-1) ?? -1);
-        if (!mapped) return { startTime: phrase.startTime, y: 0, highlight: [] };
+        if (!mapped) return { startTime: phrase.startTime, lineIndex: phrase.lineIndex, y: 0, highlight: [] };
         const { row, position } = mapped;
         const highlight = rows.has(phrase.lineIndex) ? [row] : [];
         const previous = rows.get(phrase.lineIndex - 1)?.row;
         if (highlight.length && previous && previous !== row && previous.hasAttribute('data-timing-chord-row')) {
           highlight.push(previous);
         }
-        return { startTime: phrase.startTime, y: Math.round(position.getBoundingClientRect().top + offset), highlight };
+        return { startTime: phrase.startTime, lineIndex: phrase.lineIndex, y: Math.round(position.getBoundingClientRect().top + offset), highlight };
       });
       const changedTiming = timingMedia !== mappedTimingRef.current;
       mappedTimingRef.current = timingMedia;
@@ -2421,7 +2452,7 @@ export const CifraViewer: React.FC = () => {
               <div className="flex items-center justify-between">
                 <label className="font-bold text-[10px] uppercase text-gray-500">{t('cifra.rotuloLoop')}</label>
                 {(loopA !== null || loopB !== null) && (
-                  <button onClick={() => { setLoopA(null); setLoopB(null); }} className="text-[9px] font-bold border border-gray-400 px-1 bg-[#ece9d8] hover:bg-white text-[#cc3300]">✕</button>
+                  <button onClick={clearLoop} className="text-[9px] font-bold border border-gray-400 px-1 bg-[#ece9d8] hover:bg-white text-[#cc3300]">✕</button>
                 )}
               </div>
               <div className="flex gap-1">
@@ -2554,7 +2585,7 @@ export const CifraViewer: React.FC = () => {
                 <button onClick={() => markLoop('a')} className={`px-2 py-1 text-xs font-bold border leading-tight active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${loopA !== null ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[var(--color-winxp-panel)] border-gray-400 hover:bg-white'}`} title={t('cifra.marcarALoop')}>A</button>
                 <button onClick={() => markLoop('b')} className={`px-2 py-1 text-xs font-bold border leading-tight active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${loopB !== null ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[var(--color-winxp-panel)] border-gray-400 hover:bg-white'}`} title={t('cifra.marcarBLoop')}>B</button>
                 {(loopA !== null || loopB !== null) && (
-                  <button onClick={() => { setLoopA(null); setLoopB(null); }} className="px-2 py-1 text-xs font-bold border border-gray-400 bg-[#ece9d8] text-[#cc3300] hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white">✕ {t('cifra.loop')}</button>
+                  <button onClick={clearLoop} className="px-2 py-1 text-xs font-bold border border-gray-400 bg-[#ece9d8] text-[#cc3300] hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white">✕ {t('cifra.loop')}</button>
                 )}
               </div>
             </div>
@@ -3076,6 +3107,9 @@ export const CifraViewer: React.FC = () => {
               <button type="button" onClick={() => void openScrollChooser(true)} className="text-[#002fa7] underline">
                 {t('cifra.rolagemTrocarTiming')}
               </button>
+              <span role="status" className="empty:sr-only whitespace-nowrap text-[#002fa7]">
+                {showLineRepeat && t('cifra.rolagemRepeticao')}
+              </span>
             </span>
           )}
           <button
@@ -3143,12 +3177,13 @@ export const CifraViewer: React.FC = () => {
             fmtTime={fmtTime}
             secao={currentSection}
             syncLabel={syncLabel}
+            showLineRepeat={showLineRepeat}
             onSwitchTiming={() => void openScrollChooser(true)}
             loopA={loopA}
             loopB={loopB}
             onLoopA={() => markLoop('a')}
             onLoopB={() => markLoop('b')}
-            onLoopLimpar={() => { setLoopA(null); setLoopB(null); }}
+            onLoopLimpar={clearLoop}
             showTabs={showTabs}
             tabsForcedHidden={tabsForcedHidden}
             onToggleTabs={toggleTabs}

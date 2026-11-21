@@ -414,6 +414,7 @@ export const ptBR = {
     linhaSincronizadaAuto: 'Sincronizado · automático',
     linhaSincronizadaSemDedilhado: 'Sincronizado · automático (sem dedilhado)',
     linhaSincronizadaComunidade: 'Sincronizado · comunidade ({apelido})',
+    rolagemRepeticao: '↺ repetição',
     rolagemTrocarTiming: 'Trocar',
     rolagemTimingTitulo: 'Escolher timing da rolagem',
     rolagemTimingPadrao: 'Padrão (rolagem contínua)',

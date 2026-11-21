@@ -52,6 +52,19 @@ describe('withoutFingerpicking', () => {
       .toEqual({ phrases: [phrase(2, 3, 5), phrase(0, 1, 3)], removedDuration: 5 });
     expect(phrases).toEqual([phrase(2, 8, 10), phrase(0, 1, 3), phrase(1, 4, 7)]);
   });
+
+  it('corta os dedilhados de cada passagem e preserva a pausa antes da repetição', () => {
+    expect(withoutFingerpicking(
+      [
+        phrase(0, 0, 3), phrase(1, 4, 6), phrase(2, 6, 8), phrase(3, 9, 12),
+        phrase(0, 15, 18), phrase(1, 19, 20), phrase(2, 20, 21), phrase(3, 22, 25),
+      ],
+      ['lyric', 'tab', 'tab', 'lyric'],
+    )).toEqual({
+      phrases: [phrase(0, 0, 3), phrase(3, 3, 6), phrase(0, 9, 12), phrase(3, 12, 15)],
+      removedDuration: 10,
+    });
+  });
 });
 
 const anchors = [
@@ -102,6 +115,10 @@ describe('stepTimeAtY', () => {
     expect(stepTimeAtY(anchors, 251)).toBe(12);
     expect(stepTimeAtY(anchors, 900)).toBe(12);
     expect(stepTimeAtY([], 100)).toBe(0);
+    for (const y of [0, 100, 100.5, 251, 900]) {
+      expect(stepTimeAtY(anchors, y, 50)).toBe(stepTimeAtY(anchors, y));
+    }
+    expect(stepTimeAtY([], 100, 50)).toBe(0);
   });
 
   it('recupera o início de cada âncora, inclusive quando a música volta a uma linha anterior', () => {
@@ -109,5 +126,25 @@ describe('stepTimeAtY', () => {
     for (const anchor of reordered) {
       expect(stepTimeAtY(reordered, stepYAtTime(reordered, anchor.startTime))).toBe(anchor.startTime);
     }
+  });
+
+  it('escolhe o início mais próximo antes, durante e depois de cada passagem pela linha', () => {
+    const repeated = [{ startTime: 51, y: 100 }, ...anchors, { startTime: 25, y: 100 }];
+    for (const [start, references] of [[2, [0, 2.5, 4]], [25, [24, 25.5, 28]], [51, [49, 51.5, 54]]] as const) {
+      for (const reference of references) {
+        expect(stepTimeAtY(repeated, 100, reference)).toBe(start);
+        expect(stepTimeAtY(repeated, 99, reference)).toBe(start);
+      }
+    }
+    expect(stepTimeAtY(repeated, 100)).toBe(2);
+    expect(stepTimeAtY(repeated, 100, 38)).toBe(25);
+    expect(stepTimeAtY(repeated, 100.5, 51)).toBe(5);
+  });
+
+  it('usa a última posição da cifra quando a guia passa de todas as linhas', () => {
+    const repeated = [{ startTime: 44, y: 430 }, ...anchors];
+    expect(stepTimeAtY(repeated, 900)).toBe(44);
+    expect(stepTimeAtY(repeated, 900, 10)).toBe(12);
+    expect(stepTimeAtY(repeated, 900, 45)).toBe(44);
   });
 });

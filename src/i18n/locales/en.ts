@@ -402,6 +402,7 @@ export const en: Dicionario = {
     linhaSincronizadaAuto: 'Synced · automatic',
     linhaSincronizadaSemDedilhado: 'Synced · automatic (without fingerpicking)',
     linhaSincronizadaComunidade: 'Synced · community ({apelido})',
+    rolagemRepeticao: '↺ repeat',
     rolagemTrocarTiming: 'Switch',
     rolagemTimingTitulo: 'Choose auto-scroll timing',
     rolagemTimingPadrao: 'Default (continuous scrolling)',

@@ -44,6 +44,35 @@ describe('buildScrollTimingChoices', () => {
     expect(selected.id).toBe('auto-original');
   });
 
+  it('mantém as passagens repetidas nas duas opções automáticas', () => {
+    const repeated: TimingContribution = {
+      ...auto,
+      duration: 25,
+      phrases: [
+        { lineIndex: 0, startTime: 0, endTime: 3 },
+        { lineIndex: 1, startTime: 4, endTime: 8 },
+        { lineIndex: 2, startTime: 9, endTime: 12 },
+        { lineIndex: 0, startTime: 15, endTime: 18 },
+        { lineIndex: 1, startTime: 19, endTime: 21 },
+        { lineIndex: 2, startTime: 22, endTime: 25 },
+      ],
+    };
+    const { choices, selected } = buildScrollTimingChoices(
+      [repeated], ['lyric', 'tab', 'lyric'], repeated, 'auto-sem-dedilhado',
+    );
+    expect(choices[1].timing).toBe(repeated);
+    expect(selected).toBe(choices[2]);
+    expect(selected.timing).toMatchObject({
+      duration: 15,
+      phrases: [
+        { lineIndex: 0, startTime: 0, endTime: 3 },
+        { lineIndex: 2, startTime: 3, endTime: 6 },
+        { lineIndex: 0, startTime: 9, endTime: 12 },
+        { lineIndex: 2, startTime: 12, endTime: 15 },
+      ],
+    });
+  });
+
   it('usa a opção lembrada quando ainda existe', () => {
     for (const id of ['default', 'auto-original', 'auto-sem-dedilhado', 'legacy']) {
       const { selected } = buildScrollTimingChoices([auto, manual, legacy], ['lyric', 'tab', 'lyric'], manual, id);
