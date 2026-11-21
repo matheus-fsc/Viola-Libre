@@ -9,8 +9,9 @@ import { useSeo } from '../../hooks/useSeo';
 import { useJsonLd, breadcrumbJsonLd } from '../../hooks/useJsonLd';
 import { TopSongsHighlight } from './TopSongsHighlight';
 import { useT, type Chave } from '../../i18n';
-
-const isPrincipal = (v?: string) => (v || '').toLowerCase().includes('principal');
+import { PRESET_INSTRUMENTS } from '../../engine/tunings';
+import { getPreferredInstrumentId } from '../../utils/instrumentPreference';
+import { sortVersionsForInstrument } from '../../utils/versionPreference';
 
 /** Os dois botões da barra de título, iguais por serem irmãos na mesma barra. */
 const botaoBarra =
@@ -31,23 +32,23 @@ export const SongList: React.FC = () => {
   const [songs, setSongs] = useState<Song[]>([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const savedInstrumentId = getPreferredInstrumentId();
+  const instrumentId = PRESET_INSTRUMENTS.find(i => i.id === savedInstrumentId)?.id ?? PRESET_INSTRUMENTS[0].id;
 
-  // Deduplica por título: músicas com mesmo nome em versões diferentes aparecem
-  // uma única vez (preferindo a versão "Principal"). O contador guarda quantas
-  // versões existem para exibir o selo "+N versões".
-  const { dedupedSongs, versionCount } = useMemo(() => {
-    const byTitle = new Map<string, Song>();
-    const count = new Map<string, number>();
+  // Agrupa por título para escolher uma versão por música e exibir o selo "+N versões".
+  const { dedupedSongs, versionsByTitle } = useMemo(() => {
+    const byTitle = new Map<string, Song[]>();
     for (const s of songs) {
       const key = s.title.trim().toLowerCase();
-      count.set(key, (count.get(key) || 0) + 1);
-      const existing = byTitle.get(key);
-      if (!existing || (!isPrincipal(existing.version_name) && isPrincipal(s.version_name))) {
-        byTitle.set(key, s);
-      }
+      const versions = byTitle.get(key);
+      if (versions) versions.push(s);
+      else byTitle.set(key, [s]);
     }
-    return { dedupedSongs: Array.from(byTitle.values()), versionCount: count };
-  }, [songs]);
+    const preferred = Array.from(byTitle.values(), versions =>
+      sortVersionsForInstrument(versions, instrumentId, { preferPrincipal: true })[0],
+    );
+    return { dedupedSongs: preferred, versionsByTitle: byTitle };
+  }, [songs, instrumentId]);
 
   // Quem volta de uma cifra volta para a lista como a deixou: mesma busca (que vem da URL),
   // mesmas páginas abertas e mesma posição de rolagem.
@@ -196,7 +197,7 @@ export const SongList: React.FC = () => {
             )}
 
             {visibleSongs.map((song, i) => {
-              const nVersions = versionCount.get(song.title.trim().toLowerCase()) || 1;
+              const nVersions = versionsByTitle.get(song.title.trim().toLowerCase())?.length ?? 1;
               return (
                 <Link
                   key={song.id}

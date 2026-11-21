@@ -39,6 +39,7 @@ import { lerLista, posicaoNaLista } from '../../services/listaAberta';
 import { reflowCifraHtml } from '../../services/cifraUtils';
 import { acordesDaCifra, acordesDistintos } from '../../services/cifraChords';
 import { getPreferredInstrumentId, setPreferredInstrumentId } from '../../utils/instrumentPreference';
+import { sortVersionsForInstrument } from '../../utils/versionPreference';
 import {
   useEditorSession,
   type ChordRankEntry,
@@ -1242,11 +1243,11 @@ export const CifraViewer: React.FC = () => {
   const normSlug = (s?: string) => (s || '').replace(/^\//, '');
   // Opções do seletor: as versões carregadas ou, na ausência delas, a versão atual.
   // Sempre tem ao menos 1 entrada para que o controle apareça mesmo sem variações.
-  const versionOptions = useMemo<Song[]>(() => {
-    if (songVersions.length > 0) return songVersions;
+  const versionOptions = useMemo<readonly Song[]>(() => {
+    if (songVersions.length > 0) return sortVersionsForInstrument(songVersions, selectedInstId);
     if (!cifra) return [];
     return [{ id: cifra.id, title: cifra.title, slug: normSlug(songSlug), version_name: cifra.version_name }];
-  }, [songVersions, cifra, songSlug]);
+  }, [songVersions, cifra, songSlug, selectedInstId]);
   const currentVersionSlug = useMemo(() => {
     const match = versionOptions.find(s => normSlug(s.slug) === normSlug(songSlug));
     return match ? match.slug : (versionOptions[0]?.slug ?? '');
