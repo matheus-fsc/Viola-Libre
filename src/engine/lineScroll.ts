@@ -1,4 +1,4 @@
-import type { TimingPhrase } from '../services/timingApi';
+import type { TimingLoop, TimingPhrase } from '../services/timingApi';
 import type { LineType } from '../utils/lineClassifier';
 
 type PhraseStart = { startTime: number };
@@ -8,7 +8,8 @@ export type LineScrollAnchor = PhraseStart & { y: number };
 export function withoutFingerpicking(
   phrases: readonly TimingPhrase[],
   lineTypes: readonly LineType[],
-): { phrases: TimingPhrase[]; removedDuration: number } {
+  loops?: readonly TimingLoop[],
+): { phrases: TimingPhrase[]; removedDuration: number; loops?: TimingLoop[] } {
   const cuts: Array<{ start: number; end: number }> = [];
   const ordered = [...phrases].sort((a, b) => a.startTime - b.startTime);
   const seenLyricLines = new Set<number>();
@@ -42,13 +43,25 @@ export function withoutFingerpicking(
   }
   const removedDuration = merged.reduce((total, cut) => total + (cut.end - cut.start), 0);
   const kept = phrases.filter(phrase => lineTypes[phrase.lineIndex] !== 'tab');
+  const shift = (time: number) => merged.reduce((total, cut) =>
+    total + Math.max(0, Math.min(cut.end, time) - cut.start), 0);
+  const shiftTime = (time: number) => time - shift(time);
   return {
     removedDuration,
     phrases: kept.map(phrase => {
-      const shift = merged.reduce((total, cut) =>
-        total + Math.max(0, Math.min(cut.end, phrase.startTime) - cut.start), 0);
-      return shift ? { ...phrase, startTime: phrase.startTime - shift, endTime: phrase.endTime - shift } : phrase;
+      const offset = shift(phrase.startTime);
+      return offset ? { ...phrase, startTime: phrase.startTime - offset, endTime: phrase.endTime - offset } : phrase;
     }),
+    // O contador usa o mesmo relógio encurtado da rolagem, inclusive quando o corte cai no meio de uma passagem.
+    ...(loops && { loops: loops.map(loop => ({
+      ...loop,
+      mediaTimestampStart: loop.mediaTimestampStart === null ? null : shiftTime(loop.mediaTimestampStart),
+      mediaTimestampEnd: loop.mediaTimestampEnd === null ? null : shiftTime(loop.mediaTimestampEnd),
+      ...(loop.occurrences && { occurrences: loop.occurrences.map(({ startTime, endTime }) => ({
+        startTime: shiftTime(startTime),
+        endTime: shiftTime(endTime),
+      })) }),
+    })) }),
   };
 }
 

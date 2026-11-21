@@ -252,7 +252,7 @@ interface TransporteProps {
   fmtTime(s: number): string;
   secao: string | null;
   syncLabel: string | null;
-  showLineRepeat: boolean;
+  repeatLabel: string | null;
   onSwitchTiming(): void;
   loopA: number | null;
   loopB: number | null;
@@ -352,7 +352,7 @@ export function TransporteMobile(p: TransporteProps) {
             {t('cifra.rolagemTrocarTiming')}
           </button>
           <span role="status" className="empty:sr-only whitespace-nowrap text-[#002fa7]">
-            {p.showLineRepeat && t('cifra.rolagemRepeticao')}
+            {p.repeatLabel}
           </span>
         </span>
       )}

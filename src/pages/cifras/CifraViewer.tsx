@@ -69,6 +69,7 @@ import {
   isFavorited as isCifraFavorited,
 } from '../../services/cifraFavorites';
 import { currentPhraseIndex, easeScrollY, stepTimeAtY, stepYAtTime, type LineScrollAnchor } from '../../engine/lineScroll';
+import { getRepeatRanges, repeatPassAtTime, type RepeatRange } from '../../engine/repeatRanges';
 import { buildScrollTimingChoices, DEFAULT_SCROLL_TIMING, type ScrollTimingChoice } from '../../engine/scrollTimingChoices';
 import { classifyLine } from '../../utils/lineClassifier';
 import { ScrollTimingDialog } from './ScrollTimingDialog';
@@ -124,6 +125,7 @@ const LINE_TRANSITION_MS = 300;
 const LINE_REPEAT_MS = 1500;
 const LINE_HIGHLIGHT = 'cifra-line-playing';
 type ViewerLineAnchor = LineScrollAnchor & { lineIndex: number; highlight: HTMLElement[] };
+type RepeatBracket = { range: RepeatRange; lane: number; top: number; height: number };
 // Salto dos atalhos ← / →.
 const NUDGE_SEC = 5;
 // Fatia do tempo repartida pela altura da página (o resto vai pela densidade de
@@ -340,8 +342,23 @@ export const CifraViewer: React.FC = () => {
   const showTabs = prefersTabs && !tabsForcedHidden;
   const toggleTabs = () => setPrefersTabs(value => !value);
   const lineMode = (timingMedia?.phrases?.length ?? 0) >= (scrollChoice && !previewTiming ? 1 : 2);
+  const repeatRanges = useMemo(() =>
+    lineMode && timingMedia ? getRepeatRanges(timingMedia.loops ?? [], timingMedia.phrases) : [],
+    [lineMode, timingMedia]);
+  const { bracketLanes, bracketPadding } = useMemo(() => {
+    const lastLines: number[] = [];
+    const bracketLanes = new Map<RepeatRange, number>();
+    // Reserva outra coluna quando duas chaves dividem linhas, para os totais ficarem legíveis.
+    for (const range of [...repeatRanges].sort((a, b) => a.startLine - b.startLine)) {
+      const freeLane = lastLines.findIndex(endLine => endLine < range.startLine);
+      const lane = freeLane < 0 ? lastLines.length : freeLane;
+      lastLines[lane] = range.endLine;
+      bracketLanes.set(range, lane);
+    }
+    return { bracketLanes, bracketPadding: lastLines.length ? 12 + lastLines.length * 28 : undefined };
+  }, [repeatRanges]);
+  const [repeatBrackets, setRepeatBrackets] = useState<RepeatBracket[]>([]);
   const [lineRepeat, setLineRepeat] = useState<{ timing: TimingContribution } | null>(null);
-  const showLineRepeat = lineMode && lineRepeat !== null && lineRepeat.timing === timingMedia;
   useEffect(() => {
     if (!lineRepeat) return;
     const timer = window.setTimeout(() => {
@@ -367,6 +384,9 @@ export const CifraViewer: React.FC = () => {
   const [currentSection, setCurrentSection] = useState<string | null>(null);
   // Transporte: relógio exibido, duração total e seções (para a barra de posição)
   const [elapsedDisplay, setElapsedDisplay] = useState(0);
+  const activeRepeat = autoScroll ? repeatPassAtTime(repeatRanges, elapsedDisplay) : null;
+  const repeatLabel = activeRepeat ? t('cifra.rolagemRepeticaoPassagem', activeRepeat)
+    : autoScroll && lineMode && lineRepeat?.timing === timingMedia ? t('cifra.rolagemRepeticao') : null;
   const [estimatedTotalTime, setTotalTime] = useState(0);
   const totalTime = lineMode && timingMedia
     ? timingMedia.phrases.reduce((duration, phrase) => Math.max(duration, phrase.startTime, phrase.endTime), timingMedia.duration)
@@ -1530,6 +1550,21 @@ export const CifraViewer: React.FC = () => {
         }
       }
       const visibleIndices = [...rows.keys()].sort((a, b) => a - b);
+      if (bracketLanes.size) {
+        // Reusa as âncoras para acompanhar quebras de linha, acordes e tablaturas visíveis.
+        const origin = content.getBoundingClientRect().top + content.clientTop - content.scrollTop;
+        setRepeatBrackets(Array.from(bracketLanes).flatMap(([range, lane]) => {
+          const elements = new Set<HTMLElement>();
+          for (const [index, { row }] of rows) {
+            if (index >= range.startLine && index <= range.endLine) elements.add(row);
+          }
+          if (!elements.size) return [];
+          const bounds = Array.from(elements, row => row.getBoundingClientRect());
+          const top = Math.min(...bounds.map(rect => rect.top));
+          const bottom = Math.max(...bounds.map(rect => rect.bottom));
+          return [{ range, lane, top: top - origin, height: bottom - top }];
+        }));
+      }
       const offset = window.scrollY - window.innerHeight * READING_LINE;
       lineMapRef.current = timingMedia.phrases.map(phrase => {
         // Uma linha de tab recolhida ainda tem tempo. Usa a próxima linha visível como apoio.
@@ -1564,7 +1599,7 @@ export const CifraViewer: React.FC = () => {
       cancelAnimationFrame(frame);
       window.removeEventListener('resize', measure);
     };
-  }, [timingMedia, lineMode, totalTime, cifraSegments, showTabs, geometryToken, autoScroll, syncPlayheadToScroll]);
+  }, [timingMedia, lineMode, totalTime, cifraSegments, showTabs, geometryToken, autoScroll, syncPlayheadToScroll, bracketLanes]);
 
   // Transposed unique chords for the carousel
   const currentChords = useMemo(() => {
@@ -2949,7 +2984,20 @@ export const CifraViewer: React.FC = () => {
 
         {/* Cifra Content - Notepad Style */}
         <div className="flex-1 min-h-0 flex gap-0.5 overflow-hidden">
-          <div ref={contentRef} onPointerDown={handleLyricsPointerDown} onClick={handleLyricsChordClick} onMouseOver={handleLyricsMouseOver} onMouseLeave={schedulePopupClose} className="flex-1 min-w-0 min-h-0 bevel-in bg-white p-2 sm:p-4 retro-scrollbar font-mono text-sm leading-relaxed text-black overflow-x-hidden overflow-y-auto">
+          <div ref={contentRef} onPointerDown={handleLyricsPointerDown} onClick={handleLyricsChordClick} onMouseOver={handleLyricsMouseOver} onMouseLeave={schedulePopupClose} className="relative flex-1 min-w-0 min-h-0 bevel-in bg-white p-2 sm:p-4 retro-scrollbar font-mono text-sm leading-relaxed text-black overflow-x-hidden overflow-y-auto" style={{ paddingLeft: bracketPadding }}>
+            {repeatBrackets.map(({ range, lane, top, height }, index) => bracketLanes.has(range) && (
+              <div
+                key={index}
+                role="img"
+                aria-label={t('cifra.rolagemRepeticaoTotalAria', { count: range.count })}
+                className="pointer-events-none absolute w-2 border-y border-l border-[#98acd0] text-[#385683]"
+                style={{ top, height, left: 8 + lane * 28 }}
+              >
+                <span className="absolute left-1 top-1 rounded-sm bg-[#eef3fa] px-0.5 text-[10px] font-bold leading-tight">
+                  {t('cifra.rolagemRepeticaoTotal', { count: range.count })}
+                </span>
+              </div>
+            ))}
             {cifraSegments.map((seg, i) =>
               seg.type === 'tab' ? (
                 showTabs ? (
@@ -3108,7 +3156,7 @@ export const CifraViewer: React.FC = () => {
                 {t('cifra.rolagemTrocarTiming')}
               </button>
               <span role="status" className="empty:sr-only whitespace-nowrap text-[#002fa7]">
-                {showLineRepeat && t('cifra.rolagemRepeticao')}
+                {repeatLabel}
               </span>
             </span>
           )}
@@ -3177,7 +3225,7 @@ export const CifraViewer: React.FC = () => {
             fmtTime={fmtTime}
             secao={currentSection}
             syncLabel={syncLabel}
-            showLineRepeat={showLineRepeat}
+            repeatLabel={repeatLabel}
             onSwitchTiming={() => void openScrollChooser(true)}
             loopA={loopA}
             loopB={loopB}

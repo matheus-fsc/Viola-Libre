@@ -48,6 +48,11 @@ describe('buildScrollTimingChoices', () => {
     const repeated: TimingContribution = {
       ...auto,
       duration: 25,
+      loops: [{
+        label: 'Repetição 1', startLine: 0, endLine: 2, repeatCount: 2,
+        mediaTimestampStart: 0, mediaTimestampEnd: 12,
+        occurrences: [{ startTime: 0, endTime: 12 }, { startTime: 15, endTime: 25 }],
+      }],
       phrases: [
         { lineIndex: 0, startTime: 0, endTime: 3 },
         { lineIndex: 1, startTime: 4, endTime: 8 },
@@ -64,6 +69,10 @@ describe('buildScrollTimingChoices', () => {
     expect(selected).toBe(choices[2]);
     expect(selected.timing).toMatchObject({
       duration: 15,
+      loops: [{
+        mediaTimestampStart: 0, mediaTimestampEnd: 6,
+        occurrences: [{ startTime: 0, endTime: 6 }, { startTime: 9, endTime: 15 }],
+      }],
       phrases: [
         { lineIndex: 0, startTime: 0, endTime: 3 },
         { lineIndex: 2, startTime: 3, endTime: 6 },

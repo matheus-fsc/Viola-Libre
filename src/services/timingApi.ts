@@ -1,5 +1,10 @@
 import api, { cabecalhoChavePublica } from './api';
 
+export interface TimingOccurrence {
+  startTime: number;
+  endTime: number;
+}
+
 export interface TimingLoop {
   label: string;
   startLine: number;
@@ -7,6 +12,7 @@ export interface TimingLoop {
   repeatCount: number;
   mediaTimestampStart: number | null;
   mediaTimestampEnd: number | null;
+  occurrences?: TimingOccurrence[];
 }
 
 export interface TimingInstrumental {
@@ -112,7 +118,8 @@ export interface TimingSubmitPayload {
 
 export type MediaType = 'youtube' | 'audio' | 'other' | null;
 
-type RawTimingContribution = Pick<TimingContribution, 'id' | 'duration'> & Partial<Omit<TimingContribution, 'id' | 'duration'>> & {
+type RawTimingContribution = Pick<TimingContribution, 'id' | 'duration'> & Partial<Omit<TimingContribution, 'id' | 'duration' | 'loops'>> & {
+  loops?: (Omit<TimingLoop, 'occurrences'> & { occurrences?: unknown })[];
   editor_alias?: string | null;
   media_url?: string | null;
   media_type?: MediaType;
@@ -121,6 +128,17 @@ type RawTimingContribution = Pick<TimingContribution, 'id' | 'duration'> & Parti
   reviewed_from?: string | null;
   line_timestamps?: { line: number; media_timestamp_start: number }[];
 };
+
+export function normalizeLoopOccurrences(raw: unknown): TimingOccurrence[] {
+  if (!Array.isArray(raw)) return [];
+  const occurrences = raw.filter((entry): entry is TimingOccurrence => {
+    if (!entry || typeof entry !== 'object') return false;
+    const { startTime, endTime } = entry;
+    return typeof startTime === 'number' && Number.isFinite(startTime) && startTime >= 0
+      && typeof endTime === 'number' && Number.isFinite(endTime) && endTime > startTime;
+  });
+  return occurrences.sort((a, b) => a.startTime - b.startTime);
+}
 
 export function normalizeContribution(raw: RawTimingContribution): TimingContribution {
   const {
@@ -145,7 +163,14 @@ export function normalizeContribution(raw: RawTimingContribution): TimingContrib
 
   return {
     id, duration, bpm, votes, editorAlias, mediaUrl, mediaType, updatedAt, source, reviewed, reviewedFrom,
-    loops: raw.loops ?? [],
+    loops: (raw.loops ?? []).map(({ occurrences: rawOccurrences, ...loop }) => {
+      const occurrences = normalizeLoopOccurrences(rawOccurrences);
+      const first = occurrences[0];
+      // Os tempos canônicos acompanham a primeira passagem válida para o editor abrir o clipe certo.
+      return first
+        ? { ...loop, occurrences, mediaTimestampStart: first.startTime, mediaTimestampEnd: first.endTime }
+        : loop;
+    }),
     instrumentalSections: instrumentalSections ?? [],
     phrases: phrases ?? [],
     sections: raw.sections ?? [],

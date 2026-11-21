@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { useTimingRegionsStore } from './useTimingRegionsStore';
 import type { TimingContribution } from '../services/timingApi';
 import type { TimingRegion } from '../services/timingRegions';
+import { buildTracksFromRegions } from '../components/timing/timingTracks';
 
 // O store é um singleton de módulo: sem voltar ao estado inicial, um teste herdaria as
 // regiões do anterior. O snapshot inclui as ações, então o `replace` não as apaga.
@@ -50,6 +51,47 @@ describe('carregar uma contribuição', () => {
     delete (c as Partial<TimingContribution>).markers;
     store().loadFromContribution(c);
     expect(store().markers).toEqual([]);
+  });
+
+  it('abre cada passagem automática como clipe da mesma região e salva todas as passagens', () => {
+    const loop = {
+      label: 'Repetição 1', startLine: 26, endLine: 51, repeatCount: 3,
+      mediaTimestampStart: 12, mediaTimestampEnd: 20,
+      occurrences: [
+        { startTime: 12, endTime: 20 },
+        { startTime: 24.5, endTime: 33 },
+        { startTime: 42, endTime: 50 },
+      ],
+    };
+    const phrases = [
+      { lineIndex: 26, startTime: 12, endTime: 13 },
+      { lineIndex: 26, startTime: 24.5, endTime: 26 },
+      { lineIndex: 26, startTime: 42, endTime: 43 },
+    ];
+    store().loadFromContribution(contribuicao({ source: 'auto', loops: [loop], phrases }));
+    const region = store().regions.find(r => r.kind === 'loop')!;
+    expect(region.repeats).toEqual(loop.occurrences.slice(1));
+    const clips = buildTracksFromRegions(store().regions, 60).loop;
+    expect(clips.map(({ start, end, regionId }) => ({ start, end, regionId }))).toEqual(
+      loop.occurrences.map(({ startTime, endTime }) => ({ start: startTime, end: endTime, regionId: region.id })),
+    );
+    expect(new Set(clips.map(clip => clip.clipKey)).size).toBe(3);
+    expect(store().getSerializedPayload()).toMatchObject({ loops: [loop], phrases });
+
+    store().updateRegion(region.id, { repeats: [...region.repeats!].reverse() });
+    expect(store().getSerializedPayload().loops).toEqual([loop]);
+    store().updateRegion(region.id, { repeats: [] });
+    expect(store().getSerializedPayload().loops[0].occurrences).toEqual(loop.occurrences.slice(0, 1));
+  });
+
+  it('mantém o formato dos loops antigos sem passagens marcadas', () => {
+    const loop = {
+      label: 'Refrão', startLine: 3, endLine: 6, repeatCount: 2,
+      mediaTimestampStart: 12, mediaTimestampEnd: 20,
+    };
+    store().loadFromContribution(contribuicao({ loops: [loop] }));
+    expect(store().regions[0].repeats).toBeUndefined();
+    expect(store().getSerializedPayload().loops).toEqual([loop]);
   });
 });
 

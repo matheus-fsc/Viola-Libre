@@ -57,6 +57,33 @@ describe('normalizeContribution', () => {
     expect(line_timestamps.map(timestamp => timestamp.line)).toEqual([1, 13, 0]);
   });
 
+  it('descarta ocorrências inválidas e usa a primeira passagem válida como canônica', () => {
+    const loop = {
+      label: 'Repetição 1', startLine: 26, endLine: 51, repeatCount: 3,
+      mediaTimestampStart: 6, mediaTimestampEnd: 10,
+    };
+    const occurrences = [
+      { startTime: 42, endTime: 50 }, null, { startTime: '6', endTime: 10 },
+      { startTime: 24.5, endTime: 33 }, { startTime: 0, endTime: Infinity },
+      { startTime: -1, endTime: 6 }, { startTime: 10, endTime: 10 },
+      { startTime: 6, endTime: 5 }, { startTime: NaN, endTime: 9 },
+      { startTime: 12, endTime: 20 },
+    ];
+    const normalized = normalizeContribution({
+      id: 'auto', duration: 60, loops: [{ ...loop, occurrences }],
+    });
+    expect(normalized.loops).toEqual([{
+      ...loop, mediaTimestampStart: 12, mediaTimestampEnd: 20,
+      occurrences: [occurrences[9], occurrences[3], occurrences[0]],
+    }]);
+    expect(occurrences[0]).toEqual({ startTime: 42, endTime: 50 });
+    expect(normalizeContribution({
+      id: 'auto', duration: 60, loops: [
+        { ...loop, occurrences: [null] }, { ...loop, occurrences: 'inválido' },
+      ],
+    }).loops).toEqual([loop, loop]);
+  });
+
   it('usa listas vazias e origem manual quando os campos faltam', () => {
     expect(normalizeContribution({ id: 'legado', duration: 32 })).toMatchObject({
       source: 'manual', editorAlias: null, mediaUrl: null, mediaType: null,
