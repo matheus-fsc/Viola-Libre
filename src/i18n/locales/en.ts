@@ -1239,6 +1239,7 @@ export const en: Dicionario = {
     umaFrase: '1 phrase',
     totalFrases: '{total} phrases',
     revisandoAutomatico: 'Reviewing automatic timing: listen, adjust any phrases that are off, and submit.',
+    revisaoSemDedilhado: 'The version without fingerpicking is generated from this timing. Adjustments here also correct that version.',
     cancelarRevisao: 'Cancel review',
     editarMinha: '✏️ Edit my contribution',
     timelinePrecisaDeMidia: 'Add media to use the timeline',

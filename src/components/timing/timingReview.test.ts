@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { normalizeContribution } from '../../services/timingApi';
 import { legacyToRegions } from '../../services/timingRegions';
-import { getActivePhraseLine, getTimingBadge, getTimingEditMetadata } from './timingReview';
+import { buildCommunityCards, getActivePhraseLine, getTimingBadge, getTimingEditMetadata } from './timingReview';
 
 const automatic = normalizeContribution({
   id: 'auto-1',
@@ -25,6 +25,33 @@ describe('getTimingBadge', () => {
     expect(getTimingBadge({ source: 'auto', reviewed: true })).toBe('timing.revisado');
     expect(getTimingBadge({ source: 'manual', reviewed: false })).toBeNull();
     expect(getTimingBadge({})).toBeNull();
+  });
+});
+
+describe('buildCommunityCards', () => {
+  const lineTypes = ['lyric', 'chord', 'chord', 'tab', 'chord', 'chord', 'lyric'] as const;
+
+  it('usa o automático original para revisar ambos os cartões', () => {
+    const [original, withoutTabs] = buildCommunityCards([automatic], lineTypes);
+
+    expect(original.timing).toBe(automatic);
+    expect(original.reviewTarget).toBe(automatic);
+    expect(withoutTabs.withoutTabs).toBe(true);
+    expect(withoutTabs.reviewTarget).toBe(automatic);
+    expect(withoutTabs.timing).toMatchObject({
+      duration: 18.5,
+      phrases: [automatic.phrases[0], { lineIndex: 6, startTime: 7.5, endTime: 9.5 }],
+    });
+  });
+
+  it('omite a revisão dos cartões de um automático já revisado e de uma contribuição manual', () => {
+    const cards = buildCommunityCards([
+      { ...automatic, reviewed: true },
+      { ...automatic, id: 'manual-1', source: 'manual' },
+    ], lineTypes);
+
+    expect(cards.map(card => card.withoutTabs)).toEqual([false, true, false]);
+    expect(cards.map(card => card.reviewTarget)).toEqual([null, null, null]);
   });
 });
 

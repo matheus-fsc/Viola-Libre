@@ -1265,6 +1265,7 @@ export const ptBR = {
     umaFrase: '1 frase',
     totalFrases: '{total} frases',
     revisandoAutomatico: 'Revisando o timing automático: ouça, ajuste as frases que estiverem fora e envie.',
+    revisaoSemDedilhado: 'A versão sem dedilhado é gerada a partir deste timing. Os ajustes feitos aqui corrigem também essa versão.',
     cancelarRevisao: 'Cancelar revisão',
     editarMinha: '✏️ Editar minha contribuição',
     timelinePrecisaDeMidia: 'Adicione mídia para usar a timeline',

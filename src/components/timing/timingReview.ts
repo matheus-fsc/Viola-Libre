@@ -1,9 +1,42 @@
+import { withoutFingerpicking } from '../../engine/lineScroll';
 import type { TimingContribution } from '../../services/timingApi';
 import type { TimingRegion } from '../../services/timingRegions';
+import type { LineType } from '../../utils/lineClassifier';
 
 export function getTimingBadge(timing: Pick<TimingContribution, 'source' | 'reviewed'>) {
   if (timing.reviewed) return 'timing.revisado';
   return timing.source === 'auto' ? 'timing.automaticoNaoRevisado' : null;
+}
+
+type CommunityCard = {
+  timing: TimingContribution;
+  withoutTabs: boolean;
+  badge: ReturnType<typeof getTimingBadge>;
+  reviewTarget: TimingContribution | null;
+};
+
+export function buildCommunityCards(
+  contributions: readonly TimingContribution[],
+  lineTypes: readonly LineType[],
+): CommunityCard[] {
+  return contributions.flatMap(timing => {
+    const badge = getTimingBadge(timing);
+    const reviewTarget = badge === 'timing.automaticoNaoRevisado' ? timing : null;
+    const cards: CommunityCard[] = [{ timing, withoutTabs: false, badge, reviewTarget }];
+    if (timing.source === 'auto') {
+      const { phrases, removedDuration, loops = timing.loops } = withoutFingerpicking(timing.phrases, lineTypes, timing.loops);
+      if (removedDuration > 0) {
+        // A revisão usa os tempos originais para acompanhar a gravação.
+        cards.push({
+          timing: { ...timing, phrases, loops, duration: Math.max(0, timing.duration - removedDuration) },
+          withoutTabs: true,
+          badge: null,
+          reviewTarget,
+        });
+      }
+    }
+    return cards;
+  });
 }
 
 export function getTimingEditMetadata(timing: TimingContribution) {

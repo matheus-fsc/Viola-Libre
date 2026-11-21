@@ -10,9 +10,8 @@ import type { StoredMarker } from '../stores/useTimingRegionsStore';
 import { TimingTimeline } from './timing/TimingTimeline';
 import { type ClipKind } from './timing/timingTracks';
 import { CifraGridEditor } from './timing/CifraGridEditor';
-import { getTimingBadge, getTimingEditMetadata } from './timing/timingReview';
+import { buildCommunityCards, getTimingEditMetadata } from './timing/timingReview';
 import { classifyLine } from '../utils/lineClassifier';
-import { withoutFingerpicking } from '../engine/lineScroll';
 import { usePlayerStore } from '../stores/usePlayerStore';
 import { useCifraTextStore } from '../stores/useCifraTextStore';
 import { useTimingRegionsStore } from '../stores/useTimingRegionsStore';
@@ -120,7 +119,7 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
 
   // Metadata
   const [editorAlias, setEditorAlias] = useState<string>('');
-  const [reviewedFrom, setReviewedFrom] = useState<string | null>(null);
+  const [review, setReview] = useState<{ from: string; fromWithoutTabs: boolean } | null>(null);
 
   // Regions + markers — source of truth in the store
   const { regions, markers } = useTimingRegionsStore();
@@ -183,16 +182,7 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
   // O "sem dedilhado" não é salvo no servidor: é derivado do automático no navegador, como
   // na escolha do Auto-rolar. Mostrá-lo aqui deixa a Comunidade com as mesmas opções.
   const lineTypes = useMemo(() => lines.map(classifyLine), [lines]);
-  const communityCards = useMemo(() => contributions.flatMap(c => {
-    const cards: { timing: TimingContribution; withoutTabs: boolean }[] = [{ timing: c, withoutTabs: false }];
-    if (c.source === 'auto') {
-      const { phrases, removedDuration, loops = c.loops } = withoutFingerpicking(c.phrases, lineTypes, c.loops);
-      if (removedDuration > 0) {
-        cards.push({ timing: { ...c, phrases, loops, duration: Math.max(0, c.duration - removedDuration) }, withoutTabs: true });
-      }
-    }
-    return cards;
-  }), [contributions, lineTypes]);
+  const communityCards = useMemo(() => buildCommunityCards(contributions, lineTypes), [contributions, lineTypes]);
 
   // O player do YouTube depende de JS não-livre e só carrega sob consentimento.
   const ytAllowed = useYouTubeJsAllowed();
@@ -371,7 +361,7 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
           mediaUrl: typeof extra.mediaUrl === 'string' ? extra.mediaUrl : undefined,
           mediaType: validMediaTypes.includes(extra.mediaType as MediaType) ? (extra.mediaType as MediaType) : undefined,
         });
-        setReviewedFrom(null);
+        setReview(null);
       } catch (err) {
         alert(err instanceof Error ? err.message : 'Erro ao importar o arquivo.');
       }
@@ -498,7 +488,7 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
       const result = await submitTiming(slug, {
         editorHash: getOrCreateEditorHash(),
         editorAlias: editorAlias || undefined,
-        reviewedFrom: reviewedFrom ?? undefined,
+        reviewedFrom: review?.from,
         mediaUrl: ps.mediaUrl || undefined,
         mediaType: ps.mediaType || undefined,
         bpm: ps.bpm ?? undefined,
@@ -508,7 +498,7 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
       });
       setSubmittedHash(result.editorHash || getOrCreateEditorHash());
       localStorage.setItem(`viola_timing_id_${slug}`, result.id);
-      setReviewedFrom(null);
+      setReview(null);
       // A próxima visita à Comunidade precisa mostrar a contribuição que o servidor acabou de salvar.
       setCommunityLoaded(false);
       setMode('done');
@@ -530,12 +520,12 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
     setMode('testing');
   }, [onPreviewTiming]);
 
-  const handleEditContribution = (c: TimingContribution) => {
+  const handleEditContribution = (c: TimingContribution, fromWithoutTabs = false) => {
     loadContribution({ bpm: c.bpm || null, duration: c.duration, mediaUrl: c.mediaUrl, mediaType: c.mediaType });
     useTimingRegionsStore.getState().loadFromContribution(c);
     const metadata = getTimingEditMetadata(c);
     setEditorAlias(metadata.editorAlias);
-    setReviewedFrom(metadata.reviewedFrom);
+    setReview(metadata.reviewedFrom === null ? null : { from: metadata.reviewedFrom, fromWithoutTabs });
     setTestingScroll(false);
     setSubmitError(null);
     setDurError(null);
@@ -642,12 +632,15 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
             nenhuma lógica interna de nenhum componente/handler foi alterada nesta passada. */}
         {editorOpen && (
           <div className={`flex-1 flex flex-col min-h-0 ${mode === 'testing' ? 'opacity-40 pointer-events-none' : ''}`}>
-            {reviewedFrom !== null && (
+            {review && (
               <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-yellow-400 bg-[#fffde7] px-3 py-1.5">
-                <p role="status" className="font-bold text-[#5c4600]">{t('timing.revisandoAutomatico')}</p>
+                <div role="status" className="text-[#5c4600]">
+                  <p className="font-bold">{t('timing.revisandoAutomatico')}</p>
+                  {review.fromWithoutTabs && <p>{t('timing.revisaoSemDedilhado')}</p>}
+                </div>
                 <button
                   type="button"
-                  onClick={() => setReviewedFrom(null)}
+                  onClick={() => setReview(null)}
                   disabled={mode === 'submitting'}
                   className="bevel-out border border-gray-400 bg-[#ece9d8] px-2 py-0.5 font-bold hover:bg-white disabled:opacity-50"
                 >
@@ -1237,7 +1230,7 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
                     lineRefs={lineRefs as React.MutableRefObject<(HTMLElement | null)[]>}
                     onLineClick={handleLineClick}
                     onStartReassign={startReassignLines}
-                    highlightPhrases={reviewedFrom !== null}
+                    highlightPhrases={review !== null}
                   />
                 )}
               </div>
@@ -1276,9 +1269,7 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
             {!loadingContribs && contributions.length === 0 && (
               <p className="text-xs text-gray-500 text-center py-10">{t('timing.semContribuicoes')}</p>
             )}
-            {communityCards.map(({ timing: c, withoutTabs }) => {
-              const badge = withoutTabs ? null : getTimingBadge(c);
-              const canReview = badge === 'timing.automaticoNaoRevisado';
+            {communityCards.map(({ timing: c, withoutTabs, badge, reviewTarget }) => {
               return (
                 <div key={withoutTabs ? `${c.id}-sem-dedilhado` : c.id} className={`bevel-out p-2 flex flex-col gap-1.5 ${c.id === myTimingId && !withoutTabs ? 'bg-[#fffde7] border border-yellow-400' : 'bg-white'} ${withoutTabs ? 'ml-4 border-l-2 border-l-[#316ac5]' : ''}`}>
                   {withoutTabs && (
@@ -1297,15 +1288,15 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
                         <button onClick={() => handleVote(c.id)} className="bevel-out bg-[#ece9d8] border border-gray-400 px-2 py-0.5 text-[10px] font-bold hover:bg-white">👍 {c.votes}</button>
                       )}
                       <button onClick={() => handleUseContribution(c)} className="bevel-out bg-[#002fa7] text-white border border-[#001a5c] px-2 py-0.5 text-[10px] font-bold hover:bg-[#316ac5]">{t('timing.usarEste')}</button>
-                      {canReview && (
-                        <button onClick={() => handleEditContribution(c)} className="bevel-out bg-[#ece9d8] border border-gray-400 px-2 py-0.5 text-[10px] font-bold hover:bg-white">{t('timing.revisar')}</button>
+                      {reviewTarget && (
+                        <button onClick={() => handleEditContribution(reviewTarget, withoutTabs)} className="bevel-out bg-[#ece9d8] border border-gray-400 px-2 py-0.5 text-[10px] font-bold hover:bg-white">{t('timing.revisar')}</button>
                       )}
                     </div>
                   </div>
                   {badge && (
                     <div className="flex flex-wrap items-center gap-2 text-[10px]">
-                      <span className={`rounded border px-1.5 font-bold ${canReview ? 'border-yellow-400 bg-[#fffde7] text-[#5c4600]' : 'border-green-400 bg-green-50 text-green-800'}`}>{t(badge)}</span>
-                      {canReview && (
+                      <span className={`rounded border px-1.5 font-bold ${reviewTarget ? 'border-yellow-400 bg-[#fffde7] text-[#5c4600]' : 'border-green-400 bg-green-50 text-green-800'}`}>{t(badge)}</span>
+                      {reviewTarget && (
                         <span className="text-gray-600">{t(c.phrases.length === 1 ? 'timing.umaFrase' : 'timing.totalFrases', { total: c.phrases.length })}</span>
                       )}
                     </div>
