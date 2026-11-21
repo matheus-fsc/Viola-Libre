@@ -199,8 +199,8 @@ export async function submitTiming(
   return data;
 }
 
-export async function fetchTimings(slug: string): Promise<TimingContribution[]> {
-  const { data } = await api.get<RawTimingContribution[]>(`/api/timings/${slug}`);
+export async function fetchTimings(slug: string, signal?: AbortSignal): Promise<TimingContribution[]> {
+  const { data } = await api.get<RawTimingContribution[]>(`/api/timings/${slug}`, { signal });
   return data.map(normalizeContribution);
 }
 

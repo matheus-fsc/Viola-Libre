@@ -252,12 +252,14 @@ interface TransporteProps {
   fmtTime(s: number): string;
   secao: string | null;
   syncLabel: string | null;
+  onSwitchTiming(): void;
   loopA: number | null;
   loopB: number | null;
   onLoopA(): void;
   onLoopB(): void;
   onLoopLimpar(): void;
   showTabs: boolean;
+  tabsForcedHidden: boolean;
   onToggleTabs(): void;
 }
 
@@ -343,7 +345,12 @@ export function TransporteMobile(p: TransporteProps) {
       </div>
 
       {p.syncLabel && (
-        <span className="px-2 pb-1 text-[10px] font-bold text-[#005500]">{p.syncLabel}</span>
+        <span className="flex items-baseline gap-1.5 px-2 pb-1 text-[10px] font-bold text-[#005500]">
+          {p.syncLabel}
+          <button type="button" onClick={p.onSwitchTiming} className="text-[#002fa7] underline">
+            {t('cifra.rolagemTrocarTiming')}
+          </button>
+        </span>
       )}
       {expandido && (
         <div className="flex flex-wrap items-center gap-1.5 px-2 pb-2 pt-1 border-t border-gray-400">
@@ -376,7 +383,8 @@ export function TransporteMobile(p: TransporteProps) {
           )}
           <button
             onClick={p.onToggleTabs}
-            className={`px-2.5 py-2 text-[10px] font-bold border leading-tight flex items-center gap-1 ${!p.showTabs ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#ece9d8] border-gray-400'}`}
+            disabled={p.tabsForcedHidden}
+            className={`px-2.5 py-2 text-[10px] font-bold border leading-tight flex items-center gap-1 disabled:opacity-50 ${!p.showTabs ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#ece9d8] border-gray-400'}`}
             title={p.showTabs ? t('cifra.tabsOcultarDica') : t('cifra.tabsMostrarDica')}
           >
             {t('cifra.folhaTabs')} {p.showTabs ? <ChevronDown size={11} /> : <ChevronRight size={11} />}

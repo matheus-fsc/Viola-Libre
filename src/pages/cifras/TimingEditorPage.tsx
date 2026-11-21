@@ -4,6 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { getCifra, type CifraDetail } from '../../services/api';
 import { TimingEditor } from '../../components/TimingEditor';
 import type { TimingContribution } from '../../services/timingApi';
+import { cifraTimingLines } from '../../services/cifraUtils';
 
 const previewKey = (slug: string) => `viola_preview_timing_${slug}`;
 
@@ -31,13 +32,7 @@ export const TimingEditorPage: React.FC = () => {
     return () => { cancelado = true; };
   }, [artistSlug, songSlug]);
 
-  const lines = useMemo(() => {
-    if (!cifra) return [];
-    return cifra.content_html
-      .replace(/<[^>]*>/g, '')
-      .replace(/&nbsp;/g, ' ')
-      .split('\n');
-  }, [cifra]);
+  const lines = useMemo(() => cifra ? cifraTimingLines(cifra.content_html) : [], [cifra]);
 
   const handlePreviewTiming = (t: TimingContribution | null) => {
     if (!songSlug) return;

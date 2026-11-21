@@ -72,6 +72,11 @@ function renderChordLine(line: string, semitones: number): string {
   return html + escapeHtml(line.slice(end));
 }
 
+// Os índices dos timings seguem as quebras do texto original, mesmo quando o HTML cria outras quebras visuais.
+export function cifraTimingLines(html: string): string[] {
+  return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').split('\n');
+}
+
 export function formatCifraChordHtml(html: string, semitones = 0): string {
   const decodeAnnotations = (text: string) =>
     text.replace(/&nbsp;/g, '\u00a0').replace(/&quot;|&#34;|&#x22;/gi, '"').replace(/&apos;|&#39;|&#x27;/gi, "'");
