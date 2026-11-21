@@ -11,6 +11,8 @@ import { TimingTimeline } from './timing/TimingTimeline';
 import { type ClipKind } from './timing/timingTracks';
 import { CifraGridEditor } from './timing/CifraGridEditor';
 import { getTimingBadge, getTimingEditMetadata } from './timing/timingReview';
+import { classifyLine } from '../utils/lineClassifier';
+import { withoutFingerpicking } from '../engine/lineScroll';
 import { usePlayerStore } from '../stores/usePlayerStore';
 import { useCifraTextStore } from '../stores/useCifraTextStore';
 import { useTimingRegionsStore } from '../stores/useTimingRegionsStore';
@@ -178,6 +180,19 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
   // carregados é exatamente "carregando". Com um setLoading(true) no efeito, o primeiro
   // render da aba mostrava "sem contribuições" por um quadro antes do "carregando".
   const loadingContribs = !communityLoaded;
+  // O "sem dedilhado" não é salvo no servidor: é derivado do automático no navegador, como
+  // na escolha do Auto-rolar. Mostrá-lo aqui deixa a Comunidade com as mesmas opções.
+  const lineTypes = useMemo(() => lines.map(classifyLine), [lines]);
+  const communityCards = useMemo(() => contributions.flatMap(c => {
+    const cards: { timing: TimingContribution; withoutTabs: boolean }[] = [{ timing: c, withoutTabs: false }];
+    if (c.source === 'auto') {
+      const { phrases, removedDuration, loops = c.loops } = withoutFingerpicking(c.phrases, lineTypes, c.loops);
+      if (removedDuration > 0) {
+        cards.push({ timing: { ...c, phrases, loops, duration: Math.max(0, c.duration - removedDuration) }, withoutTabs: true });
+      }
+    }
+    return cards;
+  }), [contributions, lineTypes]);
 
   // O player do YouTube depende de JS não-livre e só carrega sob consentimento.
   const ytAllowed = useYouTubeJsAllowed();
@@ -1261,11 +1276,17 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
             {!loadingContribs && contributions.length === 0 && (
               <p className="text-xs text-gray-500 text-center py-10">{t('timing.semContribuicoes')}</p>
             )}
-            {contributions.map(c => {
-              const badge = getTimingBadge(c);
+            {communityCards.map(({ timing: c, withoutTabs }) => {
+              const badge = withoutTabs ? null : getTimingBadge(c);
               const canReview = badge === 'timing.automaticoNaoRevisado';
               return (
-                <div key={c.id} className={`bevel-out p-2 flex flex-col gap-1.5 ${c.id === myTimingId ? 'bg-[#fffde7] border border-yellow-400' : 'bg-white'}`}>
+                <div key={withoutTabs ? `${c.id}-sem-dedilhado` : c.id} className={`bevel-out p-2 flex flex-col gap-1.5 ${c.id === myTimingId && !withoutTabs ? 'bg-[#fffde7] border border-yellow-400' : 'bg-white'} ${withoutTabs ? 'ml-4 border-l-2 border-l-[#316ac5]' : ''}`}>
+                  {withoutTabs && (
+                    <div className="flex flex-wrap items-center gap-2 text-[10px]">
+                      <span className="rounded border border-blue-300 bg-blue-50 px-1.5 font-bold text-[#002fa7]">{t('cifra.rolagemTimingSemDedilhado')}</span>
+                      <span className="text-gray-600">{t('cifra.rolagemTimingSemGravacao')}</span>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between flex-wrap gap-1">
                     <span className="font-bold text-[10px]">
                       {c.bpm ? `♩ ${c.bpm} BPM · ` : ''}⏱ {formatSeconds(c.duration)}

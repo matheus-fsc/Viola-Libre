@@ -11,8 +11,10 @@ export interface ChordPos { text: string; col: number; }
 const CHORD_TOKEN_RE = /[^\s|]+/g;
 
 export function isChordLine(line: string): boolean {
-  const tokens = line.match(CHORD_TOKEN_RE);
-  return tokens !== null && tokens.every(isValidChordToken);
+  // Parênteses soltos agrupam uma sequência de acordes, às vezes quebrada em duas linhas:
+  // "( A7  D7  C#7" e "F#m  G7 )  A7" (Punk da Periferia). Sozinhos não são palavra.
+  const tokens = (line.match(CHORD_TOKEN_RE) ?? []).filter(token => !/^[()]+$/.test(token));
+  return tokens.length > 0 && tokens.every(isValidChordToken);
 }
 
 export function parseChordLine(line: string): ChordPos[] {

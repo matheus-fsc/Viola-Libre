@@ -126,3 +126,16 @@ describe('índices de linha para o timing', () => {
     expect(html).toContain('data-timing-line="7">Outra frase');
   });
 });
+
+describe('isChordLine com parênteses soltos', () => {
+  it('aceita a sequência de acordes entre parênteses quebrada em duas linhas', () => {
+    expect(isChordLine('( A7  D7  C#7  F#m  A7  D7')).toBe(true);
+    expect(isChordLine('F#m  G7  G#7 )     A7')).toBe(true);
+    expect(isChordLine('( Am  Em  Am  Em )')).toBe(true);
+  });
+
+  it('não transforma parênteses vazios ou letra em linha de acorde', () => {
+    expect(isChordLine('( )')).toBe(false);
+    expect(isChordLine('( Das feridas que a pobreza cria')).toBe(false);
+  });
+});
