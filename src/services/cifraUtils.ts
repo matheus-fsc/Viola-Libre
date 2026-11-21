@@ -96,7 +96,7 @@ export function formatCifraChordHtml(html: string, semitones = 0): string {
 // stacking its chord (if any) directly above its word. Browsers wrap between units at the
 // normal space boundaries, so a chord always travels with the word it's anchored to instead
 // of the chord-line and lyric-line reflowing independently and drifting out of column-alignment.
-function buildReflowedPair(chordLine: string, lyricLine: string): string {
+function buildReflowedPair(chordLine: string, lyricLine: string, timingAttributes: string): string {
   const chords = parseChordLine(chordLine);
   const words = [...lyricLine.matchAll(/\S+/g)].map(m => ({ text: m[0], col: m.index }));
 
@@ -139,39 +139,47 @@ function buildReflowedPair(chordLine: string, lyricLine: string): string {
     units.push(`<span class="cifra-word"><span class="cifra-word-chord">${chordCell(trailing)}</span><span class="cifra-word-text">\u00A0</span></span>`);
   }
 
-  return `<div class="cifra-line cifra-line-paired">${units.join(' ')}</div>`;
+  return `<div class="cifra-line cifra-line-paired"${timingAttributes}>${units.join(' ')}</div>`;
 }
 
 // Uma linha por <div> permite quebrar o texto em telas estreitas. Quando há letra abaixo,
 // buildReflowedPair mantém o acorde e a palavra correspondente juntos na quebra.
-export function reflowCifraHtml(html: string): string {
+export function reflowCifraHtml(html: string, firstTimingLine?: number): string {
   // Drop any stray <pre> wrapper tags left over from upstream tab-block extraction — they'd
   // otherwise force white-space:pre on part of the content via the browser's own stylesheet.
   const cleaned = formatCifraChordHtml(html.replace(/<\/?pre[^>]*>/gi, ''));
-  const lines = cleaned.split(/\n|<br\s*\/?>/gi);
+  const lines = cleaned.split(/(\n|<br\s*\/?>)/gi);
   const out: string[] = [];
 
-  for (let i = 0; i < lines.length; i++) {
+  let timingLine = firstTimingLine ?? 0;
+  const indexAttribute = (index: number) => firstTimingLine === undefined ? '' : ` data-timing-line="${index}"`;
+  for (let i = 0; i < lines.length; i += 2) {
+    const index = timingLine;
+    // O editor conta as quebras do texto original. Um <br> sozinho só muda o layout.
+    if (lines[i + 1] === '\n') timingLine++;
     const line = lines[i];
     const plain = line.replace(/<[^>]+>/g, '');
 
     if (plain.trim() === '') {
-      out.push('<div class="cifra-line cifra-line-blank">&nbsp;</div>');
+      out.push(`<div class="cifra-line cifra-line-blank"${indexAttribute(index)}>&nbsp;</div>`);
       continue;
     }
 
     if (isChordLine(plain)) {
-      const nextLine = lines[i + 1];
+      const nextLine = lines[i + 2];
       const nextPlain = nextLine !== undefined ? nextLine.replace(/<[^>]+>/g, '') : '';
       const nextIsLyric = nextLine !== undefined && nextPlain.trim() !== '' && !isChordLine(nextPlain);
       if (nextIsLyric) {
-        out.push(buildReflowedPair(plain, nextPlain));
-        i++; // consumed the lyric line too
+        const attrs = firstTimingLine === undefined ? '' : `${indexAttribute(timingLine)} data-timing-chord="${index}"`;
+        out.push(buildReflowedPair(plain, nextPlain, attrs));
+        if (lines[i + 3] === '\n') timingLine++;
+        i += 2;
         continue;
       }
     }
 
-    out.push(`<div class="cifra-line">${line}</div>`);
+    const chord = firstTimingLine !== undefined && isChordLine(plain) ? ' data-timing-chord-row' : '';
+    out.push(`<div class="cifra-line"${indexAttribute(index)}${chord}>${line}</div>`);
   }
 
   return out.join('');

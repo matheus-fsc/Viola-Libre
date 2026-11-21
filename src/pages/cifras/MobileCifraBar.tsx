@@ -251,6 +251,7 @@ interface TransporteProps {
   total: number;
   fmtTime(s: number): string;
   secao: string | null;
+  syncLabel: string | null;
   loopA: number | null;
   loopB: number | null;
   onLoopA(): void;
@@ -341,6 +342,9 @@ export function TransporteMobile(p: TransporteProps) {
         </button>
       </div>
 
+      {p.syncLabel && (
+        <span className="px-2 pb-1 text-[10px] font-bold text-[#005500]">{p.syncLabel}</span>
+      )}
       {expandido && (
         <div className="flex flex-wrap items-center gap-1.5 px-2 pb-2 pt-1 border-t border-gray-400">
           <button onClick={p.onRestart} className={btn} title={t('cifra.inicioDica')} aria-label={t('cifra.barraInicioAria')}><SkipBack size={14} /></button>

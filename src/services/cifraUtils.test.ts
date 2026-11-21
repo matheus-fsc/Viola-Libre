@@ -117,3 +117,12 @@ describe('pontuação em linhas de acordes', () => {
     store.setLines([]);
   });
 });
+
+
+describe('índices de linha para o timing', () => {
+  it('preserva os índices de acordes e letra unidos no mesmo bloco', () => {
+    const html = reflowCifraHtml('Am G\nCanta comigo<br>\n\nOutra frase', 4);
+    expect(html).toContain('data-timing-line="5" data-timing-chord="4"');
+    expect(html).toContain('data-timing-line="7">Outra frase');
+  });
+});

@@ -13,6 +13,12 @@ import { useLatest } from '../hooks/useLatest';
 // Estados do player do YouTube que interessam aqui (a API devolve números crus).
 const YT_STATE_PLAYING = 1;
 
+export interface SourceVideoClock {
+  readTime(): number;
+  seek(seconds: number): void;
+  setRate(rate: number): void;
+}
+
 interface SourceVideoPanelProps {
   /** URL da source (link do YouTube semeado pela API ou vindo de um timing da comunidade). */
   videoUrl: string;
@@ -24,6 +30,7 @@ interface SourceVideoPanelProps {
    * É o que permite trocar o tempo deduzido (BPM × nº de acordes) por tempo medido.
    */
   onDurationDetected(seconds: number): void;
+  onPlayingClockChange(clock: SourceVideoClock | null): void;
 }
 
 /**
@@ -43,7 +50,7 @@ interface SourceVideoPanelProps {
  * reprodução ao encolher.
  */
 export const SourceVideoPanel: React.FC<SourceVideoPanelProps> = ({
-  videoUrl, title, onClose, onDurationDetected,
+  videoUrl, title, onClose, onDurationDetected, onPlayingClockChange,
 }) => {
   const t = useT();
   const [collapsed, setCollapsed] = useState(false);
@@ -98,7 +105,18 @@ export const SourceVideoPanel: React.FC<SourceVideoPanelProps> = ({
               const dur = Math.round(playerRef.current?.getDuration() ?? 0);
               if (dur > 0) onDurationRef.current(dur);
             },
-            onStateChange: (e) => setPlaying(e.data === YT_STATE_PLAYING),
+            onStateChange: (e) => {
+              if (cancelled) return;
+              const isPlaying = e.data === YT_STATE_PLAYING;
+              setPlaying(isPlaying);
+              const player = playerRef.current;
+              // Compartilha o relógio do player para a cifra acompanhar a gravação.
+              onPlayingClockChange(isPlaying && player ? {
+                readTime: () => player.getCurrentTime(),
+                seek: seconds => player.seekTo(seconds, true),
+                setRate: rate => player.setPlaybackRate?.(rate),
+              } : null);
+            },
           },
         });
       })
@@ -106,12 +124,13 @@ export const SourceVideoPanel: React.FC<SourceVideoPanelProps> = ({
 
     return () => {
       cancelled = true;
+      onPlayingClockChange(null);
       try { playerRef.current?.destroy(); } catch { /* o player pode já ter sumido */ }
       playerRef.current = null;
       wrap.replaceChildren();
     };
     // onDurationRef vem do useLatest, identidade fixa: não recria o player.
-  }, [videoId, ytAllowed, onDurationRef]);
+  }, [videoId, ytAllowed, onDurationRef, onPlayingClockChange]);
 
   const togglePlay = useCallback(() => {
     const p = playerRef.current;

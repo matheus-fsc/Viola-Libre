@@ -411,6 +411,8 @@ export const ptBR = {
     pausar: 'Pausar',
     ajustando: 'Ajustando',
     autoRolar: 'Auto-Rolar',
+    linhaSincronizadaAuto: 'Sincronizado · automático',
+    linhaSincronizadaComunidade: 'Sincronizado · comunidade',
     rolarDica: 'Espaço: retoma da posição atual da tela',
     tocarPausarDica: 'Tocar ou pausar (Espaço): retoma de onde a tela está',
     inicioDica: 'Voltar ao início (Home)',

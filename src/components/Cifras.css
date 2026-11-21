@@ -45,6 +45,12 @@
   display: block;
 }
 
+/* O destaque da revisão usa uma faixa lateral. A sombra evita alterar a quebra das linhas. */
+.cifra-line-playing {
+  background-color: var(--color-purple-200);
+  box-shadow: inset 2px 0 var(--color-purple-600);
+}
+
 .cifra-viewer-content .cifra-line-blank {
   min-height: 1em;
 }

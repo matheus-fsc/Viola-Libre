@@ -399,6 +399,8 @@ export const en: Dicionario = {
     pausar: 'Pause',
     ajustando: 'Adjusting',
     autoRolar: 'Auto-scroll',
+    linhaSincronizadaAuto: 'Synced · automatic',
+    linhaSincronizadaComunidade: 'Synced · community',
     rolarDica: 'Space: picks up from where the screen is',
     tocarPausarDica: 'Play or pause (Space): picks up from where the screen is',
     inicioDica: 'Back to the start (Home)',

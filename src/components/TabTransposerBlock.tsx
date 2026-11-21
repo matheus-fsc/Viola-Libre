@@ -13,6 +13,7 @@ interface Props {
   originalText: string;
   targetStrings: number[];
   targetLabel: string;
+  timingLines?: { firstLine: number; lastLine: number };
   extraSemitones?: number;
   posIdx: number;            // neck position index — controlled by CifraViewer
 }
@@ -23,6 +24,7 @@ export const TabTransposerBlock: React.FC<Props> = ({
   targetLabel,
   extraSemitones = 0,
   posIdx,
+  timingLines,
 }) => {
   const t = useT();
   const targetMidi      = useMemo(() => getTuningMidiHighToLow(targetStrings), [targetStrings]);
@@ -62,7 +64,7 @@ export const TabTransposerBlock: React.FC<Props> = ({
   const sourceName = firstTab?.sourceName ?? '';
 
   return (
-    <div className="my-1">
+    <div className="my-1" data-timing-tab-start={timingLines?.firstLine} data-timing-tab-end={timingLines?.lastLine}>
       <div className="flex items-center gap-2 py-0.5 px-1 bg-[#d4d0c8] border-b border-gray-400">
         <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">{t('acordes.tabRotulo')}</span>
         {recognized && !isSameInstrument ? (
