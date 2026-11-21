@@ -10,6 +10,7 @@ import type { StoredMarker } from '../stores/useTimingRegionsStore';
 import { TimingTimeline } from './timing/TimingTimeline';
 import { type ClipKind } from './timing/timingTracks';
 import { CifraGridEditor } from './timing/CifraGridEditor';
+import { getTimingBadge, getTimingEditMetadata } from './timing/timingReview';
 import { usePlayerStore } from '../stores/usePlayerStore';
 import { useCifraTextStore } from '../stores/useCifraTextStore';
 import { useTimingRegionsStore } from '../stores/useTimingRegionsStore';
@@ -105,6 +106,7 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
   const t = useT();
   const [mode, setMode] = useState<EditorMode>('editing');
   const [activeTab, setActiveTab] = useState<'editor' | 'community'>('editor');
+  const editorOpen = activeTab === 'editor' && mode !== 'done';
 
   // Player state — lives in usePlayerStore
   const {
@@ -116,6 +118,7 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
 
   // Metadata
   const [editorAlias, setEditorAlias] = useState<string>('');
+  const [reviewedFrom, setReviewedFrom] = useState<string | null>(null);
 
   // Regions + markers — source of truth in the store
   const { regions, markers } = useTimingRegionsStore();
@@ -227,7 +230,8 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
 
   // ── YouTube player ────────────────────────────────────────────────────────
   useEffect(() => {
-    if (mediaType !== 'youtube' || !mediaUrl) return;
+    // A aba Comunidade desmonta o player, mesmo quando o link continua igual.
+    if (!editorOpen || mediaType !== 'youtube' || !mediaUrl) return;
     // Sem autorização o script não-livre do YouTube nem chega a ser pedido; o
     // editor segue funcionando com a duração digitada à mão.
     if (!ytAllowed) return;
@@ -245,6 +249,7 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
         width: '100%',
         events: {
           onReady: () => {
+            if (cancelled) return;
             registerYtPlayer(player);
             const dur = Math.round(player.getDuration());
             setPlayerReady(true, dur > 0 ? dur : undefined);
@@ -253,14 +258,14 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
       });
     }).catch(() => { /* sem player: o editor segue com a duração digitada à mão */ });
 
-    return () => { cancelled = true; clearYtPlayer(); };
+    return () => { cancelled = true; clearYtPlayer(); setPlayerReady(false); };
     // As ações do usePlayerStore são criadas uma vez com o store e nunca mudam de
     // identidade: declará-las não faz o efeito rodar mais vezes.
-  }, [mediaUrl, mediaType, ytAllowed, clearYtPlayer, registerYtPlayer, setPlayerReady]);
+  }, [editorOpen, mediaUrl, mediaType, ytAllowed, clearYtPlayer, registerYtPlayer, setPlayerReady]);
 
   // ── Audio polling (tick delegated to store) ────────────────────────────────
   useEffect(() => {
-    if (mediaType !== 'audio') return;
+    if (!editorOpen || mediaType !== 'audio') return;
     const audio = audioRef.current;
     if (!audio) return;
     registerAudio(audio);
@@ -268,8 +273,8 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
       if (audio.paused) return;
       usePlayerStore.getState().tick(audio.currentTime);
     }, 250);
-    return () => { clearInterval(id); registerAudio(null); };
-  }, [mediaType, mediaUrl, registerAudio]);
+    return () => { clearInterval(id); registerAudio(null); setPlayerReady(false); };
+  }, [editorOpen, mediaType, mediaUrl, registerAudio, setPlayerReady]);
 
   // ── Community ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -316,12 +321,7 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
-  // Debug/portability snapshot — own format (regions + markers), not the backend payload.
-  // Also carries mediaUrl/mediaType/duration/bpm — without them, reimporting a snapshot would
-  // leave the player pointing at nothing and force re-pasting the media link every time.
-  // useTimingRegionsStore doesn't know about usePlayerStore (domain stores stay isolated from
-  // each other — see useTimingRegionsStore.ts) so this component is what combines the two,
-  // same as handleEditMyContribution already does below.
+  // O snapshot inclui os dados do player para que o usuário possa restaurar a mídia junto com as regiões.
   const handleExportSnapshot = () => {
     const ps = usePlayerStore.getState();
     const json = useTimingRegionsStore.getState().exportSnapshot({
@@ -356,6 +356,7 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
           mediaUrl: typeof extra.mediaUrl === 'string' ? extra.mediaUrl : undefined,
           mediaType: validMediaTypes.includes(extra.mediaType as MediaType) ? (extra.mediaType as MediaType) : undefined,
         });
+        setReviewedFrom(null);
       } catch (err) {
         alert(err instanceof Error ? err.message : 'Erro ao importar o arquivo.');
       }
@@ -482,6 +483,7 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
       const result = await submitTiming(slug, {
         editorHash: getOrCreateEditorHash(),
         editorAlias: editorAlias || undefined,
+        reviewedFrom: reviewedFrom ?? undefined,
         mediaUrl: ps.mediaUrl || undefined,
         mediaType: ps.mediaType || undefined,
         bpm: ps.bpm ?? undefined,
@@ -491,6 +493,9 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
       });
       setSubmittedHash(result.editorHash || getOrCreateEditorHash());
       localStorage.setItem(`viola_timing_id_${slug}`, result.id);
+      setReviewedFrom(null);
+      // A próxima visita à Comunidade precisa mostrar a contribuição que o servidor acabou de salvar.
+      setCommunityLoaded(false);
       setMode('done');
     } catch {
       setSubmitError('Erro ao enviar. Tente novamente.');
@@ -510,10 +515,16 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
     setMode('testing');
   }, [onPreviewTiming]);
 
-  const handleEditMyContribution = (c: TimingContribution) => {
+  const handleEditContribution = (c: TimingContribution) => {
     loadContribution({ bpm: c.bpm || null, duration: c.duration, mediaUrl: c.mediaUrl, mediaType: c.mediaType });
     useTimingRegionsStore.getState().loadFromContribution(c);
-    setEditorAlias(c.editorAlias ?? '');
+    const metadata = getTimingEditMetadata(c);
+    setEditorAlias(metadata.editorAlias);
+    setReviewedFrom(metadata.reviewedFrom);
+    setTestingScroll(false);
+    setSubmitError(null);
+    setDurError(null);
+    setMode('editing');
     setActiveTab('editor');
   };
 
@@ -593,12 +604,13 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
+              disabled={mode === 'submitting'}
               className={`px-4 py-1.5 font-bold text-xs border-r border-gray-400 ${activeTab === tab ? 'bg-[#ece9d8]' : 'hover:bg-[#ddd9cc]'}`}
             >
               {tab === 'editor' ? '✏️ Editor' : `👥 Comunidade${contributions.length > 0 ? ` (${contributions.length})` : ''}`}
             </button>
           ))}
-          {activeTab === 'editor' && mode !== 'done' && (
+          {editorOpen && (
             <button
               onClick={handleSubmit}
               disabled={mode === 'submitting'}
@@ -613,8 +625,21 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
             3 blocos verticais: (1) player + wizards/trechos lado a lado, (2) cifra em largura
             total, (3) timeline fixa no rodapé (mais abaixo, fora deste wrapper). Só reposiciona —
             nenhuma lógica interna de nenhum componente/handler foi alterada nesta passada. */}
-        {activeTab === 'editor' && mode !== 'done' && (
+        {editorOpen && (
           <div className={`flex-1 flex flex-col min-h-0 ${mode === 'testing' ? 'opacity-40 pointer-events-none' : ''}`}>
+            {reviewedFrom !== null && (
+              <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-yellow-400 bg-[#fffde7] px-3 py-1.5">
+                <p role="status" className="font-bold text-[#5c4600]">{t('timing.revisandoAutomatico')}</p>
+                <button
+                  type="button"
+                  onClick={() => setReviewedFrom(null)}
+                  disabled={mode === 'submitting'}
+                  className="bevel-out border border-gray-400 bg-[#ece9d8] px-2 py-0.5 font-bold hover:bg-white disabled:opacity-50"
+                >
+                  {t('timing.cancelarRevisao')}
+                </button>
+              </div>
+            )}
 
             {/* ══ Bloco 1: player (esquerda, largura fixa) + wizards/trechos (direita, flex) ══
                 Altura fixa em 340px — cada coluna rola internamente se seu conteúdo passar disso,
@@ -651,6 +676,7 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
                       ref={audioRef}
                       controls
                       src={mediaUrl}
+                      onSeeked={e => usePlayerStore.getState().tick(e.currentTarget.currentTime)}
                       onLoadedMetadata={() => {
                         const audio = audioRef.current;
                         const dur = audio ? Math.round(audio.duration) : 0;
@@ -1196,6 +1222,7 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
                     lineRefs={lineRefs as React.MutableRefObject<(HTMLElement | null)[]>}
                     onLineClick={handleLineClick}
                     onStartReassign={startReassignLines}
+                    highlightPhrases={reviewedFrom !== null}
                   />
                 )}
               </div>
@@ -1220,7 +1247,7 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
                   </button>
                 </div>
               )}
-              <button onClick={() => { setActiveTab('community'); setCommunityLoaded(false); }} className="bevel-out bg-[var(--color-winxp-panel)] border border-gray-400 px-3 py-1 text-xs font-bold hover:bg-white self-start">
+              <button onClick={() => setActiveTab('community')} className="bevel-out bg-[var(--color-winxp-panel)] border border-gray-400 px-3 py-1 text-xs font-bold hover:bg-white self-start">
                 {t('timing.verContribuicoes')}
               </button>
             </div>
@@ -1234,75 +1261,91 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
             {!loadingContribs && contributions.length === 0 && (
               <p className="text-xs text-gray-500 text-center py-10">{t('timing.semContribuicoes')}</p>
             )}
-            {contributions.map(c => (
-              <div key={c.id} className={`bevel-out p-2 flex flex-col gap-1.5 ${c.id === myTimingId ? 'bg-[#fffde7] border border-yellow-400' : 'bg-white'}`}>
-                <div className="flex items-center justify-between flex-wrap gap-1">
-                  <span className="font-bold text-[10px]">
-                    {c.bpm ? `♩ ${c.bpm} BPM · ` : ''}⏱ {formatSeconds(c.duration)}
-                    {c.editorAlias && <span className="text-gray-500 font-normal"> · {c.editorAlias}</span>}
-                  </span>
-                  <div className="flex gap-1">
-                    <button onClick={() => handleVote(c.id)} className="bevel-out bg-[#ece9d8] border border-gray-400 px-2 py-0.5 text-[10px] font-bold hover:bg-white">👍 {c.votes}</button>
-                    <button onClick={() => handleUseContribution(c)} className="bevel-out bg-[#002fa7] text-white border border-[#001a5c] px-2 py-0.5 text-[10px] font-bold hover:bg-[#316ac5]">{t('timing.usarEste')}</button>
+            {contributions.map(c => {
+              const badge = getTimingBadge(c);
+              const canReview = badge === 'timing.automaticoNaoRevisado';
+              return (
+                <div key={c.id} className={`bevel-out p-2 flex flex-col gap-1.5 ${c.id === myTimingId ? 'bg-[#fffde7] border border-yellow-400' : 'bg-white'}`}>
+                  <div className="flex items-center justify-between flex-wrap gap-1">
+                    <span className="font-bold text-[10px]">
+                      {c.bpm ? `♩ ${c.bpm} BPM · ` : ''}⏱ {formatSeconds(c.duration)}
+                      {c.editorAlias && <span className="text-gray-500 font-normal"> · {c.editorAlias}</span>}
+                    </span>
+                    <div className="flex gap-1">
+                      {c.source !== 'auto' && (
+                        <button onClick={() => handleVote(c.id)} className="bevel-out bg-[#ece9d8] border border-gray-400 px-2 py-0.5 text-[10px] font-bold hover:bg-white">👍 {c.votes}</button>
+                      )}
+                      <button onClick={() => handleUseContribution(c)} className="bevel-out bg-[#002fa7] text-white border border-[#001a5c] px-2 py-0.5 text-[10px] font-bold hover:bg-[#316ac5]">{t('timing.usarEste')}</button>
+                      {canReview && (
+                        <button onClick={() => handleEditContribution(c)} className="bevel-out bg-[#ece9d8] border border-gray-400 px-2 py-0.5 text-[10px] font-bold hover:bg-white">{t('timing.revisar')}</button>
+                      )}
+                    </div>
                   </div>
+                  {badge && (
+                    <div className="flex flex-wrap items-center gap-2 text-[10px]">
+                      <span className={`rounded border px-1.5 font-bold ${canReview ? 'border-yellow-400 bg-[#fffde7] text-[#5c4600]' : 'border-green-400 bg-green-50 text-green-800'}`}>{t(badge)}</span>
+                      {canReview && (
+                        <span className="text-gray-600">{t(c.phrases.length === 1 ? 'timing.umaFrase' : 'timing.totalFrases', { total: c.phrases.length })}</span>
+                      )}
+                    </div>
+                  )}
+                  {c.mediaUrl && (
+                    <div className="flex items-center gap-1 text-[10px] text-gray-500">
+                      <span className="truncate text-[9px] font-mono">{c.mediaUrl}</span>
+                      <a href={c.mediaUrl} target="_blank" rel="noopener noreferrer" className="text-[#002fa7] shrink-0">↗</a>
+                    </div>
+                  )}
+                  {c.sections?.length > 0 && c.duration > 0 && (
+                    <div className="relative h-4 bg-gray-100 rounded overflow-hidden">
+                      {[...c.sections].sort((a, b) => a.startTime - b.startTime).map((s, i) => {
+                        const meta = SECTION_TYPE_META[s.type];
+                        const left = (s.startTime / c.duration) * 100;
+                        const endT = s.endTime ?? c.duration;
+                        const width = Math.max(((endT - s.startTime) / c.duration) * 100, 0.5);
+                        return (
+                          <div
+                            key={i}
+                            title={`${s.label}  ${formatSeconds(s.startTime)}${s.endTime !== null ? ` → ${formatSeconds(s.endTime)}` : ''}`}
+                            style={{ left: `${left}%`, width: `${width}%`, backgroundColor: meta.barColor }}
+                            className="absolute top-0 bottom-0 border-r border-white/50"
+                          />
+                        );
+                      })}
+                    </div>
+                  )}
+                  {c.sections?.length > 0 && (
+                    <p className="text-[9px] text-gray-500">
+                      {[...c.sections].sort((a, b) => a.startTime - b.startTime).map(s =>
+                        `${s.label} (${formatSeconds(s.startTime)}${s.endTime !== null ? ` → ${formatSeconds(s.endTime)}` : ''})`
+                      ).join(' · ')}
+                    </p>
+                  )}
+                  {c.markers?.length > 0 && (
+                    <p className="text-[10px] text-gray-600 flex flex-wrap gap-x-2 gap-y-0.5">
+                      {[...c.markers].sort((a, b) => a.time - b.time).map((mk, i) => {
+                        const m = MARKER_META[mk.type];
+                        return (
+                          <span key={i} className="font-mono" style={{ color: m.pinColor }}>
+                            {m.symbol} <span className="text-gray-500 font-sans">{m.name}</span> {formatSeconds(mk.time)}
+                          </span>
+                        );
+                      })}
+                    </p>
+                  )}
+                  {c.loops?.length > 0 && <p className="text-[10px] text-blue-700">🔁 {c.loops.map(l => `${l.label} (${l.repeatCount}×${l.mediaTimestampStart != null ? ` ⏱${formatSeconds(l.mediaTimestampStart)}` : ''})`).join(' · ')}</p>}
+                  {c.instrumentalSections?.length > 0 && <p className="text-[10px] text-green-700">🎸 {c.instrumentalSections.map(s => `${s.label}${s.mediaTimestampStart != null ? ` ⏱${formatSeconds(s.mediaTimestampStart)}` : ''}`).join(' · ')}</p>}
+                  {c.source !== 'auto' && c.id === myTimingId && (
+                    <button onClick={() => handleEditContribution(c)} className="bevel-out bg-[#ece9d8] border border-gray-400 px-2 py-0.5 text-[10px] font-bold hover:bg-white self-start">{t('timing.editarMinha')}</button>
+                  )}
                 </div>
-                {c.mediaUrl && (
-                  <div className="flex items-center gap-1 text-[10px] text-gray-500">
-                    <span className="truncate text-[9px] font-mono">{c.mediaUrl}</span>
-                    <a href={c.mediaUrl} target="_blank" rel="noopener noreferrer" className="text-[#002fa7] shrink-0">↗</a>
-                  </div>
-                )}
-                {/* Trechos timeline in community card */}
-                {c.sections?.length > 0 && c.duration > 0 && (
-                  <div className="relative h-4 bg-gray-100 rounded overflow-hidden">
-                    {[...c.sections].sort((a, b) => a.startTime - b.startTime).map((s, i) => {
-                      const meta = SECTION_TYPE_META[s.type];
-                      const left = (s.startTime / c.duration) * 100;
-                      const endT = s.endTime ?? c.duration;
-                      const width = Math.max(((endT - s.startTime) / c.duration) * 100, 0.5);
-                      return (
-                        <div
-                          key={i}
-                          title={`${s.label}  ${formatSeconds(s.startTime)}${s.endTime !== null ? ` → ${formatSeconds(s.endTime)}` : ''}`}
-                          style={{ left: `${left}%`, width: `${width}%`, backgroundColor: meta.barColor }}
-                          className="absolute top-0 bottom-0 border-r border-white/50"
-                        />
-                      );
-                    })}
-                  </div>
-                )}
-                {c.sections?.length > 0 && (
-                  <p className="text-[9px] text-gray-500">
-                    {[...c.sections].sort((a, b) => a.startTime - b.startTime).map(s =>
-                      `${s.label} (${formatSeconds(s.startTime)}${s.endTime !== null ? `–${formatSeconds(s.endTime)}` : ''})`
-                    ).join(' · ')}
-                  </p>
-                )}
-                {c.markers?.length > 0 && (
-                  <p className="text-[10px] text-gray-600 flex flex-wrap gap-x-2 gap-y-0.5">
-                    {[...c.markers].sort((a, b) => a.time - b.time).map((mk, i) => {
-                      const m = MARKER_META[mk.type];
-                      return (
-                        <span key={i} className="font-mono" style={{ color: m.pinColor }}>
-                          {m.symbol} <span className="text-gray-500 font-sans">{m.name}</span> {formatSeconds(mk.time)}
-                        </span>
-                      );
-                    })}
-                  </p>
-                )}
-                {c.loops?.length > 0 && <p className="text-[10px] text-blue-700">🔁 {c.loops.map(l => `${l.label} (${l.repeatCount}×${l.mediaTimestampStart != null ? ` ⏱${formatSeconds(l.mediaTimestampStart)}` : ''})`).join(' · ')}</p>}
-                {c.instrumentalSections?.length > 0 && <p className="text-[10px] text-green-700">🎸 {c.instrumentalSections.map(s => `${s.label}${s.mediaTimestampStart != null ? ` ⏱${formatSeconds(s.mediaTimestampStart)}` : ''}`).join(' · ')}</p>}
-                {c.id === myTimingId && (
-                  <button onClick={() => handleEditMyContribution(c)} className="bevel-out bg-[#ece9d8] border border-gray-400 px-2 py-0.5 text-[10px] font-bold hover:bg-white self-start">{t('timing.editarMinha')}</button>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
 
       {/* Timeline fixed footer — floats at bottom of viewport */}
-      {activeTab === 'editor' && mode !== 'done' && (
+      {editorOpen && (
         <div className="fixed bottom-0 left-0 right-0 z-50 shadow-[0_-2px_6px_rgba(0,0,0,0.25)]">
           <TimingTimeline
             markerMeta={MARKER_META}

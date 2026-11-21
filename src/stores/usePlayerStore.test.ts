@@ -33,6 +33,18 @@ describe('player — mídia e duração', () => {
     expect(player().mediaUrl).toBe('');
   });
 
+  it('carrega o tipo de áudio da contribuição mesmo sem extensão no link', () => {
+    const mediaUrl = 'https://example.com/faixas/1';
+    usePlayerStore.setState({ currentTime: 30, isPlaying: true, playerReady: true });
+    player().loadContribution({ mediaUrl, mediaType: 'audio', bpm: 84, duration: 36.5 });
+    expect(player()).toMatchObject({
+      mediaUrl, mediaUrlInput: mediaUrl, mediaType: 'audio', duration: 36.5, bpm: 84,
+      currentTime: 0, isPlaying: false, playerReady: false,
+    });
+    player().loadContribution({ mediaUrl: null, mediaType: null, bpm: null, duration: 24 });
+    expect(player()).toMatchObject({ mediaUrl: '', mediaUrlInput: '', mediaType: null, duration: 24 });
+  });
+
   it.each([
     ['3:05', 185, '3:05'],
     ['3:5', 185, '3:05'],

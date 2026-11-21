@@ -90,6 +90,9 @@ export interface TimingContribution {
   markers: TimingMarker[];
   votes: number;
   updatedAt: string;
+  source?: 'manual' | 'auto';
+  reviewed?: boolean;
+  reviewedFrom?: string | null;
 }
 
 export interface TimingSubmitPayload {
@@ -104,9 +107,51 @@ export interface TimingSubmitPayload {
   phrases: TimingPhrase[];
   sections: TimingSection[];
   markers: TimingMarker[];
+  reviewedFrom?: string;
 }
 
 export type MediaType = 'youtube' | 'audio' | 'other' | null;
+
+type RawTimingContribution = Pick<TimingContribution, 'id' | 'duration'> & Partial<Omit<TimingContribution, 'id' | 'duration'>> & {
+  editor_alias?: string | null;
+  media_url?: string | null;
+  media_type?: MediaType;
+  instrumental_sections?: TimingInstrumental[];
+  updated_at?: string;
+  reviewed_from?: string | null;
+  line_timestamps?: { line: number; media_timestamp_start: number }[];
+};
+
+export function normalizeContribution(raw: RawTimingContribution): TimingContribution {
+  const {
+    id, duration, bpm = 0, votes = 0,
+    editorAlias = raw.editor_alias ?? null,
+    mediaUrl = raw.media_url ?? null,
+    mediaType = raw.media_type ?? null,
+    instrumentalSections = raw.instrumental_sections,
+    updatedAt = raw.updated_at ?? '',
+    source = 'manual', reviewed, reviewedFrom = raw.reviewed_from,
+  } = raw;
+  let phrases = raw.phrases;
+  // Os registros antigos guardavam só o início, então o próximo início delimita cada frase.
+  if (phrases == null && raw.line_timestamps) {
+    const timestamps = [...raw.line_timestamps].sort((a, b) => a.media_timestamp_start - b.media_timestamp_start);
+    phrases = timestamps.map((timestamp, index) => ({
+      lineIndex: timestamp.line,
+      startTime: timestamp.media_timestamp_start,
+      endTime: timestamps[index + 1]?.media_timestamp_start ?? duration,
+    }));
+  }
+
+  return {
+    id, duration, bpm, votes, editorAlias, mediaUrl, mediaType, updatedAt, source, reviewed, reviewedFrom,
+    loops: raw.loops ?? [],
+    instrumentalSections: instrumentalSections ?? [],
+    phrases: phrases ?? [],
+    sections: raw.sections ?? [],
+    markers: raw.markers ?? [],
+  };
+}
 
 export function getOrCreateEditorHash(): string {
   const key = 'viola_editor_hash';
@@ -155,8 +200,8 @@ export async function submitTiming(
 }
 
 export async function fetchTimings(slug: string): Promise<TimingContribution[]> {
-  const { data } = await api.get<TimingContribution[]>(`/api/timings/${slug}`);
-  return data;
+  const { data } = await api.get<RawTimingContribution[]>(`/api/timings/${slug}`);
+  return data.map(normalizeContribution);
 }
 
 export async function voteTiming(timingId: string): Promise<{ votes: number }> {
@@ -176,9 +221,9 @@ export async function voteTiming(timingId: string): Promise<{ votes: number }> {
 }
 
 export async function fetchBestTiming(slug: string): Promise<TimingContribution | null> {
-  const response = await api.get<TimingContribution>(`/api/timings/${slug}/best`, {
-    validateStatus: (s) => s < 500,
+  const response = await api.get<RawTimingContribution>(`/api/timings/${slug}/best`, {
+    validateStatus: (s) => (s >= 200 && s < 300) || s === 404,
   });
   if (response.status === 204 || response.status === 404) return null;
-  return response.data;
+  return normalizeContribution(response.data);
 }

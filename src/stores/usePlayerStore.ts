@@ -186,10 +186,17 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         duration: c.duration,
         durationInput: c.duration > 0 ? formatSeconds(c.duration) : '',
       };
-      if (c.mediaUrl) {
-        patch.mediaUrl = c.mediaUrl;
-        patch.mediaUrlInput = c.mediaUrl;
-        patch.mediaType = c.mediaType ?? null;
+      if (c.mediaUrl !== undefined) {
+        // Uma contribuição sem mídia precisa limpar a faixa anterior. Snapshots antigos podem omitir o campo.
+        patch.mediaUrl = c.mediaUrl ?? '';
+        patch.mediaUrlInput = patch.mediaUrl;
+        patch.mediaType = c.mediaUrl ? c.mediaType ?? null : null;
+        if (patch.mediaUrl !== get().mediaUrl || patch.mediaType !== get().mediaType) {
+          patch.playerReady = false;
+          patch.currentTime = 0;
+          patch.isPlaying = false;
+        }
+        _previewEnd = null;
       }
       set(patch);
     },
