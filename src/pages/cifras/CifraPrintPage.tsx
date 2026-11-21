@@ -13,7 +13,6 @@ import {
   buildVoicingFromFrets,
   calculateVoicings,
   parseChordString,
-  transposeChordString,
 } from '../../engine/chordCalculator';
 import type { Voicing } from '../../engine/types';
 import { PRESET_INSTRUMENTS } from '../../engine/tunings';
@@ -27,7 +26,7 @@ import {
   TAB_POSITIONS,
   type ContentSegment,
 } from '../../engine/tabTransposer';
-import { isChordLine, reflowCifraHtml } from '../../services/cifraUtils';
+import { formatCifraChordHtml, isChordLine, reflowCifraHtml } from '../../services/cifraUtils';
 import { prettifySlug } from '../../services/cifraFavorites';
 import { getPreferredInstrumentId } from '../../utils/instrumentPreference';
 import { useSeo, SITE_URL } from '../../hooks/useSeo';
@@ -127,6 +126,7 @@ function escaparHtml(s: string): string {
 
 /** Uma linha que parece pauta de tablatura ("E|--3--|", "|-0-2-", "---3---"). */
 function pareceLinhaDeTab(linha: string): boolean {
+  if (isChordLine(linha)) return false;
   const t = linha.trim();
   return /^[A-Ga-g#b]{1,3}\|/.test(t) || /^\|+[-x0-9hpb/\\~^.]/.test(t) || /^[-x0-9hpb/\\~^.|]{8,}$/.test(t);
 }
@@ -152,9 +152,7 @@ function segmentosDoTexto(texto: string): ContentSegment[] {
     }
     const inicio = i;
     while (i < linhas.length && !(pareceLinhaDeTab(linhas[i]) && pareceLinhaDeTab(linhas[i + 1] ?? ''))) i++;
-    const bloco = linhas.slice(inicio, i)
-      .map(l => (isChordLine(l) ? l.replace(/\S+/g, m => `<b>${escaparHtml(m)}</b>`) : escaparHtml(l)))
-      .join('\n');
+    const bloco = formatCifraChordHtml(escaparHtml(linhas.slice(inicio, i).join('\n')));
     segs.push({ type: 'html', content: bloco });
   }
   return segs;
@@ -403,9 +401,7 @@ export const CifraPrintPage: React.FC = () => {
 
   const htmlTransposto = useMemo(() => {
     if (!cifra) return '';
-    if (transpose === 0) return cifra.content_html;
-    return cifra.content_html.replace(/<b>(.*?)<\/b>/g, (_m, acorde: string) =>
-      `<b>${transposeChordString(acorde.trim(), transpose, false)}</b>`);
+    return formatCifraChordHtml(cifra.content_html, transpose);
   }, [cifra, transpose]);
 
   // Mesma mescla de tabs consecutivas do visualizador: uma tab partida em duas vira um

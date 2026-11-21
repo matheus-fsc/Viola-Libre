@@ -36,7 +36,7 @@ import { descricaoDoTom } from '../../i18n/musica';
 import { estadoTomSalvo } from './tomSalvo';
 import { BarraDaLista } from './BarraDaLista';
 import { lerLista, posicaoNaLista } from '../../services/listaAberta';
-import { reflowCifraHtml } from '../../services/cifraUtils';
+import { formatCifraChordHtml, reflowCifraHtml } from '../../services/cifraUtils';
 import { acordesDaCifra, acordesDistintos } from '../../services/cifraChords';
 import { getPreferredInstrumentId, setPreferredInstrumentId } from '../../utils/instrumentPreference';
 import { sortVersionsForInstrument } from '../../utils/versionPreference';
@@ -850,9 +850,12 @@ export const CifraViewer: React.FC = () => {
       const REPEAT_RE = /(\d+)\s*[xX]|[xX]\s*(\d+)/;
       const labelRe = /\[([^\]]+)\]/g;
       const sectionMarkers: { charPos: number; label: string; instrumental: boolean; repeat: number }[] = [];
+      // Usa a mesma marcação do visor para contar também os acordes que vieram sem <b>.
+      const chordHtml = formatCifraChordHtml(cifra.content_html);
       let lm: RegExpExecArray | null;
-      while ((lm = labelRe.exec(cifra.content_html)) !== null) {
+      while ((lm = labelRe.exec(chordHtml)) !== null) {
         const labelText = lm[1];
+        if (labelText.includes('<b>')) continue;
         const isInstrumental = INSTR_RE.test(labelText);
         let repeat = 1;
         const mRep = REPEAT_RE.exec(labelText);
@@ -860,8 +863,8 @@ export const CifraViewer: React.FC = () => {
           repeat = parseInt(mRep[1] ?? mRep[2], 10);
         } else {
           const afterEnd = lm.index + lm[0].length;
-          const nlIdx = cifra.content_html.indexOf('\n', afterEnd);
-          const afterText = cifra.content_html.slice(afterEnd, nlIdx === -1 ? afterEnd + 25 : Math.min(nlIdx, afterEnd + 25));
+          const nlIdx = chordHtml.indexOf('\n', afterEnd);
+          const afterText = chordHtml.slice(afterEnd, nlIdx === -1 ? afterEnd + 25 : Math.min(nlIdx, afterEnd + 25));
           const mAfter = REPEAT_RE.exec(afterText);
           if (mAfter) {
             repeat = parseInt(mAfter[1] ?? mAfter[2], 10);
@@ -872,11 +875,11 @@ export const CifraViewer: React.FC = () => {
         }
         sectionMarkers.push({ charPos: lm.index, label: labelText, instrumental: isInstrumental, repeat: Math.max(1, Math.min(repeat, 8)) });
       }
-      // Posição char de cada <b> no HTML bruto (mesma ordem que no DOM)
+      // Posição de cada <b> no HTML normalizado (mesma ordem que no DOM).
       const chordCharPos: number[] = [];
       const bRe = /<b>/gi;
       let bm: RegExpExecArray | null;
-      while ((bm = bRe.exec(cifra.content_html)) !== null) chordCharPos.push(bm.index);
+      while ((bm = bRe.exec(chordHtml)) !== null) chordCharPos.push(bm.index);
 
       const INSTR_MULT = 2.0;
       let domChordIdx = 0;
@@ -1128,15 +1131,9 @@ export const CifraViewer: React.FC = () => {
     }).catch(console.error);
   };
 
-  // Derive transformed HTML based on transpose offset
   const displayHtml = useMemo(() => {
     if (!cifra) return '';
-    if (transposeOffset === 0) return cifra.content_html;
-
-    return cifra.content_html.replace(/<b>(.*?)<\/b>/g, (match, chordName) => {
-      const transposed = transposeChordString(chordName.trim(), transposeOffset, false);
-      return `<b>${transposed}</b>`;
-    });
+    return formatCifraChordHtml(cifra.content_html, transposeOffset);
   }, [cifra, transposeOffset]);
 
   // Split displayHtml into html/tab segments for the tab transposer

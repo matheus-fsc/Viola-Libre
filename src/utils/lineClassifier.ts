@@ -38,13 +38,14 @@ export type LineType = 'chord' | 'section' | 'instrumental' | 'tab' | 'lyric';
 export function classifyLine(line: string): LineType {
   const trimmed = line.trim();
   if (!trimmed) return 'lyric';
+  // [Am] também tem a forma de um cabeçalho, então o vocabulário de acordes vem primeiro.
+  if (isChordLine(line)) return 'chord';
   if (SECTION_LINE_RE.test(trimmed)) {
     return INSTR_RE.test(trimmed) ? 'instrumental' : 'section';
   }
   if (UNBRACKETED_SECTION_RE.test(trimmed)) {
     return INSTR_RE.test(trimmed) ? 'instrumental' : 'section';
   }
-  if (isChordLine(line)) return 'chord';
   if (isTabLine(trimmed)) return 'tab';
   return 'lyric';
 }

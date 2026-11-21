@@ -66,9 +66,34 @@ export function parseChordString(chordStr: string): { root: string; suffix: stri
   return { root, suffix, bass };
 }
 
+export function splitChordAnnotation(token: string): { prefix: string; core: string; suffix: string } {
+  const prefix = token.match(/^[([|]+/)?.[0] ?? '';
+  let end = token.length;
+  let depth = 0;
+  let lastBalancedClose = -1;
+  // Conta só os parênteses depois do prefixo para preservar as tensões do acorde.
+  for (let i = prefix.length; i < token.length; i++) {
+    const char = token[i];
+    if (char === '(') depth++;
+    if (char === ')' && depth > 0) {
+      depth--;
+      lastBalancedClose = i;
+    }
+  }
+  while (end > prefix.length) {
+    const char = token[end - 1];
+    if (!(char === ')' && end - 1 > lastBalancedClose) && !/[\]|*,.:?~!'"]/.test(char)) break;
+    end--;
+  }
+  // O ponto de N.C. faz parte da abreviação e continua no núcleo.
+  if (token[end] === '.' && /^N\.?C$/i.test(token.slice(prefix.length, end))) end++;
+  return { prefix, core: token.slice(prefix.length, end), suffix: token.slice(end) };
+}
+
 // Transpose a chord string by semitones. Uses +120 offset to handle negative semitones safely.
 export function transposeChordString(chordStr: string, semitones: number, preferFlats: boolean): string {
-  const { root, suffix, bass } = parseChordString(chordStr);
+  const { prefix, core, suffix: annotation } = splitChordAnnotation(chordStr.trim());
+  const { root, suffix, bass } = parseChordString(core);
   if (!root) return chordStr;
 
   try {
@@ -83,7 +108,7 @@ export function transposeChordString(chordStr: string, semitones: number, prefer
       transposedBass = preferFlats ? NOTE_NAMES_FLAT[transposedBassPc] : NOTE_NAMES_SHARP[transposedBassPc];
     }
 
-    return transposedRoot + suffix + (transposedBass ? '/' + transposedBass : '');
+    return prefix + transposedRoot + suffix + (transposedBass ? '/' + transposedBass : '') + annotation;
   } catch {
     return chordStr;
   }
@@ -310,7 +335,7 @@ const ROOT_RE = /^[A-Ga-g][b#]?$/;
  * Used by isChordLine in cifraUtils.ts so both share the same vocabulary.
  */
 export function isValidChordToken(token: string): boolean {
-  const t = token.trim();
+  const { core: t } = splitChordAnnotation(token.trim());
   if (!t) return false;
   if (/^N\.?C\.?$/i.test(t)) return true;  // No Chord marker
 

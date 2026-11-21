@@ -1,7 +1,7 @@
 import React, { useRef, useMemo, useEffect, useCallback, useState } from 'react';
 import { useT } from '../../i18n';
 import { formatSeconds } from '../../services/timingApi';
-import { isChordLine, parseChordLine } from '../../services/cifraUtils';
+import { chordLineAnnotations, parseChordLine } from '../../services/cifraUtils';
 import type { ChordPos } from '../../services/cifraUtils';
 import type { TimingRegion } from '../../services/timingRegions';
 import { classifyLine } from '../../utils/lineClassifier';
@@ -32,13 +32,14 @@ function parseBlocks(lines: string[]): Block[] {
   while (i < lines.length) {
     const line = lines[i];
     const trimmed = line.trim();
-    if (SECTION_LINE_RE.test(trimmed)) {
+    const type = classifyLine(line);
+    if (type !== 'chord' && SECTION_LINE_RE.test(trimmed)) {
       blocks.push({ type: 'section', idx: i, label: trimmed.match(SECTION_LINE_RE)![1] });
       i++;
     } else if (!trimmed) {
       blocks.push({ type: 'empty', idx: i });
       i++;
-    } else if (classifyLine(line) === 'tab') {
+    } else if (type === 'tab') {
       // Consume all consecutive tab lines into one block (blank line ends it)
       const startIdx = i;
       let endIdx = i;
@@ -48,9 +49,10 @@ function parseBlocks(lines: string[]): Block[] {
         i++;
       }
       blocks.push({ type: 'tab_block', startIdx, endIdx });
-    } else if (isChordLine(line)) {
+    } else if (type === 'chord') {
       const next = lines[i + 1];
-      if (next !== undefined && next.trim() && !SECTION_LINE_RE.test(next.trim()) && !isChordLine(next) && classifyLine(next) !== 'tab') {
+      const nextType = classifyLine(next ?? '');
+      if (next?.trim() && !SECTION_LINE_RE.test(next.trim()) && nextType !== 'chord' && nextType !== 'tab') {
         blocks.push({ type: 'pair', chordIdx: i, lyricIdx: i + 1 });
         i += 2;
       } else {
@@ -204,6 +206,7 @@ export const CifraGridEditor: React.FC<CifraGridEditorProps> = ({
   const renderChordRow = (chordLineIdx: number, lyricLen = 60) => {
     const chords = parseChordLine(lines[chordLineIdx]);
     if (chords.length === 0) return null;
+    const annotations = chordLineAnnotations(lines[chordLineIdx], chords);
     const isDragging = chordDragVisual?.lineIdx === chordLineIdx;
     const maxDotCol = Math.max(lyricLen, ...chords.map(c => c.col + c.text.length + 10));
     const dotCount = Math.ceil(maxDotCol / 2);
@@ -213,7 +216,11 @@ export const CifraGridEditor: React.FC<CifraGridEditorProps> = ({
         {/* Empty gutter — chord lines are not numbered */}
         <div className="shrink-0" style={{ width: GUTTER_W }} />
         <div className="relative flex-1" style={{ height: CHORD_H }}>
-          {/* Tokens */}
+          {annotations.map(({ text, col }) => (
+            <span key={col} className="absolute whitespace-pre" style={{
+              left: `calc(${col} * 1ch)`, top: 0, fontSize: CHORD_SIZE, lineHeight: `${CHORD_TOKENS_H}px`,
+            }}>{text}</span>
+          ))}
           {chords.map((c, ci) => (
             <span
               key={ci}

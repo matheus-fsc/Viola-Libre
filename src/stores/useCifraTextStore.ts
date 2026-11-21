@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { buildChordLineText, pixelDeltaToCol, type ChordPos } from '../services/cifraUtils';
+import { buildChordLineText, chordLineAnnotations, pixelDeltaToCol, type ChordPos } from '../services/cifraUtils';
 
 // Performance note: updateChordDrag rebuilds the full chord line text on every mousemove
 // (O(line length) per pixel). The hot path could be deferred to endChordDrag(), tracking
@@ -9,6 +9,7 @@ interface ChordDragState {
   lineIdx: number;
   tokenIdx: number;
   origChords: ChordPos[];
+  bars: ChordPos[];
   origCol: number;
   startX: number;
   charW: number;
@@ -43,9 +44,13 @@ export const useCifraTextStore = create<CifraTextState>((set, get) => {
     },
 
     startChordDrag: (lineIdx, tokenIdx, chords, startX, charW) => {
+      const line = get().lines[lineIdx];
+      // Move os afixos junto com o acorde, mas mantém as barras na posição do compasso.
+      const origChords = [...line.matchAll(/[^\s|]+/g)].map(m => ({ text: m[0], col: m.index }));
       _drag = {
         lineIdx, tokenIdx,
-        origChords: chords.map(c => ({ ...c })),
+        origChords,
+        bars: chordLineAnnotations(line, origChords),
         origCol: chords[tokenIdx].col,
         startX, charW,
         lastCol: chords[tokenIdx].col,
@@ -55,13 +60,14 @@ export const useCifraTextStore = create<CifraTextState>((set, get) => {
 
     updateChordDrag: (clientX) => {
       if (!_drag) return;
-      const newCol = Math.max(0, _drag.origCol + pixelDeltaToCol(clientX - _drag.startX, _drag.charW));
+      const prefixLength = _drag.origCol - _drag.origChords[_drag.tokenIdx].col;
+      const newCol = Math.max(prefixLength, _drag.origCol + pixelDeltaToCol(clientX - _drag.startX, _drag.charW));
       if (newCol === _drag.lastCol) return;
       _drag.lastCol = newCol;
       const d = _drag;
-      const newChords = d.origChords.map((c, i) => i === d.tokenIdx ? { ...c, col: newCol } : c);
+      const newChords = d.origChords.map((c, i) => i === d.tokenIdx ? { ...c, col: newCol - prefixLength } : c);
       const newLines = [...get().lines];
-      newLines[d.lineIdx] = buildChordLineText(newChords);
+      newLines[d.lineIdx] = buildChordLineText([...d.bars, ...newChords]);
       set({ lines: newLines, chordDragVisual: { lineIdx: d.lineIdx, currentCol: newCol } });
     },
 

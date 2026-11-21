@@ -1,3 +1,5 @@
+import { formatCifraChordHtml } from './cifraUtils';
+
 /**
  * Extrair a sequência de acordes de uma cifra vinda da API.
  *
@@ -16,10 +18,11 @@
  * a grade de diagramas, por exemplo — usa `acordesDistintos`.
  */
 export function acordesDaCifra(html: string): string[] {
+  const marcado = formatCifraChordHtml(html);
   const regex = /<b>(.*?)<\/b>/g;
   const todos: string[] = [];
   let match: RegExpExecArray | null;
-  while ((match = regex.exec(html)) !== null) {
+  while ((match = regex.exec(marcado)) !== null) {
     // Um único <b> pode conter vários acordes separados por espaço
     // (ex.: "<b>G#m7(5-)  A#7</b>"). Separa cada acorde para não grudar dois num só.
     const raw = match[1].replace(/&nbsp;/g, ' ').replace(/<[^>]*>/g, ' ').trim();
