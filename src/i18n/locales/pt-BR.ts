@@ -290,6 +290,14 @@ export const ptBR = {
 
   /* A tela da cifra: painel, carrossel de acordes, transporte e a folha do telefone. */
   cifra: {
+    audioReferencia: 'Áudio de referência',
+    treinar: 'Treinar',
+    abrirGravacao: 'Abrir gravação',
+    rolagemInstrumental: 'Instrumental',
+    rolagemLetraEm: 'letra em {tempo}',
+    rolagemTimeline: 'Posição na gravação',
+    rolagemGap: 'Sem seção vinculada neste tempo',
+
     tomAbaixar: 'abaixar',
     tomOriginal: '● original',
     tomSubir: 'subir',

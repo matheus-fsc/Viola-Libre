@@ -39,3 +39,13 @@ export function buildScrollTimingChoices(
     ?? DEFAULT_SCROLL_TIMING;
   return { choices, selected };
 }
+
+export function chooseTrainingTiming(choices: readonly ScrollTimingChoice[], best: TimingContribution | null): ScrollTimingChoice | null {
+  const synced = choices.filter(c => c.timing && (c.timing.phrases.length > 0 || c.timing.instrumentalSections.some(s =>
+    s.startLine != null && s.endLine != null && s.mediaTimestampStart != null && s.mediaTimestampEnd != null)));
+  const community = synced.filter(c => c.kind === 'manual');
+  return community.find(c => c.timing?.id === best?.id)
+    ?? [...community].sort((a, b) => Number(!!b.timing?.reviewed) - Number(!!a.timing?.reviewed)
+      || (b.timing?.votes ?? 0) - (a.timing?.votes ?? 0))[0]
+    ?? synced.find(c => c.id === 'auto-original') ?? null;
+}

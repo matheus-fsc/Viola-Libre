@@ -278,6 +278,14 @@ export const en: Dicionario = {
   },
 
   cifra: {
+    audioReferencia: 'Reference audio',
+    treinar: 'Practice',
+    abrirGravacao: 'Open recording',
+    rolagemInstrumental: 'Instrumental section',
+    rolagemLetraEm: 'lyrics in {tempo}',
+    rolagemTimeline: 'Recording position',
+    rolagemGap: 'No linked section at this time',
+
     tomAbaixar: 'down',
     tomOriginal: '● original',
     tomSubir: 'up',

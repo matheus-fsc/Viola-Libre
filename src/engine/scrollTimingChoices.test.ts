@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { TimingContribution } from '../services/timingApi';
-import { buildScrollTimingChoices, DEFAULT_SCROLL_TIMING } from './scrollTimingChoices';
+import { buildScrollTimingChoices, chooseTrainingTiming, DEFAULT_SCROLL_TIMING } from './scrollTimingChoices';
 
 const auto: TimingContribution = {
   id: 'generated',
@@ -108,5 +108,28 @@ describe('buildScrollTimingChoices', () => {
   it('seleciona a rolagem padrão quando a lista está vazia', () => {
     expect(buildScrollTimingChoices([], [], null, 'editor'))
       .toEqual({ choices: [DEFAULT_SCROLL_TIMING], selected: DEFAULT_SCROLL_TIMING });
+  });
+});
+
+describe('chooseTrainingTiming', () => {
+  it('prefere a melhor contribuição da comunidade mesmo quando a seleção lembrada é padrão', () => {
+    const { choices } = buildScrollTimingChoices([auto, legacy, manual], [], manual, 'default');
+    expect(chooseTrainingTiming(choices, manual)?.timing).toBe(manual);
+    expect(chooseTrainingTiming(choices, auto)?.timing).toBe(manual);
+  });
+
+  it('usa o automático original quando não há comunidade e nunca a variante encurtada', () => {
+    const { choices } = buildScrollTimingChoices([auto], ['lyric', 'tab', 'lyric'], auto, 'auto-sem-dedilhado');
+    expect(chooseTrainingTiming(choices, auto)?.id).toBe('auto-original');
+    expect(chooseTrainingTiming([DEFAULT_SCROLL_TIMING], null)).toBeNull();
+  });
+
+  it('ignora timings sem sincronização e desempata contribuições por revisão e votos', () => {
+    const empty = { ...manual, phrases: [] };
+    const { choices } = buildScrollTimingChoices([empty, auto], [], empty, null);
+    expect(chooseTrainingTiming(choices, empty)?.id).toBe('auto-original');
+    const popular = { ...legacy, id: 'popular', votes: 10 };
+    const ranked = buildScrollTimingChoices([legacy, popular], [], null, null).choices;
+    expect(chooseTrainingTiming(ranked, null)?.timing).toBe(popular);
   });
 });
