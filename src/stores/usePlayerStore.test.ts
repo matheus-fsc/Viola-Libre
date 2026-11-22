@@ -169,3 +169,17 @@ describe('seleção do editor de timing', () => {
     expect(sel().selectionMode).toBeNull();
   });
 });
+
+describe('partida após o silêncio digital', () => {
+  it('usa audioStart no áudio e respeita seek explícito para zero', () => {
+    const audio = { currentTime: 0, play: vi.fn(() => Promise.resolve()) };
+    player().loadContribution({ mediaUrl: 'https://example.com/audio.mp3', mediaType: 'audio', bpm: null, duration: 90, audioStart: 2 });
+    player().registerAudio(audio as unknown as HTMLAudioElement);
+    expect(audio.currentTime).toBe(2);
+    player().seek(0);
+    player().play();
+    expect(audio.currentTime).toBe(0);
+    expect(player().currentTime).toBe(0);
+    player().registerAudio(null);
+  });
+});

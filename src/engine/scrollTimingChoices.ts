@@ -20,12 +20,12 @@ export function buildScrollTimingChoices(
     ?? timings.find(timing => timing.source === 'auto');
   if (auto) {
     choices.push({ id: 'auto-original', kind: 'auto', timing: auto });
-    const { phrases, removedDuration, loops = auto.loops } = withoutFingerpicking(auto.phrases, lineTypes, auto.loops);
+    const { phrases, removedDuration, loops = auto.loops, instrumentalSections } = withoutFingerpicking(auto.phrases, lineTypes, auto.loops, auto.instrumentalSections);
     if (removedDuration > 0) {
       choices.push({
         id: 'auto-sem-dedilhado',
         kind: 'without-fingerpicking',
-        timing: { ...auto, phrases, loops, duration: Math.max(0, auto.duration - removedDuration) },
+        timing: { ...auto, phrases, loops, instrumentalSections: instrumentalSections ?? auto.instrumentalSections, duration: Math.max(0, auto.duration - removedDuration) },
       });
     }
   }

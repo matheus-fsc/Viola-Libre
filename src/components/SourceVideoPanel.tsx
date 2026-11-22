@@ -1,3 +1,4 @@
+import { playbackStartTime } from '../engine/timingPlayback';
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { MoveDiagonal2 } from 'lucide-react';
 import { useT } from '../i18n';
@@ -22,6 +23,7 @@ export interface SourceVideoClock {
 interface SourceVideoPanelProps {
   /** URL da source (link do YouTube semeado pela API ou vindo de um timing da comunidade). */
   videoUrl: string;
+  audioStart?: number | null;
   /** Título da música — vai na barra do painel. */
   title: string;
   onClose(): void;
@@ -50,7 +52,7 @@ interface SourceVideoPanelProps {
  * reprodução ao encolher.
  */
 export const SourceVideoPanel: React.FC<SourceVideoPanelProps> = ({
-  videoUrl, title, onClose, onDurationDetected, onPlayingClockChange,
+  videoUrl, audioStart, title, onClose, onDurationDetected, onPlayingClockChange,
 }) => {
   const t = useT();
   const [collapsed, setCollapsed] = useState(false);
@@ -78,6 +80,7 @@ export const SourceVideoPanel: React.FC<SourceVideoPanelProps> = ({
   // O callback do pai não precisa ser estável: guardá-lo num ref evita que uma
   // nova referência a cada render destrua e recrie o player no meio da música.
   const onDurationRef = useLatest(onDurationDetected);
+  const audioStartRef = useLatest(audioStart);
 
   const videoId = extractYouTubeId(videoUrl);
 
@@ -102,6 +105,13 @@ export const SourceVideoPanel: React.FC<SourceVideoPanelProps> = ({
           playerVars: { rel: 0, playsinline: 1, modestbranding: 1 },
           events: {
             onReady: () => {
+              const player = playerRef.current;
+              if (player) {
+                const current = player.getCurrentTime();
+                const start = playbackStartTime(current, audioStartRef.current, 'youtube');
+                // Inicializa uma vez para que os seeks posteriores no iframe continuem livres.
+                if (start !== current) player.seekTo(start, true);
+              }
               const dur = Math.round(playerRef.current?.getDuration() ?? 0);
               if (dur > 0) onDurationRef.current(dur);
             },
@@ -130,7 +140,7 @@ export const SourceVideoPanel: React.FC<SourceVideoPanelProps> = ({
       wrap.replaceChildren();
     };
     // onDurationRef vem do useLatest, identidade fixa: não recria o player.
-  }, [videoId, ytAllowed, onDurationRef, onPlayingClockChange]);
+  }, [videoId, ytAllowed, onDurationRef, audioStartRef, onPlayingClockChange]);
 
   const togglePlay = useCallback(() => {
     const p = playerRef.current;

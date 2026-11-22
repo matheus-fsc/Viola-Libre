@@ -89,6 +89,7 @@ export interface TimingContribution {
   mediaType: 'youtube' | 'audio' | 'other' | null;
   bpm: number;
   duration: number;
+  audioStart?: number | null;
   loops: TimingLoop[];
   instrumentalSections: TimingInstrumental[];
   phrases: TimingPhrase[];
@@ -108,6 +109,7 @@ export interface TimingSubmitPayload {
   mediaType?: string;
   bpm?: number;
   duration: number;
+  audioStart?: number | null;
   loops: TimingLoop[];
   instrumentalSections: TimingInstrumental[];
   phrases: TimingPhrase[];
@@ -163,6 +165,7 @@ export function normalizeContribution(raw: RawTimingContribution): TimingContrib
 
   return {
     id, duration, bpm, votes, editorAlias, mediaUrl, mediaType, updatedAt, source, reviewed, reviewedFrom,
+    ...(raw.audioStart != null && { audioStart: raw.audioStart }),
     loops: (raw.loops ?? []).map(({ occurrences: rawOccurrences, ...loop }) => {
       const occurrences = normalizeLoopOccurrences(rawOccurrences);
       const first = occurrences[0];

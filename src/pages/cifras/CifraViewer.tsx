@@ -1,3 +1,4 @@
+import { playbackLineRanges, playbackStartTime } from '../../engine/timingPlayback';
 import React, { useCallback, useEffect, useLayoutEffect, useState, useMemo, useRef } from 'react';
 import { tSeo, useT } from '../../i18n';
 import { Link, useParams, useNavigate } from 'react-router-dom';
@@ -124,7 +125,7 @@ const SETTLE_MS = 900;
 const LINE_TRANSITION_MS = 300;
 const LINE_REPEAT_MS = 1500;
 const LINE_HIGHLIGHT = 'cifra-line-playing';
-type ViewerLineAnchor = LineScrollAnchor & { lineIndex: number; highlight: HTMLElement[] };
+type ViewerLineAnchor = LineScrollAnchor & { lineIndex: number; endTime: number; instrumental: boolean; highlight: HTMLElement[] };
 type RepeatBracket = { range: RepeatRange; lane: number; top: number; height: number };
 // Salto dos atalhos ← / →.
 const NUDGE_SEC = 5;
@@ -341,7 +342,9 @@ export const CifraViewer: React.FC = () => {
   // A preferência fica guardada enquanto o relógio encurtado exige a cifra sem tabs.
   const showTabs = prefersTabs && !tabsForcedHidden;
   const toggleTabs = () => setPrefersTabs(value => !value);
-  const lineMode = (timingMedia?.phrases?.length ?? 0) >= (scrollChoice && !previewTiming ? 1 : 2);
+  const lineMode = (timingMedia?.phrases?.length ?? 0) >= (scrollChoice && !previewTiming ? 1 : 2)
+    || !!timingMedia?.instrumentalSections.some(section => section.startLine != null && section.endLine != null
+      && section.mediaTimestampStart != null && section.mediaTimestampEnd != null);
   const repeatRanges = useMemo(() =>
     lineMode && timingMedia ? getRepeatRanges(timingMedia.loops ?? [], timingMedia.phrases) : [],
     [lineMode, timingMedia]);
@@ -403,6 +406,7 @@ export const CifraViewer: React.FC = () => {
   const tabPositionRef = useRef<{ line: string; top: number } | null>(null);
   const rafRef = useRef<number | null>(null);
   const elapsedRef = useRef(0);
+  const explicitSeekRef = useRef(false);
   const prevTimeRef = useRef<number | null>(null);
   const chordMapRef = useRef<Array<{ chordY: number; time: number }>>([]);
   const lineMapRef = useRef<ViewerLineAnchor[]>([]);
@@ -726,6 +730,7 @@ export const CifraViewer: React.FC = () => {
   // A barra reposiciona a tela. Os atalhos em segundos preservam o tempo exato
   // mesmo quando vários segundos da música apontam para a mesma linha.
   const seekToY = useCallback((y: number) => {
+    explicitSeekRef.current = true;
     const maxSc = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
     window.scrollTo(0, Math.max(0, Math.min(y, maxSc)));
     lastGestureRef.current = -Infinity;
@@ -737,6 +742,7 @@ export const CifraViewer: React.FC = () => {
   }, [seekVideo, syncPlayheadToScroll]);
 
   const seekToTime = useCallback((t: number) => {
+    explicitSeekRef.current = true;
     const lines = lineMapRef.current;
     const map = chordMapRef.current;
     const maxSc = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
@@ -873,6 +879,17 @@ export const CifraViewer: React.FC = () => {
         } else if (start.reanchor || !lineMapRef.current.length || window.scrollY !== appliedYRef.current) {
           syncPlayheadToScroll();
         }
+        const timing = mappedTimingRef.current;
+        const beginning = internalTiming ? elapsedRef.current : playbackStartTime(
+          elapsedRef.current, timing?.audioStart, timing?.mediaType ?? null,
+          explicitSeekRef.current || start.seekSource || window.scrollY !== 0,
+        );
+        if (beginning !== elapsedRef.current) {
+          elapsedRef.current = beginning;
+          setElapsedDisplay(beginning);
+          seekVideo(beginning);
+        }
+        explicitSeekRef.current = false;
         if (start.seekSource && lineMapRef.current.length) seekVideo(elapsedRef.current);
       }
       const dt = Math.min(ts - prevTimeRef.current, 100);
@@ -958,7 +975,8 @@ export const CifraViewer: React.FC = () => {
           appliedYRef.current = window.scrollY;
           if (internalTiming && elapsedRef.current >= duration && y === target) pauseScroll();
         }
-        highlight(lines[currentPhraseIndex(lines, elapsedRef.current)]);
+        const activeLine = lines[currentPhraseIndex(lines, elapsedRef.current)];
+        highlight(activeLine?.instrumental && elapsedRef.current >= activeLine.endTime ? undefined : activeLine);
       } else if (settling) {
         highlight();
         // Motor em silêncio: a inércia do toque/trackpad termina sozinha e o
@@ -1566,18 +1584,21 @@ export const CifraViewer: React.FC = () => {
         }));
       }
       const offset = window.scrollY - window.innerHeight * READING_LINE;
-      lineMapRef.current = timingMedia.phrases.map(phrase => {
+      lineMapRef.current = playbackLineRanges(timingMedia).map(phrase => {
         // Uma linha de tab recolhida ainda tem tempo. Usa a próxima linha visível como apoio.
         const mapped = rows.get(phrase.lineIndex) ??
           rows.get(visibleIndices.find(index => index > phrase.lineIndex) ?? visibleIndices.at(-1) ?? -1);
-        if (!mapped) return { startTime: phrase.startTime, lineIndex: phrase.lineIndex, y: 0, highlight: [] };
+        if (!mapped) return { ...phrase, y: 0, highlight: [] };
         const { row, position } = mapped;
-        const highlight = rows.has(phrase.lineIndex) ? [row] : [];
+        const highlight = phrase.instrumental
+          ? [...new Set([...rows].filter(([index, entry]) => index >= phrase.lineIndex && index <= phrase.endLine
+            && !entry.row.classList.contains('cifra-line-blank') && !!entry.row.textContent?.trim()).map(([, entry]) => entry.row))]
+          : rows.has(phrase.lineIndex) ? [row] : [];
         const previous = rows.get(phrase.lineIndex - 1)?.row;
-        if (highlight.length && previous && previous !== row && previous.hasAttribute('data-timing-chord-row')) {
+        if (!phrase.instrumental && highlight.length && previous && previous !== row && previous.hasAttribute('data-timing-chord-row')) {
           highlight.push(previous);
         }
-        return { startTime: phrase.startTime, lineIndex: phrase.lineIndex, y: Math.round(position.getBoundingClientRect().top + offset), highlight };
+        return { ...phrase, y: Math.round(position.getBoundingClientRect().top + offset), highlight };
       });
       const changedTiming = timingMedia !== mappedTimingRef.current;
       mappedTimingRef.current = timingMedia;
@@ -3056,6 +3077,7 @@ export const CifraViewer: React.FC = () => {
           BPM no mapa de tempo do auto-scroll. */}
       {showVideo && sourceVideoUrl && (
         <SourceVideoPanel
+          audioStart={timingMedia?.audioStart}
           videoUrl={sourceVideoUrl}
           title={cifra.title}
           onClose={() => setShowVideo(false)}

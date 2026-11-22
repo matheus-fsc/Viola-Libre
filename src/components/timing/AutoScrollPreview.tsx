@@ -1,3 +1,4 @@
+import { isLineInRange } from '../../engine/timingPlayback';
 import React, { useEffect, useRef } from 'react';
 import { useT } from '../../i18n';
 import { formatSeconds } from '../../services/timingApi';
@@ -41,9 +42,7 @@ export const AutoScrollPreview: React.FC = () => {
         <span className="ml-auto font-mono text-gray-500">{formatSeconds(currentTime)}</span>
       </div>
       {lines.map((line, idx) => {
-        const isActiveLine = !!activeRegion
-          && activeRegion.startLine !== null && activeRegion.endLine !== null
-          && idx >= activeRegion.startLine && idx <= activeRegion.endLine;
+        const isActiveLine = isLineInRange(line, idx, activeRegion);
         return (
           <div
             key={idx}

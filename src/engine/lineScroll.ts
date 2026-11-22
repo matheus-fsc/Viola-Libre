@@ -1,4 +1,4 @@
-import type { TimingLoop, TimingPhrase } from '../services/timingApi';
+import type { TimingInstrumental, TimingLoop, TimingPhrase } from '../services/timingApi';
 import type { LineType } from '../utils/lineClassifier';
 
 type PhraseStart = { startTime: number };
@@ -9,7 +9,8 @@ export function withoutFingerpicking(
   phrases: readonly TimingPhrase[],
   lineTypes: readonly LineType[],
   loops?: readonly TimingLoop[],
-): { phrases: TimingPhrase[]; removedDuration: number; loops?: TimingLoop[] } {
+  instrumentalSections?: readonly TimingInstrumental[],
+): { phrases: TimingPhrase[]; removedDuration: number; loops?: TimingLoop[]; instrumentalSections?: TimingInstrumental[] } {
   const cuts: Array<{ start: number; end: number }> = [];
   const ordered = [...phrases].sort((a, b) => a.startTime - b.startTime);
   const seenLyricLines = new Set<number>();
@@ -52,6 +53,12 @@ export function withoutFingerpicking(
       const offset = shift(phrase.startTime);
       return offset ? { ...phrase, startTime: phrase.startTime - offset, endTime: phrase.endTime - offset } : phrase;
     }),
+    // O bloco instrumental também precisa acompanhar os cortes no relógio interno.
+    ...(instrumentalSections && { instrumentalSections: instrumentalSections.map(section => ({
+      ...section,
+      mediaTimestampStart: section.mediaTimestampStart == null ? null : shiftTime(section.mediaTimestampStart),
+      mediaTimestampEnd: section.mediaTimestampEnd == null ? null : shiftTime(section.mediaTimestampEnd),
+    })) }),
     // O contador usa o mesmo relógio encurtado da rolagem, inclusive quando o corte cai no meio de uma passagem.
     ...(loops && { loops: loops.map(loop => ({
       ...loop,

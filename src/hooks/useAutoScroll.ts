@@ -1,3 +1,4 @@
+import { activePlaybackRegion } from '../engine/timingPlayback';
 import { useState } from 'react';
 import type { TimingRegion } from '../services/timingRegions';
 
@@ -24,7 +25,7 @@ export function useAutoScroll(regions: TimingRegion[], currentTime: number): Aut
   // só muda quando a linha muda, o re-render extra acontece uma vez por troca de região.
   const [lastScrollToLine, setLastScrollToLine] = useState<number | null>(null);
 
-  const active = regions.find(r =>
+  const active = activePlaybackRegion(regions, currentTime) ?? regions.find(r =>
     r.startLine != null && r.endLine != null && r.startTime != null && r.endTime != null &&
     currentTime >= r.startTime && currentTime < r.endTime
   ) ?? null;

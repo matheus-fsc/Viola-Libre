@@ -333,6 +333,7 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
       mediaUrl: ps.mediaUrl,
       mediaType: ps.mediaType,
       duration: ps.duration,
+      audioStart: ps.audioStart,
       bpm: ps.bpm,
     });
     const blob = new Blob([json], { type: 'application/json' });
@@ -357,6 +358,7 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
         const validMediaTypes: MediaType[] = ['youtube', 'audio', 'other', null];
         loadContribution({
           bpm: typeof extra.bpm === 'number' ? extra.bpm : null,
+          audioStart: typeof extra.audioStart === 'number' ? extra.audioStart : null,
           duration: typeof extra.duration === 'number' ? extra.duration : 0,
           mediaUrl: typeof extra.mediaUrl === 'string' ? extra.mediaUrl : undefined,
           mediaType: validMediaTypes.includes(extra.mediaType as MediaType) ? (extra.mediaType as MediaType) : undefined,
@@ -493,6 +495,7 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
         mediaType: ps.mediaType || undefined,
         bpm: ps.bpm ?? undefined,
         duration: ps.duration,
+        audioStart: ps.audioStart,
         ...payload,
         markers: rawMarkers,
       });
@@ -521,7 +524,7 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
   }, [onPreviewTiming]);
 
   const handleEditContribution = (c: TimingContribution, fromWithoutTabs = false) => {
-    loadContribution({ bpm: c.bpm || null, duration: c.duration, mediaUrl: c.mediaUrl, mediaType: c.mediaType });
+    loadContribution({ bpm: c.bpm || null, duration: c.duration, mediaUrl: c.mediaUrl, mediaType: c.mediaType, audioStart: c.audioStart });
     useTimingRegionsStore.getState().loadFromContribution(c);
     const metadata = getTimingEditMetadata(c);
     setEditorAlias(metadata.editorAlias);
@@ -684,7 +687,7 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
                       ref={audioRef}
                       controls
                       src={mediaUrl}
-                      onSeeked={e => usePlayerStore.getState().tick(e.currentTarget.currentTime)}
+                      onSeeked={e => usePlayerStore.getState().seek(e.currentTarget.currentTime)}
                       onLoadedMetadata={() => {
                         const audio = audioRef.current;
                         const dur = audio ? Math.round(audio.duration) : 0;

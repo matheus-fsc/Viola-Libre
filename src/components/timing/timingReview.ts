@@ -1,3 +1,4 @@
+import { activePlaybackRegion } from '../../engine/timingPlayback';
 import { withoutFingerpicking } from '../../engine/lineScroll';
 import type { TimingContribution } from '../../services/timingApi';
 import type { TimingRegion } from '../../services/timingRegions';
@@ -24,11 +25,11 @@ export function buildCommunityCards(
     const reviewTarget = badge === 'timing.automaticoNaoRevisado' ? timing : null;
     const cards: CommunityCard[] = [{ timing, withoutTabs: false, badge, reviewTarget }];
     if (timing.source === 'auto') {
-      const { phrases, removedDuration, loops = timing.loops } = withoutFingerpicking(timing.phrases, lineTypes, timing.loops);
+      const { phrases, removedDuration, loops = timing.loops, instrumentalSections } = withoutFingerpicking(timing.phrases, lineTypes, timing.loops, timing.instrumentalSections);
       if (removedDuration > 0) {
         // A revisão usa os tempos originais para acompanhar a gravação.
         cards.push({
-          timing: { ...timing, phrases, loops, duration: Math.max(0, timing.duration - removedDuration) },
+          timing: { ...timing, phrases, loops, instrumentalSections: instrumentalSections ?? timing.instrumentalSections, duration: Math.max(0, timing.duration - removedDuration) },
           withoutTabs: true,
           badge: null,
           reviewTarget,
@@ -49,15 +50,5 @@ export function getTimingEditMetadata(timing: TimingContribution) {
 }
 
 export function getActivePhraseLine(regions: TimingRegion[], currentTime: number): number | null {
-  let line: number | null = null;
-  let latestStart = -Infinity;
-  for (const region of regions) {
-    if (region.kind !== 'phrase' || region.startLine === null || region.startTime === null || region.endTime === null) continue;
-    // Se dois intervalos se sobrepõem durante o ajuste, destaque a frase que acabou de começar.
-    if (region.startTime > latestStart && currentTime >= region.startTime && currentTime < region.endTime) {
-      line = region.startLine;
-      latestStart = region.startTime;
-    }
-  }
-  return line;
+  return activePlaybackRegion(regions, currentTime)?.startLine ?? null;
 }

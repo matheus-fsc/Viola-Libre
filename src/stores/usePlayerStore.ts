@@ -1,3 +1,4 @@
+import { playbackStartTime } from '../engine/timingPlayback';
 import { create } from 'zustand';
 import { detectMediaType, cleanYouTubeUrl, formatSeconds } from '../services/timingApi';
 import type { MediaType } from '../services/timingApi';
@@ -12,6 +13,7 @@ export interface PlayerState {
   mediaType: MediaType;
   playerReady: boolean;
   currentTime: number;
+  audioStart: number | null;
   duration: number;
   durationInput: string;
   bpm: number | null;
@@ -59,6 +61,7 @@ export interface PlayerState {
     duration: number;
     mediaUrl?: string | null;
     mediaType?: MediaType;
+    audioStart?: number | null;
   }): void;
 }
 
@@ -67,6 +70,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
   let _ytPlayer: YTPlayerInstance | null = null;
   let _audio: HTMLAudioElement | null = null;
   let _pollingId: ReturnType<typeof setInterval> | null = null;
+  let _explicitSeek = false;
   let _previewEnd: number | null = null;
   let _tapTimes: number[] = [];
   let _tapResetTimer: ReturnType<typeof setTimeout> | null = null;
@@ -77,6 +81,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     mediaType: null,
     playerReady: false,
     currentTime: 0,
+    audioStart: null,
     duration: 0,
     durationInput: '',
     bpm: null,
@@ -89,7 +94,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       if (!raw) return;
       const type = detectMediaType(raw);
       const url = type === 'youtube' ? cleanYouTubeUrl(raw) : raw;
-      set({ mediaUrl: url, mediaUrlInput: url, mediaType: type, playerReady: false, currentTime: 0, isPlaying: false });
+      _explicitSeek = false;
+      set({ audioStart: null, mediaUrl: url, mediaUrlInput: url, mediaType: type, playerReady: false, currentTime: 0, isPlaying: false });
     },
 
     setDuration: (n) => set({ duration: n, durationInput: n > 0 ? formatSeconds(n) : '' }),
@@ -108,6 +114,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     setBpm: (bpm) => set({ bpm }),
 
     play: () => {
+      const state = get();
+      const start = playbackStartTime(state.currentTime, state.audioStart, state.mediaType, _explicitSeek);
+      if (start !== state.currentTime) get().seek(start);
+      _explicitSeek = false;
       _ytPlayer?.playVideo();
       _audio?.play().catch(() => {});
       set({ isPlaying: true });
@@ -120,8 +130,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     },
 
     seek: (t) => {
+      _explicitSeek = true;
       _ytPlayer?.seekTo(t, true);
-      if (_audio) _audio.currentTime = t;
+      if (_audio && _audio.currentTime !== t) _audio.currentTime = t;
       set({ currentTime: t });
     },
 
@@ -164,6 +175,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
 
     registerYtPlayer: (player) => {
       _ytPlayer = player;
+      const current = player.getCurrentTime();
+      const start = playbackStartTime(current, get().audioStart, get().mediaType, _explicitSeek);
+      if (start !== current) { player.seekTo(start, true); set({ currentTime: start }); }
       // Start internal polling — cleared by clearYtPlayer on unmount / media change
       if (_pollingId) clearInterval(_pollingId);
       _pollingId = setInterval(() => {
@@ -178,11 +192,19 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       _ytPlayer = null;
     },
 
-    registerAudio: (el) => { _audio = el; },
+    registerAudio: (el) => {
+      _audio = el;
+      if (el) {
+        const start = playbackStartTime(el.currentTime, get().audioStart, get().mediaType, _explicitSeek);
+        if (start !== el.currentTime) { el.currentTime = start; set({ currentTime: start }); }
+      }
+    },
 
     loadContribution: (c) => {
+      _explicitSeek = false;
       const patch: Partial<PlayerState> = {
         bpm: c.bpm,
+        audioStart: c.audioStart ?? null,
         duration: c.duration,
         durationInput: c.duration > 0 ? formatSeconds(c.duration) : '',
       };

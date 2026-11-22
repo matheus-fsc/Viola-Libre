@@ -11,7 +11,7 @@ import { useTimingRegionsStore } from '../../stores/useTimingRegionsStore';
 import { useTimingSelectionStore } from '../../stores/useTimingSelectionStore';
 import { usePlayerStore } from '../../stores/usePlayerStore';
 import { InlineMarkerDot } from './InlineMarkerDot';
-import { getActivePhraseLine } from './timingReview';
+import { activePlaybackRegion, isLineInRange } from '../../engine/timingPlayback';
 
 // ── Chord parsing ────────────────────────────────────────────────────────────
 const SECTION_LINE_RE = /^\[([^\]]+)\]$/;
@@ -102,7 +102,8 @@ export const CifraGridEditor: React.FC<CifraGridEditorProps> = ({
   const { regions, markers } = useTimingRegionsStore();
   const { selectionMode, selectionStart, selectionEnd } = useTimingSelectionStore();
   const blocks = useMemo(() => parseBlocks(lines), [lines]);
-  const activePhraseLine = usePlayerStore(s => highlightPhrases ? getActivePhraseLine(regions, s.currentTime) : null);
+  const activeRegion = usePlayerStore(s => highlightPhrases ? activePlaybackRegion(regions, s.currentTime) : null);
+  const activePhraseLine = activeRegion?.startLine ?? null;
 
   useEffect(() => {
     if (activePhraseLine === null) return;
@@ -194,7 +195,7 @@ export const CifraGridEditor: React.FC<CifraGridEditorProps> = ({
 
   // ── Appearance ──
   const getLineBg = (idx: number): { className: string; style?: React.CSSProperties } => {
-    if (idx === activePhraseLine)
+    if (isLineInRange(lines[idx], idx, activeRegion))
       return { className: 'bg-purple-200 border-l-2 border-purple-600' };
     if (selectionStart !== null && selectionEnd === null && idx === selectionStart)
       return { className: 'bg-yellow-200 border-l-2 border-yellow-500' };
