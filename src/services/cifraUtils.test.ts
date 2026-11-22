@@ -139,3 +139,25 @@ describe('isChordLine com parênteses soltos', () => {
     expect(isChordLine('( Das feridas que a pobreza cria')).toBe(false);
   });
 });
+
+describe('acordes colados depois de parêntese', () => {
+  // Falso Brilhante (João Bosco): o acervo traz os dois acordes sem espaço entre eles.
+  const linha = '   E(add9)E(#5/add9)                ';
+
+  it('reconhece a linha e separa os dois acordes', () => {
+    expect(isChordLine(linha)).toBe(true);
+    expect(parseChordLine(linha)).toEqual([
+      { text: 'E(add9)', col: 3 },
+      { text: 'E(#5/add9)', col: 10 },
+    ]);
+  });
+
+  it('marca cada acorde no seu próprio <b>', () => {
+    expect(acordesDaCifra(`<pre>${linha}\nletra</pre>`)).toEqual(['E(add9)', 'E(#5/add9)']);
+  });
+
+  it('não separa texto que não vira dois acordes', () => {
+    expect(isChordLine('E(add9)Amor')).toBe(false);
+    expect(parseChordLine('Em7(9)')).toEqual([{ text: 'Em7(9)', col: 0 }]);
+  });
+});
