@@ -1,0 +1,55 @@
+import { describe, expect, it } from 'vitest';
+import { buildChordTimeline, chordStripAtTime } from './upcomingChords';
+import { buildScrollTimeline, type ScrollSegment } from './scrollTimeline';
+
+const lyric = (lineIndex: number, startTime = 10, endTime = 20): ScrollSegment => ({
+  lineIndex, endLine: lineIndex, startTime, endTime, kind: 'lyric', instrumental: false,
+});
+
+describe('faixa temporal de acordes', () => {
+  it('distribui pelas colunas usando a maior largura entre letra e harmonia', () => {
+    expect(buildChordTimeline([lyric(1)], ['C    G', 'abcdefghij'])).toEqual([
+      { name: 'C', startTime: 10 }, { name: 'G', startTime: 15 },
+    ]);
+    const events = buildChordTimeline([lyric(1)], ['C    G', 'abc']);
+    expect(events[1].startTime).toBeCloseTo(10 + 5 / 6 * 10);
+  });
+
+  it('conserva F7 na letra sem acordes, nos intervalos e após o fim', () => {
+    const segments = buildScrollTimeline({ phrases: [lyric(1), lyric(2, 22, 25)], instrumentalSections: [], duration: 30 });
+    const events = buildChordTimeline(segments, ['F7', 'fim da frase', 'CARNIÇA']);
+    for (const time of [10, 19, 21, 23, 40]) expect(chordStripAtTime(events, time).current?.name).toBe('F7');
+    expect(events).toHaveLength(1);
+  });
+
+  it('não toma emprestado um acorde através de linha vazia', () => {
+    expect(buildChordTimeline([lyric(2)], ['G7', '', 'outra letra'])).toEqual([]);
+  });
+
+  it('segue a repetição do transporte e anuncia o primeiro acorde do refrão de novo', () => {
+    const timeline = buildScrollTimeline({ phrases: [lyric(1), lyric(3, 20, 30), lyric(1, 30, 40), lyric(3, 40, 50)], instrumentalSections: [] });
+    const events = buildChordTimeline(timeline, ['C', 'primeira frase', 'G7', 'segunda frase']);
+    expect(events.map(c => [c.name, c.startTime])).toEqual([['C', 10], ['G7', 20], ['C', 30], ['G7', 40]]);
+    expect(chordStripAtTime(events, 29)).toMatchObject({ current: { name: 'G7' }, next: { name: 'C', startTime: 30 }, startsIn: 1 });
+  });
+
+  it('espalha todos os acordes de um instrumental de modo uniforme', () => {
+    const events = buildChordTimeline([{ ...lyric(0, 4, 12), kind: 'instrumental', instrumental: true, endLine: 3 }],
+      ['( C    Dm )', '', 'G7', 'F7']);
+    expect(events.map(c => [c.name, c.startTime])).toEqual([['C', 4], ['Dm', 6], ['G7', 8], ['F7', 10]]);
+  });
+
+  it('colapsa apenas acordes idênticos consecutivos, inclusive aliases', () => {
+    const events = buildChordTimeline([lyric(1), lyric(3, 20, 30)], ['C C G G', 'letra', 'G C', 'outra letra']);
+    expect(events.map(c => c.name)).toEqual(['C', 'G', 'C']);
+    expect(buildChordTimeline([lyric(1)], ['F#m Gbm F#7', 'letra longa']).map(c => c.name)).toEqual(['F#m', 'F#7']);
+  });
+
+  it('recalcula os três lugares ao buscar para trás, inclusive antes do primeiro acorde', () => {
+    const events = buildChordTimeline([lyric(1)], ['C   G7   F7', 'abcdefghij']);
+    expect(chordStripAtTime(events, 19)).toMatchObject({ previous: { name: 'G7' }, current: { name: 'F7' }, next: null });
+    expect(chordStripAtTime(events, 10)).toMatchObject({ previous: null, current: { name: 'C' }, next: { name: 'G7' } });
+    expect(chordStripAtTime(events, 0)).toEqual({ previous: null, current: null, next: events[0], startsIn: 10 });
+    expect(chordStripAtTime([], 0)).toEqual({ previous: null, current: null, next: null, startsIn: null });
+  });
+});

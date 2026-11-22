@@ -1,3 +1,4 @@
+import { chordIdentity } from './chordIdentity';
 import { isChordLine, parseChordLine } from '../services/cifraUtils';
 import type { ScrollSegment } from './scrollTimeline';
 
@@ -26,4 +27,50 @@ export function upcomingChords(timeline: readonly ScrollSegment[], lines: readon
   return timeline.filter(segment => segment.kind !== 'hold' && segment.startTime > time)
     .slice(0, Math.floor(count)).map(segment => ({ lineIndex: segment.lineIndex,
       chords: segmentChords(segment, lines), startsIn: segment.startTime - time }));
+}
+
+export interface TimedChord {
+  name: string;
+  startTime: number;
+}
+
+/** Usa ocorrências do transporte, pois a mesma linha pode voltar em cada refrão. */
+export function buildChordTimeline(segments: readonly ScrollSegment[], lines: readonly string[]): TimedChord[] {
+  const events: TimedChord[] = [];
+  for (const segment of segments) {
+    const duration = segment.endTime - segment.startTime;
+    if (segment.kind === 'hold' || !Number.isFinite(segment.startTime) || !Number.isFinite(duration) || duration <= 0) continue;
+    if (segment.instrumental) {
+      const chords = segmentChords(segment, lines);
+      chords.forEach((name, index) => events.push({ name, startTime: segment.startTime + index / chords.length * duration }));
+      continue;
+    }
+    const lyric = lines[segment.lineIndex];
+    if (lyric === undefined) continue;
+    const chordLine = isChordLine(lyric) ? lyric : lines[segment.lineIndex - 1];
+    // Não atravessa letras ou linhas vazias: só a harmonia escrita logo acima é desta frase.
+    if (chordLine === undefined || !isChordLine(chordLine)) continue;
+    const length = Math.max(lyric.length, chordLine.length, 1);
+    for (const chord of parseChordLine(chordLine)) {
+      events.push({ name: chord.text, startTime: segment.startTime + chord.col / length * duration });
+    }
+  }
+  const sorted = events.sort((a, b) => a.startTime - b.startTime);
+  return sorted.filter((chord, index) => index === 0 || chordIdentity(chord.name) !== chordIdentity(sorted[index - 1].name));
+}
+
+/** A busca independe do histórico, então voltar no vídeo restaura a harmonia correta. */
+export function chordStripAtTime(timeline: readonly TimedChord[], time: number): {
+  previous: TimedChord | null; current: TimedChord | null; next: TimedChord | null; startsIn: number | null;
+} {
+  let low = 0;
+  let high = timeline.length;
+  while (low < high) {
+    const mid = (low + high) >>> 1;
+    if (timeline[mid].startTime <= time) low = mid + 1;
+    else high = mid;
+  }
+  const next = timeline[low] ?? null;
+  return { previous: timeline[low - 2] ?? null, current: timeline[low - 1] ?? null,
+    next, startsIn: next ? next.startTime - time : null };
 }

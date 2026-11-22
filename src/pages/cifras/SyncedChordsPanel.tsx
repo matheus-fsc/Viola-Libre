@@ -1,14 +1,13 @@
 import type { Tuning, Voicing } from '../../engine/types';
-import type { upcomingChords } from '../../engine/upcomingChords';
+import type { chordStripAtTime } from '../../engine/upcomingChords';
 import { MiniFretboard } from '../../components/MiniFretboard';
 import { useT } from '../../i18n';
 import { useLayoutEffect, useRef } from 'react';
 
-export function SyncedChordsPanel({ visible, onToggle, chords, next, tuning, voicings }: {
+export function SyncedChordsPanel({ visible, onToggle, strip, tuning, voicings }: {
   visible: boolean;
   onToggle(): void;
-  chords: string[];
-  next: ReturnType<typeof upcomingChords>;
+  strip: ReturnType<typeof chordStripAtTime>;
   tuning: Tuning;
   voicings: Record<string, Voicing | null>;
 }) {
@@ -41,33 +40,42 @@ export function SyncedChordsPanel({ visible, onToggle, chords, next, tuning, voi
     };
   }, []);
   return (
-    <aside ref={slotRef} className={`synced-chords-panel self-start shrink-0 min-w-0 ${visible ? 'w-60' : ''}`}>
+    <aside ref={slotRef} className={`synced-chords-panel self-start shrink-0 min-w-0 ${visible ? 'w-64' : ''}`}>
       <div ref={panelRef}>
         <button type="button" onClick={onToggle} aria-expanded={visible}
           className="bevel-out bg-[#ece9d8] border border-gray-400 p-2 text-xs font-bold text-[#002fa7] w-full">
           {t(visible ? 'cifra.acordesPainelOcultar' : 'cifra.acordesPainelMostrar')}
         </button>
         {visible && (
-          <div className="bevel-in bg-white p-3 max-h-[60vh] overflow-y-auto retro-scrollbar">
-            <h3 className="text-xs font-bold text-[#005500] mb-2">{t('cifra.acordesFraseAtual')}</h3>
-            <div className="flex flex-wrap gap-3">
-              {chords.map((chord, index) => (
-                <div key={index} className="min-w-0 max-w-full">
-                  <div className="font-mono text-2xl font-bold text-[#002fa7] break-words">{chord}</div>
-                  {voicings[chord] && <MiniFretboard voicing={voicings[chord]} tuning={tuning} width={76} fretSpacing={12} />}
-                </div>
-              ))}
-              {!chords.length && <span className="text-xs text-gray-500">{t('cifra.acordesSemFrase')}</span>}
+          <div className="bevel-in bg-white p-2">
+            <div className="grid grid-cols-[1fr_1.2fr_1fr] gap-1 items-start">
+              {([['cifra.acordesAnterior', strip.previous], ['cifra.acordesAtual', strip.current],
+                ['cifra.acordesProximo', strip.next]] as const).map(([label, chord], index) => {
+                const voicing = chord ? voicings[chord.name] : null;
+                return (
+                  <div key={label} className={`min-w-0 text-center ${index === 1 ? '' : 'opacity-40'}`}>
+                    <h3 className="text-[10px] uppercase text-gray-600">{t(label)}</h3>
+                    {chord && (
+                      <>
+                        <div className={`font-mono text-[#002fa7] break-words min-h-7 ${index === 1 ? 'text-lg font-bold' : 'text-sm'}`}>
+                          {chord.name}
+                        </div>
+                        {voicing && (
+                          <div className="w-full [&>svg]:w-full [&>svg]:h-auto">
+                            <MiniFretboard voicing={voicing} tuning={tuning} />
+                          </div>
+                        )}
+                      </>
+                    )}
+                    {index === 2 && strip.startsIn !== null && (
+                      <div className="text-[10px] text-gray-600 mt-1">
+                        {t('cifra.acordesEmSegundos', { s: Math.ceil(strip.startsIn) })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-            <h3 className="text-xs font-bold text-gray-600 mt-4 mb-1">{t('cifra.acordesProximasFrases')}</h3>
-            {next.map((phrase, index) => (
-              <div key={index} className="border-t border-[#d4d0c8] py-2">
-                <span className="text-[10px] text-gray-600">{t('cifra.acordesEmSegundos', { s: Math.ceil(phrase.startsIn) })}</span>
-                <div className="font-mono text-base font-bold text-[#385683] break-words">
-                  {phrase.chords.join('  ') || t('cifra.acordesSemFrase')}
-                </div>
-              </div>
-            ))}
           </div>
         )}
       </div>

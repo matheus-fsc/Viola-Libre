@@ -11,7 +11,7 @@ import {
   type SequenciaData, type RecentSequencia,
 } from '../../services/api';
 import type { Voicing } from '../../engine/types';
-import { buildChord, buildVoicingFromFrets, calculateVoicings, parseChordString, transposeChordString } from '../../engine/chordCalculator';
+import { buildChord, calculateVoicings, parseChordString, transposeChordString } from '../../engine/chordCalculator';
 import { detectKey, isChordDiatonic, type DeteccaoTom } from '../../engine/detectKey';
 import { PRESET_INSTRUMENTS } from '../../engine/tunings';
 import { AudioEngine } from '../../engine/AudioEngine';
@@ -46,8 +46,6 @@ import {
   type ChordRankEntry,
   buildChordId,
   getChordRankings,
-  pickCuratedVoicings,
-  applyCurationOrder,
   rankChord,
 } from '../../services/authApi';
 import {
@@ -57,7 +55,6 @@ import {
   fetchChordFavoritesBatch,
   fretsKey,
   isFavoritedIn,
-  pickPopularVoicings,
   readAllMyFavorites,
   toggleChordFavorite,
 } from '../../services/chordFavoritesApi';
@@ -73,7 +70,8 @@ import { easeScrollY, stepTimeAtY, type LineScrollAnchor } from '../../engine/li
 import { buildScrollTimeline, timelineYAtTime as stepYAtTime, timelineIndexAtTime as currentPhraseIndex, instrumentalCountdown } from '../../engine/scrollTimeline';
 import { ScrollTimelineBar } from './ScrollTimelineBar';
 import { SyncedChordsPanel } from './SyncedChordsPanel';
-import { segmentChords, upcomingChords } from '../../engine/upcomingChords';
+import { buildChordTimeline, chordStripAtTime } from '../../engine/upcomingChords';
+import { displayedChordVoicing, type ChordVoicingContext } from '../../services/displayedChordVoicing';
 import { InstrumentalIndicator } from '../../components/timing/InstrumentalIndicator';
 import { getRepeatRanges, repeatPassAtTime, type RepeatRange } from '../../engine/repeatRanges';
 import { buildScrollTimingChoices, chooseTrainingTiming, DEFAULT_SCROLL_TIMING, type ScrollTimingChoice } from '../../engine/scrollTimingChoices';
@@ -85,7 +83,6 @@ import { animacoesDesligadas } from '../../stores/useDesempenhoStore';
 import { useCifraFavorites } from '../../hooks/useCifraFavorites';
 import { useLatest } from '../../hooks/useLatest';
 import {
-  frontShapesFor,
   readVoicingOrderMode,
   writeVoicingOrderMode,
   VOICING_ORDER_MODES,
@@ -1552,11 +1549,8 @@ export const CifraViewer: React.FC = () => {
   }, [cifra, transposeOffset]);
 
   const syncedChordLines = useMemo(() => cifraTimingLines(displayHtml), [displayHtml]);
-  const activeChordSegment = activeSegment?.kind === 'hold'
-    ? scrollTimeline.findLast(segment => segment.kind !== 'hold' && segment.startTime <= elapsedDisplay) : activeSegment;
-  const currentPhraseChords = activeSegment && elapsedDisplay >= activeSegment.startTime && elapsedDisplay < activeSegment.endTime
-    && activeChordSegment ? segmentChords(activeChordSegment, syncedChordLines) : [];
-  const nextPhraseChords = upcomingChords(scrollTimeline, syncedChordLines, elapsedDisplay, 3);
+  const chordTimeline = useMemo(() => buildChordTimeline(scrollTimeline, syncedChordLines), [scrollTimeline, syncedChordLines]);
+  const chordStrip = chordStripAtTime(chordTimeline, elapsedDisplay);
 
   // Split displayHtml into html/tab segments for the tab transposer
   const cifraSegments = useMemo(() => {
@@ -1908,20 +1902,16 @@ export const CifraViewer: React.FC = () => {
     });
   }, [voicingFilter, allVoicings, variationIndices, currentChords, lockedVariations, excludedFromFilter]);
 
-  // Reutiliza formas, curadoria e escolhas da grade para o painel acompanhar o mesmo instrumento.
+  const chordVoicingContext: ChordVoicingContext = {
+    chordNames: currentChords, displayedVoicings, instrumentId: currentInst.id, tuning: currentTuning,
+    songSlug, rankings: chordRankingsById, favorites: favoritesById, orderMode: voicingOrderMode,
+    variations: variationIndices, locked: lockedVariations, custom: customVoicings,
+  };
   const syncedVoicings: Record<string, Voicing | null> = {};
-  for (const chordName of new Set(autoScroll && showSyncedChords ? currentPhraseChords : [])) {
-    const index = currentChords.indexOf(chordName);
-    const chordId = buildChordId(currentInst.id, currentTuning.id, chordName);
-    const curated = pickCuratedVoicings(chordRankingsById[chordId] ?? [], songSlug);
-    const popular = pickPopularVoicings(favoritesById[chordId] ?? [], songSlug);
-    const voicings = applyCurationOrder(displayedVoicings[index] ?? [],
-      frontShapesFor(voicingOrderMode, popular, curated).filter(f => f.length === currentTuning.strings.length),
-      frets => buildVoicingFromFrets(frets, currentTuning, false));
-    const chosen = (lockedVariations[chordName] ?? variationIndices[chordName] ?? 0) % Math.max(voicings.length, 1);
-    const custom = customVoicings[chordName];
-    syncedVoicings[chordName] = custom?.length === currentTuning.strings.length
-      ? buildVoicingFromFrets(custom, currentTuning, false) : voicings[chosen] ?? null;
+  if (autoScroll && showSyncedChords) {
+    for (const chord of [chordStrip.previous, chordStrip.current, chordStrip.next]) {
+      if (chord) syncedVoicings[chord.name] = displayedChordVoicing(chord.name, chordVoicingContext).bestVoicing;
+    }
   }
 
   const isFilterActive = voicingFilter.proximity || voicingFilter.maxNotes || voicingFilter.muteFilter !== 'any' || voicingFilter.prioritizeEasy;
@@ -2880,44 +2870,8 @@ export const CifraViewer: React.FC = () => {
               {currentChords.map((chordName, idx) => {
                 const isChordLocked = chordName in lockedVariations;
 
-                // Quem ocupa as primeiras posições depende do modo escolhido (favoritos do
-                // público, curadoria dos Editores, ou nenhum dos dois). Nas duas fontes vale
-                // a mesma precedência: o que foi escolhido NESTA música vem primeiro, seguido
-                // do que foi escolhido globalmente e a música não repetiu — mesclados, não
-                // substituídos. As formas da frente furam os demais filtros: se um deles tiver
-                // excluído alguma, ela é reinserida na frente mesmo assim.
-                const chordId = buildChordId(currentInst.id, currentTuning.id, chordName);
-                const rankEntries = chordRankingsById[chordId] ?? [];
-                const curatedList = pickCuratedVoicings(rankEntries, songSlug);
-                const favoriteEntries = favoritesById[chordId] ?? [];
-                const popularList = pickPopularVoicings(favoriteEntries, songSlug);
-                const rawVoicings = displayedVoicings[idx] ?? [];
-                // Mesma proteção do dicionário: curadoria e voto do público vêm do
-                // servidor e podem ser de outro instrumento enquanto a resposta nova não
-                // chega. Forma com número de cordas diferente do braço atual é descartada.
-                const voicings = applyCurationOrder(
-                  rawVoicings,
-                  frontShapesFor(voicingOrderMode, popularList, curatedList)
-                    .filter(f => f.length === currentTuning.strings.length),
-                  (fretsArray) => buildVoicingFromFrets(fretsArray, currentTuning, false)
-                );
-
-                // Índice efetivo: respeita cadeado; sem escolha explícita, começa em #1
-                // (a(s) curada(s), se houver — applyCurationOrder já as deixou lá).
-                const rawIdx = variationIndices[chordName] ?? 0;
-                const effectiveIdx = isChordLocked
-                  ? (lockedVariations[chordName] ?? 0) % Math.max(voicings.length, 1)
-                  : rawIdx % Math.max(voicings.length, 1);
-
-                const generatedVoicing = voicings.length > 0 ? voicings[effectiveIdx] : null;
-                // A user-edited shape (from the chord editor) overrides the generated one.
-                // A forma editada à mão fica guardada por nome de acorde, sem registro de
-                // qual instrumento a originou — então trocar de instrumento pode trazer
-                // uma forma de outro braço. Só vale se o número de cordas bater.
-                const customFrets = customVoicings[chordName];
-                const bestVoicing = customFrets && customFrets.length === currentTuning.strings.length
-                  ? buildVoicingFromFrets(customFrets, currentTuning, false)
-                  : generatedVoicing;
+                const { chordId, favoriteEntries, curatedList, voicings, rawIdx, effectiveIdx,
+                  generatedVoicing, bestVoicing } = displayedChordVoicing(chordName, chordVoicingContext);
 
                 const clearCustom = () => setCustomVoicings(prev => {
                   if (!(chordName in prev)) return prev;
@@ -3140,7 +3094,7 @@ export const CifraViewer: React.FC = () => {
           </div>
           {autoScroll && lineMode && (
             <SyncedChordsPanel visible={showSyncedChords} onToggle={toggleSyncedChords}
-              chords={currentPhraseChords} next={nextPhraseChords} tuning={currentTuning} voicings={syncedVoicings} />
+              strip={chordStrip} tuning={currentTuning} voicings={syncedVoicings} />
           )}
         </div>
 
