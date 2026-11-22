@@ -295,6 +295,12 @@ export const ptBR = {
     abrirGravacao: 'Abrir gravação',
     rolagemInstrumental: 'Instrumental',
     rolagemLetraEm: 'letra em {tempo}',
+    acordesPainelOcultar: 'Ocultar acordes da frase',
+    acordesPainelMostrar: 'Mostrar acordes da frase',
+    acordesFraseAtual: 'Frase atual',
+    acordesProximasFrases: 'Próximas frases',
+    acordesEmSegundos: 'em {s} s',
+    acordesSemFrase: 'Sem acordes nesta frase',
     rolagemTimeline: 'Posição na gravação',
     rolagemGap: 'Sem seção vinculada neste tempo',
 

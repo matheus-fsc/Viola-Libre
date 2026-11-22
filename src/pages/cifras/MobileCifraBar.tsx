@@ -49,9 +49,10 @@ interface Props {
   /** Enquanto true, a barra troca os destinos pelo transporte. */
   rolando: boolean;
   transporte: ReactNode;
+  timeline?: ReactNode;
 }
 
-export function MobileCifraBar({ destinos, aberto, onAbrir, rolando, transporte }: Props) {
+export function MobileCifraBar({ destinos, aberto, onAbrir, rolando, transporte, timeline }: Props) {
   // A folha fica montada enquanto desce: `aberto` vira null no começo da saída, e quem
   // segura o id até a mola terminar é `saindo`. O ajuste é durante o render (e não num
   // efeito) para não haver um frame com a folha já desmontada.
@@ -80,6 +81,7 @@ export function MobileCifraBar({ destinos, aberto, onAbrir, rolando, transporte 
           e as duas juntas empilhariam dois níveis de controle no mesmo canto. */}
       {!folha && (
         <div className="fixed inset-x-2 bottom-2 z-50 md:hidden bevel-out bg-[var(--color-winxp-panel)] border border-gray-500 shadow-xl mb-[env(safe-area-inset-bottom)]">
+          {rolando && timeline}
           {rolando ? (
             transporte
           ) : (

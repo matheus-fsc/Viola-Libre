@@ -71,6 +71,9 @@ import {
 } from '../../services/cifraFavorites';
 import { easeScrollY, stepTimeAtY, type LineScrollAnchor } from '../../engine/lineScroll';
 import { buildScrollTimeline, timelineYAtTime as stepYAtTime, timelineIndexAtTime as currentPhraseIndex, instrumentalCountdown } from '../../engine/scrollTimeline';
+import { ScrollTimelineBar } from './ScrollTimelineBar';
+import { SyncedChordsPanel } from './SyncedChordsPanel';
+import { segmentChords, upcomingChords } from '../../engine/upcomingChords';
 import { InstrumentalIndicator } from '../../components/timing/InstrumentalIndicator';
 import { getRepeatRanges, repeatPassAtTime, type RepeatRange } from '../../engine/repeatRanges';
 import { buildScrollTimingChoices, chooseTrainingTiming, DEFAULT_SCROLL_TIMING, type ScrollTimingChoice } from '../../engine/scrollTimingChoices';
@@ -324,6 +327,16 @@ export const CifraViewer: React.FC = () => {
   // BPM / auto-scroll / loop
   const [localBpm, setLocalBpm] = useState<number | null>(null);
   const [autoScroll, setAutoScroll] = useState(false);
+  const [showSyncedChords, setShowSyncedChords] = useState(() => {
+    try { return localStorage.getItem('viola_synced_chords') !== 'false'; }
+    catch { return true; }
+  });
+  const toggleSyncedChords = () => {
+    const next = !showSyncedChords;
+    setShowSyncedChords(next);
+    // Navegação privada pode negar persistência, mas nunca deve impedir o controle.
+    try { localStorage.setItem('viola_synced_chords', String(next)); } catch { /* A preferência vale nesta sessão. */ }
+  };
   const [scrollMult, setScrollMult] = useState(1);
   const [loopA, setLoopA] = useState<number | null>(null);
   const [loopB, setLoopB] = useState<number | null>(null);
@@ -1538,6 +1551,13 @@ export const CifraViewer: React.FC = () => {
     return formatCifraChordHtml(cifra.content_html, transposeOffset);
   }, [cifra, transposeOffset]);
 
+  const syncedChordLines = useMemo(() => cifraTimingLines(displayHtml), [displayHtml]);
+  const activeChordSegment = activeSegment?.kind === 'hold'
+    ? scrollTimeline.findLast(segment => segment.kind !== 'hold' && segment.startTime <= elapsedDisplay) : activeSegment;
+  const currentPhraseChords = activeSegment && elapsedDisplay >= activeSegment.startTime && elapsedDisplay < activeSegment.endTime
+    && activeChordSegment ? segmentChords(activeChordSegment, syncedChordLines) : [];
+  const nextPhraseChords = upcomingChords(scrollTimeline, syncedChordLines, elapsedDisplay, 3);
+
   // Split displayHtml into html/tab segments for the tab transposer
   const cifraSegments = useMemo(() => {
     if (!cifra) return [];
@@ -1887,6 +1907,22 @@ export const CifraViewer: React.FC = () => {
       return [...filterEasy(raw)].sort(compareStatic);
     });
   }, [voicingFilter, allVoicings, variationIndices, currentChords, lockedVariations, excludedFromFilter]);
+
+  // Reutiliza formas, curadoria e escolhas da grade para o painel acompanhar o mesmo instrumento.
+  const syncedVoicings: Record<string, Voicing | null> = {};
+  for (const chordName of new Set(autoScroll && showSyncedChords ? currentPhraseChords : [])) {
+    const index = currentChords.indexOf(chordName);
+    const chordId = buildChordId(currentInst.id, currentTuning.id, chordName);
+    const curated = pickCuratedVoicings(chordRankingsById[chordId] ?? [], songSlug);
+    const popular = pickPopularVoicings(favoritesById[chordId] ?? [], songSlug);
+    const voicings = applyCurationOrder(displayedVoicings[index] ?? [],
+      frontShapesFor(voicingOrderMode, popular, curated).filter(f => f.length === currentTuning.strings.length),
+      frets => buildVoicingFromFrets(frets, currentTuning, false));
+    const chosen = (lockedVariations[chordName] ?? variationIndices[chordName] ?? 0) % Math.max(voicings.length, 1);
+    const custom = customVoicings[chordName];
+    syncedVoicings[chordName] = custom?.length === currentTuning.strings.length
+      ? buildVoicingFromFrets(custom, currentTuning, false) : voicings[chosen] ?? null;
+  }
 
   const isFilterActive = voicingFilter.proximity || voicingFilter.maxNotes || voicingFilter.muteFilter !== 'any' || voicingFilter.prioritizeEasy;
 
@@ -3051,7 +3087,7 @@ export const CifraViewer: React.FC = () => {
         )}
 
         {/* Cifra Content - Notepad Style */}
-        <div className="flex-1 min-h-0 flex gap-0.5 overflow-hidden">
+        <div className="cifra-synced-layout flex-1 min-h-0 flex gap-2">
           <div ref={contentRef} onPointerDown={handleLyricsPointerDown} onClick={handleLyricsChordClick} onMouseOver={handleLyricsMouseOver} onMouseLeave={schedulePopupClose} className="relative flex-1 min-w-0 min-h-0 bevel-in bg-white p-2 sm:p-4 retro-scrollbar font-mono text-sm leading-relaxed text-black overflow-x-hidden overflow-y-auto" style={{ paddingLeft: bracketPadding }}>
             {activeInstrumental && sectionMarker?.line === activeInstrumental.lineIndex && (
               <div className="absolute right-2 z-10 pointer-events-none" style={{ top: sectionMarker.top }}>
@@ -3102,6 +3138,10 @@ export const CifraViewer: React.FC = () => {
             {/* A última linha também precisa chegar à guia de leitura. */}
             {autoScroll && lineMode && <div aria-hidden style={{ height: `${(1 - READING_LINE) * 100}vh` }} />}
           </div>
+          {autoScroll && lineMode && (
+            <SyncedChordsPanel visible={showSyncedChords} onToggle={toggleSyncedChords}
+              chords={currentPhraseChords} next={nextPhraseChords} tuning={currentTuning} voicings={syncedVoicings} />
+          )}
         </div>
 
         </div>{/* fim área de conteúdo */}
@@ -3205,103 +3245,92 @@ export const CifraViewer: React.FC = () => {
         </div>
       )}
 
-      {autoScroll && lineMode && totalTime > 0 && (
-        <div className="fixed left-4 right-4 bottom-36 md:bottom-24 z-40 h-6 bevel-in bg-[#eef3fa] focus-within:ring-2 focus-within:ring-[#316ac5]">
-          <div className="absolute inset-x-0 top-2 h-1 flex" aria-hidden="true">
-            {scrollTimeline.map((segment, index) => (
-              <span key={index} style={{ width: `${(segment.endTime - segment.startTime) / totalTime * 100}%` }}
-                className={segment.instrumental ? 'bg-[#996600]' : segment.kind === 'hold' ? 'bg-[#d4d0c8]'
-                  : repeatPassAtTime(repeatRanges, segment.startTime) ? 'bg-[#385683]' : 'bg-[#558855]'} />
-            ))}
-          </div>
-          <span aria-hidden="true" className="absolute top-0 bottom-0 w-0.5 bg-[#cc3300] pointer-events-none"
-            style={{ left: `${Math.min(100, elapsedDisplay / totalTime * 100)}%` }} />
-          <input type="range" min={0} max={totalTime} step={0.1} value={Math.min(elapsedDisplay, totalTime)}
-            aria-label={t('cifra.rolagemTimeline')} aria-valuetext={fmtTime(elapsedDisplay)} onChange={event => seekToTime(Number(event.target.value))}
-            className="absolute inset-0 w-full h-full m-0 opacity-0 cursor-pointer" />
-        </div>
-      )}
-
       {/* Transporte flutuante do desktop. No telefone quem manda é a MobileCifraBar. */}
       {!isMobile && (
-        <div className="fixed right-4 bottom-12 z-50 bevel-out bg-[var(--color-winxp-panel)] border border-gray-500 shadow-xl px-2 py-1.5 flex items-center gap-2 text-xs select-none">
-          <button
-            onClick={handleRestart}
-            className="bevel-out px-2 py-1 font-bold border border-gray-400 bg-[var(--color-winxp-panel)] text-[#002fa7] hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
-            title={t('cifra.inicioDica')}
-          >
-            ⏮
-          </button>
-          <button
-            onClick={() => seekBySeconds(-NUDGE_SEC)}
-            className="bevel-out px-1.5 py-1 font-bold border border-gray-400 bg-[var(--color-winxp-panel)] text-[#002fa7] hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
-            title={t('cifra.voltarSegundos', { s: NUDGE_SEC })}
-          >
-            ◀◀
-          </button>
-          <button
-            onClick={handleToggleAutoScroll}
-            className={`bevel-out px-3 py-1 font-bold border border-gray-400 min-w-[90px] text-center active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${autoScroll ? 'bg-[#316ac5] text-white' : 'bg-[var(--color-winxp-panel)] text-[#002fa7] hover:bg-white'}`}
-            title={t('cifra.tocarPausarDica')}
-          >
-            {autoScroll ? (userSeeking ? `✋ ${t('cifra.ajustando')}` : `⏸ ${t('cifra.pausar')}`) : `▶ ${t('cifra.autoRolar')}`}
-          </button>
-          {syncLabel && (
-            <span className="flex items-baseline gap-1.5 border-l border-gray-400 pl-1.5 text-[10px] font-bold text-[#005500]">
-              {syncLabel}
-              <button type="button" onClick={() => void openScrollChooser(true)} className="text-[#002fa7] underline">
-                {t('cifra.rolagemTrocarTiming')}
-              </button>
-              <span role="status" className="empty:sr-only whitespace-nowrap text-[#002fa7]">
-                {repeatLabel}
-              </span>
-            </span>
+        <div className="fixed right-4 bottom-12 z-50 max-w-[calc(100vw-2rem)] bevel-out bg-[var(--color-winxp-panel)] border border-gray-500 shadow-xl text-xs select-none">
+          {autoScroll && lineMode && totalTime > 0 && (
+            <ScrollTimelineBar timeline={scrollTimeline} total={totalTime} elapsed={elapsedDisplay} repeats={repeatRanges}
+              label={activeSegment?.label ?? currentSection} onSeek={seekToTime} />
           )}
-          <button
-            onClick={() => seekBySeconds(NUDGE_SEC)}
-            className="bevel-out px-1.5 py-1 font-bold border border-gray-400 bg-[var(--color-winxp-panel)] text-[#002fa7] hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
-            title={t('cifra.avancarSegundos', { s: NUDGE_SEC })}
-          >
-            ▶▶
-          </button>
-          {totalTime > 0 && (
-            <span className="font-mono text-[10px] font-bold text-[#002fa7] border-l border-gray-400 pl-1.5 tabular-nums">
-              {fmtTime(elapsedDisplay)} / {fmtTime(totalTime)}
-            </span>
-          )}
-          <div className="flex gap-0.5">
-            {([0.5, 1, 2] as const).map(m => (
-              <button
-                key={m}
-                onClick={() => setScrollMult(m)}
-                className={`text-[10px] font-bold px-1.5 py-0.5 border leading-tight ${scrollMult === m ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#ece9d8] border-gray-400 hover:bg-white'}`}
-              >
-                {m}×
-              </button>
-            ))}
-          </div>
-          <button
-            onClick={toggleTabs}
-            disabled={tabsForcedHidden}
-            className={`text-[10px] font-bold px-1.5 py-0.5 border leading-tight disabled:opacity-50 ${!showTabs ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#ece9d8] border-gray-400 hover:bg-white'}`}
-            title={showTabs ? t('cifra.tabsOcultarDica') : t('cifra.tabsMostrarDica')}
-          >
-            {t('cifra.folhaTabs')} {showTabs ? '▼' : '▶'}
-          </button>
-          {effectiveBpm != null && (
-            <span className="font-mono text-[10px] font-bold text-[#005500] border-l border-gray-400 pl-1.5">♩ {effectiveBpm}</span>
-          )}
-          {(loopA !== null && loopB !== null) && (
-            <span className="text-[10px] font-bold text-[#316ac5] border-l border-gray-400 pl-1.5">⟳ {t('cifra.loop')}</span>
-          )}
-          {currentSection && autoScroll && (
-            <span
-              className="text-[10px] font-bold text-[#660033] border-l border-gray-400 pl-1.5 max-w-[110px] truncate"
-              title={currentSection}
+          <div className="px-2 py-1.5 flex flex-wrap items-center gap-2">
+            <button
+              onClick={handleRestart}
+              className="bevel-out px-2 py-1 font-bold border border-gray-400 bg-[var(--color-winxp-panel)] text-[#002fa7] hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
+              title={t('cifra.inicioDica')}
             >
-              {currentSection}
-            </span>
-          )}
+              ⏮
+            </button>
+            <button
+              onClick={() => seekBySeconds(-NUDGE_SEC)}
+              className="bevel-out px-1.5 py-1 font-bold border border-gray-400 bg-[var(--color-winxp-panel)] text-[#002fa7] hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
+              title={t('cifra.voltarSegundos', { s: NUDGE_SEC })}
+            >
+              ◀◀
+            </button>
+            <button
+              onClick={handleToggleAutoScroll}
+              className={`bevel-out px-3 py-1 font-bold border border-gray-400 min-w-[90px] text-center active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white ${autoScroll ? 'bg-[#316ac5] text-white' : 'bg-[var(--color-winxp-panel)] text-[#002fa7] hover:bg-white'}`}
+              title={t('cifra.tocarPausarDica')}
+            >
+              {autoScroll ? (userSeeking ? `✋ ${t('cifra.ajustando')}` : `⏸ ${t('cifra.pausar')}`) : `▶ ${t('cifra.autoRolar')}`}
+            </button>
+            {syncLabel && (
+              <span className="flex min-w-0 flex-wrap items-baseline gap-1.5 border-l border-gray-400 pl-1.5 text-[10px] font-bold text-[#005500]">
+                {syncLabel}
+                <button type="button" onClick={() => void openScrollChooser(true)} className="text-[#002fa7] underline">
+                  {t('cifra.rolagemTrocarTiming')}
+                </button>
+                <span role="status" className="empty:sr-only whitespace-nowrap text-[#002fa7]">
+                  {repeatLabel}
+                </span>
+              </span>
+            )}
+            <button
+              onClick={() => seekBySeconds(NUDGE_SEC)}
+              className="bevel-out px-1.5 py-1 font-bold border border-gray-400 bg-[var(--color-winxp-panel)] text-[#002fa7] hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
+              title={t('cifra.avancarSegundos', { s: NUDGE_SEC })}
+            >
+              ▶▶
+            </button>
+            {totalTime > 0 && (
+              <span className="font-mono text-[10px] font-bold text-[#002fa7] border-l border-gray-400 pl-1.5 tabular-nums">
+                {fmtTime(elapsedDisplay)} / {fmtTime(totalTime)}
+              </span>
+            )}
+            <div className="flex gap-0.5">
+              {([0.5, 1, 2] as const).map(m => (
+                <button
+                  key={m}
+                  onClick={() => setScrollMult(m)}
+                  className={`text-[10px] font-bold px-1.5 py-0.5 border leading-tight ${scrollMult === m ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#ece9d8] border-gray-400 hover:bg-white'}`}
+                >
+                  {m}×
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={toggleTabs}
+              disabled={tabsForcedHidden}
+              className={`text-[10px] font-bold px-1.5 py-0.5 border leading-tight disabled:opacity-50 ${!showTabs ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#ece9d8] border-gray-400 hover:bg-white'}`}
+              title={showTabs ? t('cifra.tabsOcultarDica') : t('cifra.tabsMostrarDica')}
+            >
+              {t('cifra.folhaTabs')} {showTabs ? '▼' : '▶'}
+            </button>
+            {effectiveBpm != null && (
+              <span className="font-mono text-[10px] font-bold text-[#005500] border-l border-gray-400 pl-1.5">♩ {effectiveBpm}</span>
+            )}
+            {(loopA !== null && loopB !== null) && (
+              <span className="text-[10px] font-bold text-[#316ac5] border-l border-gray-400 pl-1.5">⟳ {t('cifra.loop')}</span>
+            )}
+            {currentSection && autoScroll && (
+              <span
+                className="text-[10px] font-bold text-[#660033] border-l border-gray-400 pl-1.5 max-w-[110px] truncate"
+                title={currentSection}
+              >
+                {currentSection}
+              </span>
+            )}
+          </div>
         </div>
       )}
 
@@ -3310,6 +3339,10 @@ export const CifraViewer: React.FC = () => {
           aberto={folhaAberta}
           onAbrir={setFolhaAberta}
           rolando={autoScroll}
+          timeline={autoScroll && lineMode && totalTime > 0 ? (
+            <ScrollTimelineBar timeline={scrollTimeline} total={totalTime} elapsed={elapsedDisplay} repeats={repeatRanges}
+              label={activeSegment?.label ?? currentSection} onSeek={seekToTime} />
+          ) : null}
           transporte={<TransporteMobile
             userSeeking={userSeeking}
             onToggle={handleToggleAutoScroll}

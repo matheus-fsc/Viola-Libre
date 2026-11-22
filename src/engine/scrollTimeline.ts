@@ -10,6 +10,20 @@ export interface ScrollSegment {
   label?: string;
 }
 
+export function timelineBarSegments(timeline: readonly ScrollSegment[], totalTime: number): {
+  leftPct: number; widthPct: number; kind: ScrollSegment['kind'];
+}[] {
+  if (!Number.isFinite(totalTime) || totalTime <= 0) return [];
+  return timeline.flatMap(segment => {
+    if (!Number.isFinite(segment.startTime) || !Number.isFinite(segment.endTime)) return [];
+    const start = Math.max(0, Math.min(totalTime, segment.startTime));
+    const end = Math.max(0, Math.min(totalTime, segment.endTime));
+    // A mesma origem do cursor conserva introduções e lacunas no relógio exibido.
+    return end > start ? [{ leftPct: start / totalTime * 100,
+      widthPct: (end - start) / totalTime * 100, kind: segment.kind }] : [];
+  });
+}
+
 type TimelineTiming = Pick<TimingContribution, 'phrases' | 'instrumentalSections'> & Partial<Pick<TimingContribution, 'duration' | 'audioStart'>>;
 
 export function buildScrollTimeline(timing: TimelineTiming): ScrollSegment[] {

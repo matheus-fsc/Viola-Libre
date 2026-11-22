@@ -104,3 +104,18 @@
 .btn-premium:active {
   transform: translateY(0);
 }
+
+/* Mede a janela da cifra para reservar espaço real, mesmo quando o desktop é largo. */
+.cifra-synced-layout {
+  container-type: inline-size;
+}
+
+.synced-chords-panel {
+  display: none;
+}
+
+@container (min-width: 900px) {
+  .synced-chords-panel {
+    display: block;
+  }
+}

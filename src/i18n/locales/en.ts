@@ -283,6 +283,12 @@ export const en: Dicionario = {
     abrirGravacao: 'Open recording',
     rolagemInstrumental: 'Instrumental section',
     rolagemLetraEm: 'lyrics in {tempo}',
+    acordesPainelOcultar: 'Hide phrase chords',
+    acordesPainelMostrar: 'Show phrase chords',
+    acordesFraseAtual: 'Current phrase',
+    acordesProximasFrases: 'Upcoming phrases',
+    acordesEmSegundos: 'in {s} s',
+    acordesSemFrase: 'No chords in this phrase',
     rolagemTimeline: 'Recording position',
     rolagemGap: 'No linked section at this time',
 
