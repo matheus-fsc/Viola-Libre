@@ -1,3 +1,4 @@
+import { type MediaCut } from './mediaCuts';
 import type { TimingInstrumental, TimingLoop, TimingPhrase } from '../services/timingApi';
 import type { LineType } from '../utils/lineClassifier';
 
@@ -10,7 +11,7 @@ export function withoutFingerpicking(
   lineTypes: readonly LineType[],
   loops?: readonly TimingLoop[],
   instrumentalSections?: readonly TimingInstrumental[],
-): { phrases: TimingPhrase[]; removedDuration: number; loops?: TimingLoop[]; instrumentalSections?: TimingInstrumental[] } {
+): { phrases: TimingPhrase[]; removedDuration: number; cuts: MediaCut[]; loops?: TimingLoop[]; instrumentalSections?: TimingInstrumental[] } {
   const cuts: Array<{ start: number; end: number }> = [];
   const ordered = [...phrases].sort((a, b) => a.startTime - b.startTime);
   const seenLyricLines = new Set<number>();
@@ -49,10 +50,10 @@ export function withoutFingerpicking(
   const shiftTime = (time: number) => time - shift(time);
   return {
     removedDuration,
-    phrases: kept.map(phrase => {
-      const offset = shift(phrase.startTime);
-      return offset ? { ...phrase, startTime: phrase.startTime - offset, endTime: phrase.endTime - offset } : phrase;
-    }),
+    cuts: merged,
+    phrases: kept.map(phrase => ({ ...phrase,
+      startTime: shiftTime(phrase.startTime), endTime: shiftTime(phrase.endTime),
+    })),
     // O bloco instrumental também precisa acompanhar os cortes no relógio interno.
     ...(instrumentalSections && { instrumentalSections: instrumentalSections.map(section => ({
       ...section,

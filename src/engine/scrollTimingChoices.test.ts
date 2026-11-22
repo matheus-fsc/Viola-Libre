@@ -38,6 +38,14 @@ describe('buildScrollTimingChoices', () => {
     expect(selected).toBe(choices[3]);
   });
 
+  it('oferece a variante revisada com identidade própria e oculta a derivação automática', () => {
+    const reviewed = { ...manual, variant: 'sem_dedilhado' as const, reviewedFrom: auto.id, cuts: [{ start: 3, end: 9 }] };
+    const { choices, selected } = buildScrollTimingChoices([auto, reviewed], ['lyric', 'tab', 'lyric'], reviewed, 'editor');
+    expect(choices.map(c => c.id)).toEqual(['default', 'auto-original', 'editor']);
+    expect(selected.timing).toBe(reviewed);
+    expect(selected.timing).toMatchObject({ variant: 'sem_dedilhado', reviewed: true });
+  });
+
   it('omite a variante quando não há tempo de tablatura para cortar', () => {
     const { choices, selected } = buildScrollTimingChoices([auto], ['lyric', 'chord', 'lyric', 'tab'], auto, 'auto-sem-dedilhado');
     expect(choices.map(choice => choice.id)).toEqual(['default', 'auto-original']);

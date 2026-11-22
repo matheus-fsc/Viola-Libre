@@ -1,6 +1,6 @@
 import type { TimingContribution } from '../services/timingApi';
 import type { LineType } from '../utils/lineClassifier';
-import { withoutFingerpicking } from './lineScroll';
+import { buildCommunityCards } from './timingVariants';
 
 export type ScrollTimingChoice =
   | { id: 'default'; kind: 'default'; timing: null }
@@ -20,14 +20,8 @@ export function buildScrollTimingChoices(
     ?? timings.find(timing => timing.source === 'auto');
   if (auto) {
     choices.push({ id: 'auto-original', kind: 'auto', timing: auto });
-    const { phrases, removedDuration, loops = auto.loops, instrumentalSections } = withoutFingerpicking(auto.phrases, lineTypes, auto.loops, auto.instrumentalSections);
-    if (removedDuration > 0) {
-      choices.push({
-        id: 'auto-sem-dedilhado',
-        kind: 'without-fingerpicking',
-        timing: { ...auto, phrases, loops, instrumentalSections: instrumentalSections ?? auto.instrumentalSections, duration: Math.max(0, auto.duration - removedDuration) },
-      });
-    }
+    const derived = buildCommunityCards(timings, lineTypes).find(card => card.withoutTabs && card.timing.source === 'auto' && card.timing.id === auto.id);
+    if (derived) choices.push({ id: 'auto-sem-dedilhado', kind: 'without-fingerpicking', timing: derived.timing });
   }
   for (const timing of timings) {
     // Contribuições anteriores ao campo source também são contribuições da comunidade.

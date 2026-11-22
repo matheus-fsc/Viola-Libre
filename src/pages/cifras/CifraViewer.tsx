@@ -339,7 +339,7 @@ export const CifraViewer: React.FC = () => {
   const [scrollChoice, setScrollChoice] = useState<ScrollTimingChoice | null>(null);
   const [scrollChooser, setScrollChooser] = useState<(ReturnType<typeof buildScrollTimingChoices> & { switching: boolean }) | null>(null);
   const timingMedia = previewTiming ?? (scrollChoice ? scrollChoice.timing : bestTiming) ?? null;
-  const internalTiming = !previewTiming && scrollChoice?.kind === 'without-fingerpicking';
+  const internalTiming = timingMedia?.variant === 'sem_dedilhado';
   const tabsForcedHidden = autoScroll && internalTiming;
   // A preferência fica guardada enquanto o relógio encurtado exige a cifra sem tabs.
   const showTabs = prefersTabs && !tabsForcedHidden;
@@ -669,7 +669,7 @@ export const CifraViewer: React.FC = () => {
   }, [prefersTabs, rememberTabPosition, tabsForcedHidden]);
 
   const startScroll = useCallback((choice: ScrollTimingChoice | null, switching = false) => {
-    const hidesTabs = choice?.kind === 'without-fingerpicking' && prefersTabs;
+    const hidesTabs = choice?.timing?.variant === 'sem_dedilhado' && prefersTabs;
     if (hidesTabs) rememberTabPosition();
     const changedChoice = choice && (choice.id !== scrollChoice?.id || choice.timing?.updatedAt !== timingMedia?.updatedAt);
     const moved = window.scrollY !== appliedYRef.current;
@@ -756,13 +756,12 @@ export const CifraViewer: React.FC = () => {
   }, []);
 
   const seekVideo = useCallback((time: number) => {
-    if (internalTiming) return;
     const clock = videoClockRef.current;
     if (!clock) return;
     // O iframe pode devolver o tempo antigo por alguns quadros depois de seekTo.
     videoSeekRef.current = { time, expires: performance.now() + 700 };
     clock.seek(time);
-  }, [internalTiming]);
+  }, []);
 
   // A barra reposiciona a tela. Os atalhos em segundos preservam o tempo exato
   // mesmo quando vários segundos da música apontam para a mesma linha.
@@ -949,7 +948,7 @@ export const CifraViewer: React.FC = () => {
 
       if (lines.length) {
         const rate = scrollMultRef.current;
-        const clock = internalTiming ? null : videoClockRef.current;
+        const clock = videoClockRef.current;
         if (clock && (clock !== ratedClock || rate !== videoRate)) {
           clock.setRate(rate);
           videoRate = rate;
@@ -3134,6 +3133,7 @@ export const CifraViewer: React.FC = () => {
         <SourceVideoPanel
           key={trainingSession}
           audioStart={timingMedia?.audioStart}
+          cuts={timingMedia?.cuts}
           autoPlay={trainingPlayback}
           mediaType={videoTiming?.mediaType === 'audio' && videoTiming.mediaUrl?.trim() ? 'audio' : 'youtube'}
           videoUrl={sourceVideoUrl}

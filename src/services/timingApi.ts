@@ -1,3 +1,4 @@
+import { normalizeCuts, type MediaCut } from '../engine/mediaCuts';
 import api, { cabecalhoChavePublica } from './api';
 
 export interface TimingOccurrence {
@@ -99,6 +100,8 @@ export interface TimingContribution {
   updatedAt: string;
   source?: 'manual' | 'auto';
   reviewed?: boolean;
+  variant?: 'sem_dedilhado' | null;
+  cuts?: MediaCut[] | null;
   reviewedFrom?: string | null;
 }
 
@@ -115,6 +118,8 @@ export interface TimingSubmitPayload {
   phrases: TimingPhrase[];
   sections: TimingSection[];
   markers: TimingMarker[];
+  variant?: 'sem_dedilhado' | null;
+  cuts?: MediaCut[] | null;
   reviewedFrom?: string;
 }
 
@@ -165,6 +170,8 @@ export function normalizeContribution(raw: RawTimingContribution): TimingContrib
 
   return {
     id, duration, bpm, votes, editorAlias, mediaUrl, mediaType, updatedAt, source, reviewed, reviewedFrom,
+    ...(raw.variant != null && { variant: raw.variant }),
+    ...(raw.cuts != null && { cuts: normalizeCuts(raw.cuts) }),
     ...(raw.audioStart != null && { audioStart: raw.audioStart }),
     loops: (raw.loops ?? []).map(({ occurrences: rawOccurrences, ...loop }) => {
       const occurrences = normalizeLoopOccurrences(rawOccurrences);

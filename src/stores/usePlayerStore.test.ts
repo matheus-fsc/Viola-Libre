@@ -183,3 +183,55 @@ describe('partida após o silêncio digital', () => {
     player().registerAudio(null);
   });
 });
+
+
+describe('player com cortes', () => {
+  it('áudio pula cortes, exibe o relógio derivado e converte os seeks e a duração', () => {
+    const audio = { currentTime: 0, play: vi.fn(() => Promise.resolve()), pause: vi.fn() };
+    player().loadContribution({ bpm: null, duration: 17, mediaUrl: 'track.mp3', mediaType: 'audio',
+      cuts: [{ start: 5, end: 8 }], variant: 'sem_dedilhado' });
+    player().registerAudio(audio as unknown as HTMLAudioElement);
+    player().setPlayerReady(true, 20);
+    expect(player().duration).toBe(17);
+    player().play();
+    player().tick(0);
+    audio.currentTime = 5;
+    player().tick(5);
+    expect(audio.currentTime).toBe(8);
+    expect(player().currentTime).toBe(5);
+    player().tick(8.5);
+    expect(player().currentTime).toBe(5.5);
+    player().seek(9);
+    expect(audio.currentTime).toBe(12);
+    expect(player().currentTime).toBe(9);
+    player().registerAudio(null);
+    player().loadContribution({ bpm: null, duration: 20 });
+    expect(player()).toMatchObject({ cuts: [], variant: null });
+  });
+
+  it('YouTube pula uma vez enquanto aguarda confirmação e encerra a prévia no tempo derivado', () => {
+    vi.useFakeTimers();
+    let media = 0;
+    const yt = { getCurrentTime: () => media, destroy: vi.fn(), playVideo: vi.fn(), pauseVideo: vi.fn(), seekTo: vi.fn() };
+    player().loadContribution({ bpm: null, duration: 17, mediaUrl: 'https://youtu.be/abcdefghijk', mediaType: 'youtube',
+      cuts: [{ start: 5, end: 8 }], variant: 'sem_dedilhado' });
+    player().registerYtPlayer(yt as never);
+    player().previewRange(0, 7);
+    vi.advanceTimersByTime(250);
+    yt.seekTo.mockClear();
+    media = 4.9;
+    vi.advanceTimersByTime(250);
+    expect(yt.seekTo).toHaveBeenCalledExactlyOnceWith(8, true);
+    media = 5.1;
+    vi.advanceTimersByTime(500);
+    expect(yt.seekTo).toHaveBeenCalledTimes(1);
+    media = 8;
+    vi.advanceTimersByTime(250);
+    expect(player().currentTime).toBe(5);
+    media = 10;
+    vi.advanceTimersByTime(250);
+    expect(player()).toMatchObject({ currentTime: 7, isPlaying: false });
+    player().clearYtPlayer();
+    player().loadContribution({ bpm: null, duration: 20 });
+  });
+});

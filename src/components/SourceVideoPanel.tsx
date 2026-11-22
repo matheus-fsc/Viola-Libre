@@ -1,3 +1,4 @@
+import { createCutClock, derivedToMedia, type MediaCut } from '../engine/mediaCuts';
 import { playbackStartTime } from '../engine/timingPlayback';
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { MoveDiagonal2 } from 'lucide-react';
@@ -24,6 +25,7 @@ interface SourceVideoPanelProps {
   /** URL da source (link do YouTube semeado pela API ou vindo de um timing da comunidade). */
   videoUrl: string;
   audioStart?: number | null;
+  cuts?: readonly MediaCut[] | null;
   autoPlay?: boolean;
   mediaType?: 'youtube' | 'audio';
   /** Título da música exibido na barra do painel. */
@@ -54,7 +56,7 @@ interface SourceVideoPanelProps {
  * reprodução ao encolher.
  */
 export const SourceVideoPanel: React.FC<SourceVideoPanelProps> = ({
-  videoUrl, audioStart, autoPlay = false, mediaType = 'youtube', title, onClose, onDurationDetected, onPlayingClockChange,
+  videoUrl, audioStart, cuts, autoPlay = false, mediaType = 'youtube', title, onClose, onDurationDetected, onPlayingClockChange,
 }) => {
   const t = useT();
   const [collapsed, setCollapsed] = useState(false);
@@ -86,6 +88,21 @@ export const SourceVideoPanel: React.FC<SourceVideoPanelProps> = ({
   const audioStartRef = useLatest(audioStart);
   const autoPlayRef = useLatest(autoPlay);
 
+  const playingRef = useLatest(playing);
+  const cutClockRef = useRef<ReturnType<typeof createCutClock> | null>(null);
+  const seekCutTime = useCallback((time: number) => cutClockRef.current?.seek(time), []);
+  const sampleTime = useCallback(() => cutClockRef.current?.sample(
+    audioRef.current?.currentTime ?? playerRef.current?.getCurrentTime?.() ?? 0, playingRef.current,
+  ) ?? 0, [playingRef]);
+  useEffect(() => {
+    cutClockRef.current = createCutClock(cuts ?? [], time => {
+      playerRef.current?.seekTo?.(time, true);
+      if (audioRef.current) audioRef.current.currentTime = time;
+    });
+    const timer = setInterval(sampleTime, 100);
+    return () => { clearInterval(timer); cutClockRef.current = null; };
+  }, [cuts, sampleTime]);
+
   const videoId = extractYouTubeId(videoUrl);
 
   useEffect(() => {
@@ -112,7 +129,7 @@ export const SourceVideoPanel: React.FC<SourceVideoPanelProps> = ({
               const player = playerRef.current;
               if (player) {
                 const current = player.getCurrentTime();
-                const start = playbackStartTime(current, audioStartRef.current, 'youtube');
+                const start = derivedToMedia(playbackStartTime(0, audioStartRef.current, 'youtube'), cuts ?? []);
                 // Inicializa uma vez para que os seeks posteriores no iframe continuem livres.
                 if (start !== current) player.seekTo(start, true);
                 if (autoPlayRef.current) player.playVideo();
@@ -127,8 +144,8 @@ export const SourceVideoPanel: React.FC<SourceVideoPanelProps> = ({
               const player = playerRef.current;
               // No treino, o relógio pausado também segura a cifra enquanto o músico interrompe a gravação.
               onPlayingClockChange((isPlaying || autoPlayRef.current) && player ? {
-                readTime: () => player.getCurrentTime(),
-                seek: seconds => player.seekTo(seconds, true),
+                readTime: sampleTime,
+                seek: seekCutTime,
                 setRate: rate => player.setPlaybackRate?.(rate),
               } : null);
             },
@@ -145,7 +162,7 @@ export const SourceVideoPanel: React.FC<SourceVideoPanelProps> = ({
       wrap.replaceChildren();
     };
     // onDurationRef vem do useLatest, identidade fixa: não recria o player.
-  }, [mediaType, videoId, ytAllowed, onDurationRef, audioStartRef, autoPlayRef, onPlayingClockChange]);
+  }, [mediaType, videoId, ytAllowed, onDurationRef, audioStartRef, autoPlayRef, onPlayingClockChange, seekCutTime, cuts, sampleTime]);
 
   useEffect(() => {
     if (mediaType !== 'audio') return;
@@ -243,14 +260,14 @@ export const SourceVideoPanel: React.FC<SourceVideoPanelProps> = ({
               className="absolute inset-x-0 top-1/2 w-full -translate-y-1/2"
               onLoadedMetadata={event => {
                 const audio = event.currentTarget;
-                audio.currentTime = playbackStartTime(audio.currentTime, audioStart, 'audio');
+                audio.currentTime = derivedToMedia(playbackStartTime(0, audioStart, 'audio'), cuts ?? []);
                 if (Number.isFinite(audio.duration)) onDurationDetected(audio.duration);
               }}
               onPlay={event => {
                 const audio = event.currentTarget;
                 setPlaying(true);
-                onPlayingClockChange({ readTime: () => audio.currentTime,
-                  seek: seconds => { audio.currentTime = seconds; }, setRate: rate => { audio.playbackRate = rate; } });
+                onPlayingClockChange({ readTime: sampleTime,
+                  seek: seekCutTime, setRate: rate => { audio.playbackRate = rate; } });
               }}
               onPause={() => { setPlaying(false); if (!autoPlay) onPlayingClockChange(null); }}
               onEnded={() => { setPlaying(false); if (!autoPlay) onPlayingClockChange(null); }} />

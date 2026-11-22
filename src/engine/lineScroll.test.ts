@@ -8,27 +8,27 @@ describe('withoutFingerpicking', () => {
     expect(withoutFingerpicking(
       [phrase(0, 1, 3), phrase(1, 4, 7), phrase(3, 9, 12)],
       ['lyric', 'tab', 'chord', 'lyric'],
-    )).toEqual({ phrases: [phrase(0, 1, 3), phrase(3, 6, 9)], removedDuration: 3 });
+    )).toEqual({ phrases: [phrase(0, 1, 3), phrase(3, 6, 9)], removedDuration: 3, cuts: [{ start: 4, end: 7 }] });
   });
 
   it('une as durações de um bloco consecutivo com o vão entre letras', () => {
     expect(withoutFingerpicking(
       [phrase(0, 2, 5), phrase(1, 6, 10), phrase(2, 9, 11), phrase(3, 13, 17)],
       ['lyric', 'tab', 'tab', 'lyric'],
-    )).toEqual({ phrases: [phrase(0, 2, 5), phrase(3, 5, 9)], removedDuration: 8 });
+    )).toEqual({ phrases: [phrase(0, 2, 5), phrase(3, 5, 9)], removedDuration: 8, cuts: [{ start: 5, end: 13 }] });
   });
 
   it('remove o vão de tablatura entre letras mesmo sem frases de tab', () => {
     expect(withoutFingerpicking(
       [phrase(0, 0, 4), phrase(3, 11, 15)], ['lyric', 'tab', 'tab', 'lyric'],
-    )).toEqual({ phrases: [phrase(0, 0, 4), phrase(3, 4, 8)], removedDuration: 7 });
+    )).toEqual({ phrases: [phrase(0, 0, 4), phrase(3, 4, 8)], removedDuration: 7, cuts: [{ start: 4, end: 11 }] });
   });
 
   it('remove tabs no início e no fim sem tirar as outras pausas', () => {
     expect(withoutFingerpicking(
       [phrase(0, 0, 2), phrase(1, 4, 8), phrase(2, 9, 12), phrase(3, 13, 18)],
       ['tab', 'lyric', 'lyric', 'tab'],
-    )).toEqual({ phrases: [phrase(1, 2, 6), phrase(2, 7, 10)], removedDuration: 7 });
+    )).toEqual({ phrases: [phrase(1, 2, 6), phrase(2, 7, 10)], removedDuration: 7, cuts: [{ start: 0, end: 2 }, { start: 13, end: 18 }] });
   });
 
   it('mantém a introdução só de acordes e corta apenas o riff em tablatura', () => {
@@ -37,19 +37,19 @@ describe('withoutFingerpicking', () => {
     expect(withoutFingerpicking(
       [phrase(0, 0, 11), phrase(2, 11, 16), phrase(3, 16, 24), phrase(5, 24, 28)],
       ['chord', 'section', 'lyric', 'tab', 'chord', 'lyric'],
-    )).toEqual({ phrases: [phrase(0, 0, 11), phrase(2, 11, 16), phrase(5, 16, 20)], removedDuration: 8 });
+    )).toEqual({ phrases: [phrase(0, 0, 11), phrase(2, 11, 16), phrase(5, 16, 20)], removedDuration: 8, cuts: [{ start: 16, end: 24 }] });
   });
 
   it('devolve as mesmas frases quando não há tabs', () => {
     const phrases = [phrase(2, 7, 10), phrase(0, 0, 4)];
     expect(withoutFingerpicking(phrases, ['lyric', 'instrumental', 'lyric']))
-      .toEqual({ phrases, removedDuration: 0 });
+      .toEqual({ phrases, removedDuration: 0, cuts: [] });
   });
 
   it('calcula os cortes em ordem cronológica sem reordenar ou alterar a entrada', () => {
     const phrases = [phrase(2, 8, 10), phrase(0, 1, 3), phrase(1, 4, 7)];
     expect(withoutFingerpicking(phrases, ['lyric', 'tab', 'lyric']))
-      .toEqual({ phrases: [phrase(2, 3, 5), phrase(0, 1, 3)], removedDuration: 5 });
+      .toEqual({ phrases: [phrase(2, 3, 5), phrase(0, 1, 3)], removedDuration: 5, cuts: [{ start: 3, end: 8 }] });
     expect(phrases).toEqual([phrase(2, 8, 10), phrase(0, 1, 3), phrase(1, 4, 7)]);
   });
 
@@ -63,6 +63,7 @@ describe('withoutFingerpicking', () => {
     )).toEqual({
       phrases: [phrase(0, 0, 3), phrase(3, 3, 6), phrase(0, 9, 12), phrase(3, 12, 15)],
       removedDuration: 10,
+      cuts: [{ start: 3, end: 9 }, { start: 18, end: 22 }],
     });
   });
 });

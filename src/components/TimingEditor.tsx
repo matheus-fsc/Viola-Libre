@@ -179,8 +179,7 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
   // carregados é exatamente "carregando". Com um setLoading(true) no efeito, o primeiro
   // render da aba mostrava "sem contribuições" por um quadro antes do "carregando".
   const loadingContribs = !communityLoaded;
-  // O "sem dedilhado" não é salvo no servidor: é derivado do automático no navegador, como
-  // na escolha do Auto-rolar. Mostrá-lo aqui deixa a Comunidade com as mesmas opções.
+  // As duas listas compartilham a derivação para oferecer os mesmos cortes à comunidade.
   const lineTypes = useMemo(() => lines.map(classifyLine), [lines]);
   const communityCards = useMemo(() => buildCommunityCards(contributions, lineTypes), [contributions, lineTypes]);
 
@@ -253,6 +252,9 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
         height: 180,
         width: '100%',
         events: {
+          onStateChange: event => {
+            if (!cancelled) usePlayerStore.setState({ isPlaying: event.data === 1 });
+          },
           onReady: () => {
             if (cancelled) return;
             registerYtPlayer(player);
@@ -334,6 +336,7 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
       mediaType: ps.mediaType,
       duration: ps.duration,
       audioStart: ps.audioStart,
+      cuts: ps.cuts, variant: ps.variant, reviewedFrom: review?.from,
       bpm: ps.bpm,
     });
     const blob = new Blob([json], { type: 'application/json' });
@@ -359,11 +362,13 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
         loadContribution({
           bpm: typeof extra.bpm === 'number' ? extra.bpm : null,
           audioStart: typeof extra.audioStart === 'number' ? extra.audioStart : null,
+          cuts: Array.isArray(extra.cuts) ? extra.cuts as NonNullable<TimingContribution['cuts']> : [],
+          variant: extra.variant === 'sem_dedilhado' ? extra.variant : null,
           duration: typeof extra.duration === 'number' ? extra.duration : 0,
           mediaUrl: typeof extra.mediaUrl === 'string' ? extra.mediaUrl : undefined,
           mediaType: validMediaTypes.includes(extra.mediaType as MediaType) ? (extra.mediaType as MediaType) : undefined,
         });
-        setReview(null);
+        setReview(typeof extra.reviewedFrom === 'string' ? { from: extra.reviewedFrom, fromWithoutTabs: extra.variant === 'sem_dedilhado' } : null);
       } catch (err) {
         alert(err instanceof Error ? err.message : 'Erro ao importar o arquivo.');
       }
@@ -496,6 +501,8 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
         bpm: ps.bpm ?? undefined,
         duration: ps.duration,
         audioStart: ps.audioStart,
+        cuts: ps.cuts,
+        variant: ps.variant,
         ...payload,
         markers: rawMarkers,
       });
@@ -524,11 +531,11 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
   }, [onPreviewTiming]);
 
   const handleEditContribution = (c: TimingContribution, fromWithoutTabs = false) => {
-    loadContribution({ bpm: c.bpm || null, duration: c.duration, mediaUrl: c.mediaUrl, mediaType: c.mediaType, audioStart: c.audioStart });
+    loadContribution({ bpm: c.bpm || null, duration: c.duration, mediaUrl: c.mediaUrl, mediaType: c.mediaType, audioStart: c.audioStart, cuts: c.cuts, variant: c.variant });
     useTimingRegionsStore.getState().loadFromContribution(c);
     const metadata = getTimingEditMetadata(c);
     setEditorAlias(metadata.editorAlias);
-    setReview(metadata.reviewedFrom === null ? null : { from: metadata.reviewedFrom, fromWithoutTabs });
+    setReview(metadata.reviewedFrom === null ? null : { from: metadata.reviewedFrom, fromWithoutTabs: fromWithoutTabs || c.variant === 'sem_dedilhado' });
     setTestingScroll(false);
     setSubmitError(null);
     setDurError(null);
@@ -687,7 +694,10 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
                       ref={audioRef}
                       controls
                       src={mediaUrl}
-                      onSeeked={e => usePlayerStore.getState().seek(e.currentTarget.currentTime)}
+                      onSeeked={e => usePlayerStore.getState().tick(e.currentTarget.currentTime)}
+                      onPlay={() => usePlayerStore.setState({ isPlaying: true })}
+                      onPause={() => usePlayerStore.setState({ isPlaying: false })}
+                      onEnded={() => usePlayerStore.setState({ isPlaying: false })}
                       onLoadedMetadata={() => {
                         const audio = audioRef.current;
                         const dur = audio ? Math.round(audio.duration) : 0;
@@ -1274,11 +1284,11 @@ export const TimingEditor: React.FC<TimingEditorProps> = ({ slug, lines, onPrevi
             )}
             {communityCards.map(({ timing: c, withoutTabs, badge, reviewTarget }) => {
               return (
-                <div key={withoutTabs ? `${c.id}-sem-dedilhado` : c.id} className={`bevel-out p-2 flex flex-col gap-1.5 ${c.id === myTimingId && !withoutTabs ? 'bg-[#fffde7] border border-yellow-400' : 'bg-white'} ${withoutTabs ? 'ml-4 border-l-2 border-l-[#316ac5]' : ''}`}>
+                <div key={withoutTabs ? `${c.id}-sem-dedilhado` : c.id} className={`bevel-out p-2 flex flex-col gap-1.5 ${c.id === myTimingId && c.source !== 'auto' ? 'bg-[#fffde7] border border-yellow-400' : 'bg-white'} ${withoutTabs ? 'ml-4 border-l-2 border-l-[#316ac5]' : ''}`}>
                   {withoutTabs && (
                     <div className="flex flex-wrap items-center gap-2 text-[10px]">
-                      <span className="rounded border border-blue-300 bg-blue-50 px-1.5 font-bold text-[#002fa7]">{t('cifra.rolagemTimingSemDedilhado')}</span>
-                      <span className="text-gray-600">{t('cifra.rolagemTimingSemGravacao')}</span>
+                      <span className="rounded border border-blue-300 bg-blue-50 px-1.5 font-bold text-[#002fa7]">{t(c.source === 'auto' ? 'cifra.rolagemTimingSemDedilhado' : 'timing.semDedilhado')}</span>
+                      <span className="text-gray-600">{t('timing.revisaoSemDedilhado')}</span>
                     </div>
                   )}
                   <div className="flex items-center justify-between flex-wrap gap-1">

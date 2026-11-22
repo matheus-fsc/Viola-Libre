@@ -51,9 +51,10 @@ export function ScrollTimingDialog({ choices, initialChoice, onCancel, onStart }
                   {choice.kind === 'auto' && t('cifra.rolagemTimingAuto')}
                   {choice.kind === 'without-fingerpicking' && t('cifra.rolagemTimingSemDedilhado')}
                   {choice.kind === 'manual' && (choice.timing.editorAlias?.trim() || t('timing.apelidoPlaceholder'))}
+                  {choice.kind === 'manual' && choice.timing.variant === 'sem_dedilhado' && ` (${t('timing.semDedilhado')})`}
                 </span>
                 {choice.kind === 'without-fingerpicking' && (
-                  <span className="block text-gray-700">{t('cifra.rolagemTimingSemGravacao')}</span>
+                  <span className="block text-gray-700">{t('timing.revisaoSemDedilhado')}</span>
                 )}
                 {choice.kind === 'manual' && (
                   <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-gray-700">
