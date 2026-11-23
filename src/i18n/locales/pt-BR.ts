@@ -300,6 +300,7 @@ export const ptBR = {
 
   /* A tela da cifra: painel, carrossel de acordes, transporte e a folha do telefone. */
   cifra: {
+    acordeNavegado: 'Acorde {acorde}, posição {tempo}',
     pulsos: 'Pulsos e compassos',
     compassoNumero: 'Compasso {n}',
     contagemEntrada: 'Entrada: {n}',

@@ -288,6 +288,7 @@ export const en: Dicionario = {
   },
 
   cifra: {
+    acordeNavegado: 'Chord {acorde}, position {tempo}',
     pulsos: 'Beats and bars',
     compassoNumero: 'Bar {n}',
     contagemEntrada: 'Count in: {n}',

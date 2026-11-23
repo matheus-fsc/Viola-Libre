@@ -1,3 +1,5 @@
+import { MiniFretboard } from '../../components/MiniFretboard';
+import { useChordNavigation } from '../../hooks/useChordNavigation';
 import { SyncedMelody } from './SyncedMelody';
 import { playbackStartTime } from '../../engine/timingPlayback';
 import React, { useCallback, useEffect, useLayoutEffect, useState, useMemo, useRef } from 'react';
@@ -439,6 +441,8 @@ export const CifraViewer: React.FC = () => {
   const [userSeeking, setUserSeeking] = useState(false);
 
   // Refs
+  const pageRef = useRef<HTMLDivElement>(null);
+  const navigationBusyRef = useRef(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const bestTimingRequestRef = useRef<Promise<TimingContribution | null> | null>(null);
   const scrollRequestRef = useRef<AbortController | null>(null);
@@ -454,6 +458,7 @@ export const CifraViewer: React.FC = () => {
   const lineMotionRef = useRef<{ from: number; to: number; start: number } | null>(null);
   const lineLoopRef = useRef<{ a?: number; b?: number }>({});
   const videoClockRef = useRef<SourceVideoClock | null>(null);
+  const videoNavigationSeekRef = useRef<((time: number) => void) | null>(null);
   const videoSeekRef = useRef<{ time: number; expires: number } | null>(null);
   const sectionTimelineRef = useRef<SectionEntry[]>([]);
   const prevSectionRef = useRef<string | null>(null);
@@ -719,6 +724,7 @@ export const CifraViewer: React.FC = () => {
       }
     }
     setScrollChooser(null);
+    if (choice?.timing ?? previewTiming) pageRef.current?.focus({ preventScroll: true });
     setAutoScroll(true);
   }, [prefersTabs, previewTiming, rememberTabPosition, scrollChoice?.id, songSlug, timingMedia?.updatedAt]);
 
@@ -791,12 +797,17 @@ export const CifraViewer: React.FC = () => {
     videoClockRef.current = clock;
   }, []);
 
+  const handleVideoSeekReady = useCallback((seek: ((time: number) => void) | null) => {
+    videoNavigationSeekRef.current = seek;
+  }, []);
+
   const seekVideo = useCallback((time: number) => {
     const clock = videoClockRef.current;
-    if (!clock) return;
+    const seek = videoNavigationSeekRef.current ?? clock?.seek;
+    if (!seek) return;
     // O iframe pode devolver o tempo antigo por alguns quadros depois de seekTo.
     videoSeekRef.current = { time, expires: performance.now() + 700 };
-    clock.seek(time);
+    seek(time);
   }, []);
 
   // A barra reposiciona a tela. Os atalhos em segundos preservam o tempo exato
@@ -825,6 +836,10 @@ export const CifraViewer: React.FC = () => {
       driveYRef.current = appliedYRef.current = window.scrollY;
       lastGestureRef.current = -Infinity;
       setElapsedDisplay(elapsedRef.current);
+      // O transporte pausado não tem rAF para atualizar o destaque após um atalho.
+      contentRef.current?.querySelectorAll(`.${LINE_HIGHLIGHT}`).forEach(row => row.classList.remove(LINE_HIGHLIGHT));
+      lines[currentPhraseIndex(lines, elapsedRef.current)]?.highlight.forEach(row => row.classList.add(LINE_HIGHLIGHT));
+      syncedPanelFrameRef.current?.(elapsedRef.current);
       seekVideo(elapsedRef.current);
     } else if (map.length >= 2) {
       seekToY(yAtTime(map, Math.max(0, t), maxSc));
@@ -968,6 +983,7 @@ export const CifraViewer: React.FC = () => {
       }
       const dt = Math.min(ts - prevTimeRef.current, 100);
       prevTimeRef.current = ts;
+      if (navigationBusyRef.current) return;
       const maxSc = document.documentElement.scrollHeight - window.innerHeight;
       const lines = lineMapRef.current;
       if (maxSc <= 0 && !lines.length) {
@@ -1591,6 +1607,10 @@ export const CifraViewer: React.FC = () => {
   const chordTimeline = useMemo(() => buildChordTimeline(scrollTimeline, syncedChordLines, timingMedia?.chordTimes),
     [scrollTimeline, syncedChordLines, timingMedia?.chordTimes]);
   const chordStrip = chordStripAtTime(chordTimeline, elapsedDisplay);
+  const navigationActive = autoScroll && lineMode && !!timingMedia && !scrollChooser;
+  const navigation = useChordNavigation({ active: navigationActive, pageRef, contentRef,
+    timeline: chordTimeline, timeRef: elapsedRef, seek: seekToTime,
+    audioStart: timingMedia?.audioStart ?? 0, busyRef: navigationBusyRef });
   useLayoutEffect(() => { chordTimelineRef.current = chordTimeline; }, [chordTimeline]);
   // O painel lê acordes já transpostos, então o grau é medido contra o tom que está na tela.
   const chordLabel = useNotationStore(s => s.chordLabel);
@@ -1961,11 +1981,15 @@ export const CifraViewer: React.FC = () => {
     });
   }, [voicingFilter, allVoicings, variationIndices, currentChords, lockedVariations, excludedFromFilter]);
 
-  const chordVoicingContext: ChordVoicingContext = {
+  const chordVoicingContext: ChordVoicingContext = useMemo(() => ({
     chordNames: currentChords, displayedVoicings, instrumentId: currentInst.id, tuning: currentTuning,
     songSlug, rankings: chordRankingsById, favorites: favoritesById, orderMode: voicingOrderMode,
     variations: variationIndices, locked: lockedVariations, custom: customVoicings,
-  };
+  }), [currentChords, displayedVoicings, currentInst.id, currentTuning, songSlug,
+    chordRankingsById, favoritesById, voicingOrderMode, variationIndices, lockedVariations, customVoicings]);
+  const previewVoicing = useMemo(() => navigation.preview
+    ? displayedChordVoicing(navigation.preview.name, chordVoicingContext).bestVoicing : null,
+  [navigation.preview, chordVoicingContext]);
   const syncedVoicings: Record<string, Voicing | null> = {};
   if (autoScroll && showSyncedChords) {
     for (const chord of [chordStrip.previous, chordStrip.current, chordStrip.next]) {
@@ -2045,6 +2069,7 @@ export const CifraViewer: React.FC = () => {
   // Som no pointerdown: dispara antes dos listeners de capture/click
   // que fecham o popup, garantindo que lyricsVoicing ainda é válido
   const handleLyricsPointerDown = (e: React.PointerEvent) => {
+    if (navigationActive && e.pointerType === 'touch') return;
     const target = e.target as HTMLElement;
     if (target.tagName !== 'B') return;
     cancelPopupClose();
@@ -2234,7 +2259,20 @@ export const CifraViewer: React.FC = () => {
   // pb no mobile: a barra de transporte é fixa e ocupa a largura toda, então sem essa
   // folga ela cobriria as últimas linhas da cifra.
   return (
-    <div className="flex flex-col bg-[var(--color-winxp-bg)] p-2 pb-24 md:pb-2 relative">
+    <div ref={pageRef} tabIndex={-1} onPointerDownCapture={event => {
+      if (navigationActive && !(event.target as HTMLElement).closest('button, a, input, textarea, select, [contenteditable]')) {
+        pageRef.current?.focus({ preventScroll: true });
+      }
+    }} className="flex flex-col bg-[var(--color-winxp-bg)] p-2 pb-24 md:pb-2 relative">
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {navigation.announcement && <span key={navigation.announcement.startTime}>
+          {t('cifra.acordeNavegado', { acorde: navigation.announcement.name, tempo: fmtTime(navigation.announcement.startTime) })}
+        </span>}
+      </div>
+      {navigation.preview && <div className="fixed left-1/2 top-1/3 -translate-x-1/2 z-50 pointer-events-none bevel-out bg-[#ffffe1] border border-[#808080] p-3 text-center shadow-lg">
+        <div className="font-bold text-[#002fa7]">{navigation.preview.name}</div>
+        {previewVoicing && <MiniFretboard voicing={previewVoicing} tuning={currentTuning} width={72} />}
+      </div>}
 
       {/* Info Popup Overlay */}
       {infoPopupChord && (
@@ -3121,7 +3159,7 @@ export const CifraViewer: React.FC = () => {
 
         {/* Cifra Content - Notepad Style */}
         <div className="cifra-synced-layout flex-1 min-h-0 flex gap-2">
-          <div ref={contentRef} onPointerDown={handleLyricsPointerDown} onClick={handleLyricsChordClick} onMouseOver={handleLyricsMouseOver} onMouseLeave={schedulePopupClose} className="relative flex-1 min-w-0 min-h-0 bevel-in bg-white p-2 sm:p-4 retro-scrollbar font-mono text-sm leading-relaxed text-black overflow-x-hidden overflow-y-auto" style={{ paddingLeft: bracketPadding }}>
+          <div ref={contentRef} onPointerDown={handleLyricsPointerDown} onClick={handleLyricsChordClick} onMouseOver={handleLyricsMouseOver} onMouseLeave={schedulePopupClose} className="relative flex-1 min-w-0 min-h-0 bevel-in bg-white p-2 sm:p-4 retro-scrollbar font-mono text-sm leading-relaxed text-black overflow-x-hidden overflow-y-auto" style={{ paddingLeft: bracketPadding, touchAction: navigationActive ? 'pan-x pinch-zoom' : undefined }}>
             {activeInstrumental && sectionMarker?.line === activeInstrumental.lineIndex && (
               <div className="absolute right-2 z-10 pointer-events-none" style={{ top: sectionMarker.top }}>
                 <InstrumentalIndicator label={activeInstrumental.label ?? ''}
@@ -3218,6 +3256,7 @@ export const CifraViewer: React.FC = () => {
           onClose={() => { setShowVideo(false); setTrainingPlayback(false); }}
           onDurationDetected={handleVideoDuration}
           onPlayingClockChange={handleVideoClock}
+          onSeekReady={handleVideoSeekReady}
         />
       )}
 

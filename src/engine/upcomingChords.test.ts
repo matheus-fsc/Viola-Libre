@@ -41,7 +41,7 @@ describe('faixa temporal de acordes', () => {
 
   it('distribui pelas colunas usando a maior largura entre letra e harmonia', () => {
     expect(buildChordTimeline([lyric(1)], ['C    G', 'abcdefghij'])).toEqual([
-      { name: 'C', startTime: 10 }, { name: 'G', startTime: 15 },
+      { name: 'C', startTime: 10, occurrenceStart: 10 }, { name: 'G', startTime: 15, occurrenceStart: 10 },
     ]);
     const events = buildChordTimeline([lyric(1)], ['C    G', 'abc']);
     expect(events[1].startTime).toBeCloseTo(10 + 5 / 6 * 10);

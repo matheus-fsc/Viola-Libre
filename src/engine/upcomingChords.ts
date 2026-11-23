@@ -36,6 +36,7 @@ export interface TimedChord {
   startTime: number;
   lineIndex?: number;
   chordIndex?: number;
+  occurrenceStart?: number;
 }
 
 /** Usa ocorrências do transporte, pois a mesma linha pode voltar em cada refrão. */
@@ -54,11 +55,11 @@ export function buildChordTimeline(segments: readonly ScrollSegment[], lines: re
         return parsed ? [{ name: parsed.text, startTime: chord.time, lineIndex: chord.lineIndex, chordIndex: chord.chordIndex }] : [];
       });
       if (aligned.length) {
-        events.push(...aligned);
+        events.push(...aligned.map(chord => ({ ...chord, occurrenceStart: segment.startTime })));
         continue;
       }
       const chords = segmentChords(segment, lines);
-      chords.forEach((name, index) => events.push({ name, startTime: segment.startTime + index / chords.length * duration }));
+      chords.forEach((name, index) => events.push({ name, startTime: segment.startTime + index / chords.length * duration, occurrenceStart: segment.startTime }));
       continue;
     }
     const lyric = lines[segment.lineIndex];
@@ -68,7 +69,7 @@ export function buildChordTimeline(segments: readonly ScrollSegment[], lines: re
     if (chordLine === undefined || !isChordLine(chordLine)) continue;
     const length = Math.max(lyric.length, chordLine.length, 1);
     for (const chord of parseChordLine(chordLine)) {
-      events.push({ name: chord.text, startTime: segment.startTime + chord.col / length * duration });
+      events.push({ name: chord.text, startTime: segment.startTime + chord.col / length * duration, occurrenceStart: segment.startTime });
     }
   }
   const sorted = events.sort((a, b) => a.startTime - b.startTime);

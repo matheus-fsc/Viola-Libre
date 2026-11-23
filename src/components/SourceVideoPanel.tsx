@@ -37,6 +37,7 @@ interface SourceVideoPanelProps {
    */
   onDurationDetected(seconds: number): void;
   onPlayingClockChange(clock: SourceVideoClock | null): void;
+  onSeekReady?(seek: ((time: number) => void) | null): void;
 }
 
 /**
@@ -56,7 +57,7 @@ interface SourceVideoPanelProps {
  * reprodução ao encolher.
  */
 export const SourceVideoPanel: React.FC<SourceVideoPanelProps> = ({
-  videoUrl, audioStart, cuts, autoPlay = false, mediaType = 'youtube', title, onClose, onDurationDetected, onPlayingClockChange,
+  videoUrl, audioStart, cuts, autoPlay = false, mediaType = 'youtube', title, onClose, onDurationDetected, onPlayingClockChange, onSeekReady,
 }) => {
   const t = useT();
   const [collapsed, setCollapsed] = useState(false);
@@ -85,6 +86,7 @@ export const SourceVideoPanel: React.FC<SourceVideoPanelProps> = ({
   // O callback do pai não precisa ser estável: guardá-lo num ref evita que uma
   // nova referência a cada render destrua e recrie o player no meio da música.
   const onDurationRef = useLatest(onDurationDetected);
+  const onSeekReadyRef = useLatest(onSeekReady);
   const audioStartRef = useLatest(audioStart);
   const autoPlayRef = useLatest(autoPlay);
 
@@ -110,6 +112,7 @@ export const SourceVideoPanel: React.FC<SourceVideoPanelProps> = ({
     if (mediaType !== 'youtube' || !videoId || !wrap || !ytAllowed) return;
 
     let cancelled = false;
+    const notifySeekReady = onSeekReadyRef.current;
     // O YT.Player SUBSTITUI pelo <iframe> o elemento que recebe. Entregamos um nó
     // criado à mão para que o React nunca tente remover um filho que o YouTube já
     // trocou por outro; o wrapper continua sendo o único nó que o React governa.
@@ -134,6 +137,8 @@ export const SourceVideoPanel: React.FC<SourceVideoPanelProps> = ({
                 if (start !== current) player.seekTo(start, true);
                 if (autoPlayRef.current) player.playVideo();
               }
+              // Buscar pausado precisa do mesmo relógio de cortes sem iniciar a reprodução.
+              notifySeekReady?.(seekCutTime);
               const dur = Math.round(playerRef.current?.getDuration() ?? 0);
               if (dur > 0) onDurationRef.current(dur);
             },
@@ -156,13 +161,14 @@ export const SourceVideoPanel: React.FC<SourceVideoPanelProps> = ({
 
     return () => {
       cancelled = true;
+      notifySeekReady?.(null);
       onPlayingClockChange(null);
       try { playerRef.current?.destroy(); } catch { /* o player pode já ter sumido */ }
       playerRef.current = null;
       wrap.replaceChildren();
     };
     // onDurationRef vem do useLatest, identidade fixa: não recria o player.
-  }, [mediaType, videoId, ytAllowed, onDurationRef, audioStartRef, autoPlayRef, onPlayingClockChange, seekCutTime, cuts, sampleTime]);
+  }, [mediaType, videoId, ytAllowed, onDurationRef, audioStartRef, autoPlayRef, onPlayingClockChange, onSeekReadyRef, seekCutTime, cuts, sampleTime]);
 
   useEffect(() => {
     if (mediaType !== 'audio') return;
