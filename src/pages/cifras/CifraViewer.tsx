@@ -1,3 +1,4 @@
+import { RecordingTransposeNotice } from '../../components/timing/RecordingTransposeNotice';
 import { MiniFretboard } from '../../components/MiniFretboard';
 import { useChordNavigation } from '../../hooks/useChordNavigation';
 import { SyncedMelody } from './SyncedMelody';
@@ -3155,6 +3156,12 @@ export const CifraViewer: React.FC = () => {
               })}
             </div>
           </div>
+        )}
+
+        {autoScroll && lineMode && timingMedia?.recordingTranspose && (
+          <RecordingTransposeNotice key={`${artistSlug}/${songSlug}`}
+            songKey={`${artistSlug}/${songSlug}`} recordingTranspose={timingMedia.recordingTranspose}
+            currentTom={transposeOffset} onSelect={setTransposeOffset} />
         )}
 
         {/* Cifra Content - Notepad Style */}

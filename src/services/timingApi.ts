@@ -1,6 +1,22 @@
 import { normalizeCuts, type MediaCut } from '../engine/mediaCuts';
 import api, { cabecalhoChavePublica } from './api';
 
+export interface RecordingTranspose {
+  semitones: number;
+  confidence: number;
+}
+
+export function normalizeRecordingTranspose(raw: unknown): RecordingTranspose | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const { semitones, confidence } = raw as Record<string, unknown>;
+  // Não arredonda a detecção: um valor inválido não deve sugerir um tom ao músico.
+  if (typeof semitones !== 'number' || !Number.isInteger(semitones)
+    || semitones < -11 || semitones > 11 || semitones === 0
+    || typeof confidence !== 'number' || !Number.isFinite(confidence)
+    || confidence < 0 || confidence > 1) return undefined;
+  return { semitones, confidence };
+}
+
 export interface MelodyNote {
   start: number;
   end: number;
@@ -182,6 +198,7 @@ export interface TimingContribution extends BeatGrid {
   phrases: TimingPhrase[];
   chordTimes?: TimingChordTime[];
   melody?: TimingMelody;
+  recordingTranspose?: RecordingTranspose;
   sections: TimingSection[];
   markers: TimingMarker[];
   votes: number;
@@ -206,6 +223,7 @@ export interface TimingSubmitPayload extends BeatGrid {
   phrases: TimingPhrase[];
   chordTimes?: TimingChordTime[];
   melody?: TimingMelody;
+  recordingTranspose?: RecordingTranspose;
   sections: TimingSection[];
   markers: TimingMarker[];
   variant?: 'sem_dedilhado' | null;
@@ -215,9 +233,10 @@ export interface TimingSubmitPayload extends BeatGrid {
 
 export type MediaType = 'youtube' | 'audio' | 'other' | null;
 
-type RawTimingContribution = Pick<TimingContribution, 'id' | 'duration'> & Partial<Omit<TimingContribution, 'id' | 'duration' | 'loops' | 'chordTimes' | 'melody'>> & {
+type RawTimingContribution = Pick<TimingContribution, 'id' | 'duration'> & Partial<Omit<TimingContribution, 'id' | 'duration' | 'loops' | 'chordTimes' | 'melody' | 'recordingTranspose'>> & {
   chordTimes?: unknown;
   melody?: unknown;
+  recordingTranspose?: unknown;
   loops?: (Omit<TimingLoop, 'occurrences'> & { occurrences?: unknown })[];
   editor_alias?: string | null;
   media_url?: string | null;
@@ -267,6 +286,7 @@ export function normalizeContribution(raw: RawTimingContribution): TimingContrib
   } = raw;
   const chordTimes = normalizeChordTimes(raw.chordTimes);
   const melody = normalizeMelody(raw.melody);
+  const recordingTranspose = normalizeRecordingTranspose(raw.recordingTranspose);
   let phrases = raw.phrases;
   // Os registros antigos guardavam só o início, então o próximo início delimita cada frase.
   if (phrases == null && raw.line_timestamps) {
@@ -286,6 +306,7 @@ export function normalizeContribution(raw: RawTimingContribution): TimingContrib
     ...(raw.audioStart != null && { audioStart: raw.audioStart }),
     ...(chordTimes && { chordTimes }),
     ...(melody && { melody }),
+    ...(recordingTranspose && { recordingTranspose }),
     loops: (raw.loops ?? []).map(({ occurrences: rawOccurrences, ...loop }) => {
       const occurrences = normalizeLoopOccurrences(rawOccurrences);
       const first = occurrences[0];
