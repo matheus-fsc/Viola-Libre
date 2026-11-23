@@ -243,6 +243,8 @@ export function Stepper({ onMenos, onMais, children, rotuloMenos = '−', rotulo
 // ---------------------------------------------------------------------------
 
 interface TransporteProps {
+  pulseControls?: ReactNode;
+  measuredBpm?: string | null;
   userSeeking: boolean;
   onToggle(): void;
   onRestart(): void;
@@ -283,6 +285,7 @@ export function TransporteMobile(p: TransporteProps) {
 
   return (
     <div className="flex flex-col">
+      <div className="flex flex-wrap items-center gap-1 px-1.5">{p.pulseControls}</div>
       {/* Uma linha só, e apertada: numa viewport de 296px o slider é o primeiro a ser
           espremido, então tudo em volta anda com gap-1.5 e o mostrador numérico só
           aparece quando há largura para ele. */}
@@ -365,7 +368,7 @@ export function TransporteMobile(p: TransporteProps) {
           <button onClick={() => p.onSeek(NUDGE_SEC)} className={btn} title={t('cifra.barraAvancarSegundos', { s: NUDGE_SEC })} aria-label={t('cifra.barraAvancarSegundosAria', { s: NUDGE_SEC })}><FastForward size={14} /></button>
           {p.total > 0 && (
             <span className="font-mono text-[10px] font-bold text-[#002fa7] tabular-nums px-1">
-              {p.fmtTime(p.elapsed)} / {p.fmtTime(p.total)}
+              {p.fmtTime(p.elapsed)} / {p.fmtTime(p.total)} {p.measuredBpm}
             </span>
           )}
           <button

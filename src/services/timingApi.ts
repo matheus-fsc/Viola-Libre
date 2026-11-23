@@ -91,7 +91,32 @@ export interface TimingSection {
   endLine?: number;
 }
 
-export interface TimingContribution {
+export interface BeatGrid {
+  beats?: number[];
+  downbeats?: number[];
+  timeSignature?: '4/4' | '3/4';
+  beatConfidence?: number;
+  bpmSource?: 'audio' | 'cifra' | 'default';
+}
+
+export function normalizeBeatGrid(raw: Record<string, unknown>): BeatGrid {
+  const grid: BeatGrid = {};
+  for (const key of ['beats', 'downbeats'] as const) {
+    const values = raw[key];
+    // Uma grade parcial por erro de formato pode inventar a entrada do canto.
+    if (Array.isArray(values) && values.every(v => typeof v === 'number' && Number.isFinite(v) && v >= 0)) {
+      const sorted = [...new Set(values as number[])].sort((a, b) => a - b);
+      if (sorted.length >= (key === 'beats' ? 2 : 1)) grid[key] = sorted;
+    }
+  }
+  if (raw.timeSignature === '4/4' || raw.timeSignature === '3/4') grid.timeSignature = raw.timeSignature;
+  if (typeof raw.beatConfidence === 'number' && Number.isFinite(raw.beatConfidence)
+    && raw.beatConfidence >= 0 && raw.beatConfidence <= 1) grid.beatConfidence = raw.beatConfidence;
+  if (raw.bpmSource === 'audio' || raw.bpmSource === 'cifra' || raw.bpmSource === 'default') grid.bpmSource = raw.bpmSource;
+  return grid;
+}
+
+export interface TimingContribution extends BeatGrid {
   id: string;
   editorAlias: string | null;
   mediaUrl: string | null;
@@ -114,7 +139,7 @@ export interface TimingContribution {
   reviewedFrom?: string | null;
 }
 
-export interface TimingSubmitPayload {
+export interface TimingSubmitPayload extends BeatGrid {
   editorHash: string;
   editorAlias?: string;
   mediaUrl?: string;
@@ -197,7 +222,8 @@ export function normalizeContribution(raw: RawTimingContribution): TimingContrib
   }
 
   return {
-    id, duration, bpm, votes, editorAlias, mediaUrl, mediaType, updatedAt, source, reviewed, reviewedFrom,
+    id, duration, bpm: Number.isFinite(bpm) && bpm > 0 ? bpm : 0, votes, editorAlias, mediaUrl, mediaType, updatedAt, source, reviewed, reviewedFrom,
+    ...normalizeBeatGrid(raw),
     ...(raw.variant != null && { variant: raw.variant }),
     ...(raw.cuts != null && { cuts: normalizeCuts(raw.cuts) }),
     ...(raw.audioStart != null && { audioStart: raw.audioStart }),

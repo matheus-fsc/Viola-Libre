@@ -278,6 +278,12 @@ export const en: Dicionario = {
   },
 
   cifra: {
+    pulsos: 'Beats and bars',
+    compassoNumero: 'Bar {n}',
+    contagemEntrada: 'Count in: {n}',
+    bpmMedido: '{n} measured BPM',
+    acordesEmTempos: 'in {n} beats',
+
     audioReferencia: 'Reference audio',
     treinar: 'Practice',
     abrirGravacao: 'Open recording',

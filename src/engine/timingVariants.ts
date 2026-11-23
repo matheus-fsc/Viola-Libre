@@ -1,4 +1,4 @@
-import { mediaToDerived } from './mediaCuts';
+import { cutBeatTimes, mediaToDerived } from './mediaCuts';
 import { withoutFingerpicking } from './lineScroll';
 import type { TimingContribution } from '../services/timingApi';
 import type { LineType } from '../utils/lineClassifier';
@@ -27,7 +27,10 @@ export function buildCommunityCards(
       const { phrases, removedDuration, cuts, loops = timing.loops, instrumentalSections } = withoutFingerpicking(timing.phrases, lineTypes, timing.loops, timing.instrumentalSections);
       if (removedDuration > 0) {
         const derived: TimingContribution = {
-          ...timing, phrases, loops, cuts, variant: 'sem_dedilhado', reviewedFrom: timing.id,
+          ...timing, phrases, loops, cuts,
+          ...(timing.beats && { beats: cutBeatTimes(timing.beats, cuts) }),
+          ...(timing.downbeats && { downbeats: cutBeatTimes(timing.downbeats, cuts) }),
+          variant: 'sem_dedilhado', reviewedFrom: timing.id,
           // Um acorde dentro do corte não soa; os demais acompanham o mesmo relógio das frases.
           ...(timing.chordTimes && { chordTimes: timing.chordTimes
             .filter(chord => !cuts.some(cut => chord.time >= cut.start && chord.time < cut.end))

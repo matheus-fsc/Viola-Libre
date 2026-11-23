@@ -49,3 +49,9 @@ export function createCutClock(cuts: readonly MediaCut[], seekMedia: (time: numb
     },
   };
 }
+
+// Pulsos dentro do corte deixam de soar e os restantes usam o relógio das frases.
+export function cutBeatTimes(times: readonly number[], cuts: readonly MediaCut[]): number[] {
+  return times.filter(time => !cuts.some(cut => time >= cut.start && time < cut.end))
+    .map(time => mediaToDerived(time, cuts));
+}

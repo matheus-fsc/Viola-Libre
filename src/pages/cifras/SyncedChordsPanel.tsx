@@ -1,3 +1,4 @@
+import { beatProgress } from '../../engine/scrollTimeline';
 import type { Tuning, Voicing } from '../../engine/types';
 import { chordProgress, currentChordSeconds, type chordStripAtTime } from '../../engine/upcomingChords';
 import { noteValueForDuration } from '../../engine/noteValue';
@@ -11,7 +12,8 @@ import { useLayoutEffect, useRef, useState, type CSSProperties, type MutableRefO
 const PROGRESS_STEPS = 10;
 const MAX_BEAT_BLOCKS = 16;
 
-export function SyncedChordsPanel({ visible, onToggle, strip, tuning, voicings, bpm, degreeOf, frameRef }: {
+export function SyncedChordsPanel({ visible, onToggle, strip, tuning, voicings, bpm, degreeOf, frameRef, beats = [] }: {
+  beats?: readonly number[];
   visible: boolean;
   onToggle(): void;
   strip: ReturnType<typeof chordStripAtTime>;
@@ -70,6 +72,10 @@ export function SyncedChordsPanel({ visible, onToggle, strip, tuning, voicings, 
   }, [frameRef]);
 
   const { previous, current, next, afterNext, startsIn } = strip;
+  const remainingBeats = next && startsIn !== null && beats.length > 1
+    ? Math.max(0, Math.ceil(beatProgress(next.startTime, beats) - beatProgress(next.startTime - startsIn, beats))) : null;
+  const waitLabel = startsIn === null ? '' : t('cifra.acordesEmSegundos', { s: Math.ceil(startsIn) });
+  const beatLabel = remainingBeats === null ? '' : t('cifra.acordesEmTempos', { n: remainingBeats });
   const currentSeconds = currentChordSeconds(current, next);
   const figures = [
     previous && current ? noteValueForDuration(current.startTime - previous.startTime, bpm) : null,
@@ -142,13 +148,22 @@ export function SyncedChordsPanel({ visible, onToggle, strip, tuning, voicings, 
               <div className="grid grid-cols-[1fr_1.2fr_1fr] gap-1 mt-2">
                 <div className="col-start-2 col-span-2 min-w-0">
                   <div role="progressbar" aria-label={t('cifra.acordesBarraRotulo')}
-                    aria-valuetext={t('cifra.acordesEmSegundos', { s: Math.ceil(startsIn) })}
-                    className="bevel-in h-2.5 bg-white border border-gray-400 p-px">
+                    aria-valuetext={[waitLabel, beatLabel].filter(Boolean).join(", ")}
+                    className="bevel-in relative h-3.5 bg-white border border-gray-400 p-px">
                     <div ref={barRef} className="synced-chords-progress h-full"
                       style={{ clipPath: 'inset(0 100% 0 0)', '--beats': beatBlocks } as CSSProperties} />
+                    {/* Os quadrados tracejados aparecem antes de encher: o olho conta quantos tempos o acorde dura.
+                        Sem figura (sem BPM) não há tempos de verdade para desenhar. */}
+                    {figures[1] && (
+                      <div aria-hidden className="absolute inset-px flex pointer-events-none">
+                        {Array.from({ length: beatBlocks }, (_, i) => (
+                          <div key={i} className={`flex-1 border border-dashed border-black ${i ? '-ml-px' : ''}`} />
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="text-[10px] text-gray-600 mt-0.5 text-right truncate">
-                    {t('cifra.acordesAte', { acorde: degreeOf?.(next.name) ?? next.name })}
+                    {waitLabel}{beatLabel && ` (${beatLabel})`} {' '}{t('cifra.acordesAte', { acorde: degreeOf?.(next.name) ?? next.name })}
                   </div>
                 </div>
               </div>

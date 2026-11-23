@@ -132,7 +132,8 @@
 /* Barra até o próximo acorde, nos blocos verdes da barra de progresso do XP. Recortada por clip-path
    (sem esticar os blocos); quem move é o laço da rolagem, então não há transition aqui. */
 .synced-chords-progress {
-  /* Um bloco por tempo do acorde (--beats), com uma fresta entre eles: dá para contar. */
+  /* Um bloco por tempo do acorde (--beats), com uma fresta entre eles. Com BPM, os quadrados
+     tracejados por cima marcam a mesma divisão desde o começo, ainda vazios. */
   background: linear-gradient(90deg, #2fb12f calc(100% - 2px), transparent 0) 0 0 / calc(100% / var(--beats, 10)) 100% repeat-x;
   will-change: clip-path;
 }

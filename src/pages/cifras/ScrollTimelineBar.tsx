@@ -2,8 +2,10 @@ import { timelineBarSegments, type ScrollSegment } from '../../engine/scrollTime
 import { useT } from '../../i18n';
 import { repeatPassAtTime, type RepeatRange } from '../../engine/repeatRanges';
 
-export function ScrollTimelineBar({ timeline, total, elapsed, label, repeats, onSeek }: {
+export function ScrollTimelineBar({ timeline, total, elapsed, label, repeats, beats = [], downbeats = [], onSeek }: {
   timeline: readonly ScrollSegment[];
+  beats?: readonly number[];
+  downbeats?: readonly number[];
   total: number;
   elapsed: number;
   label: string | null;
@@ -14,6 +16,9 @@ export function ScrollTimelineBar({ timeline, total, elapsed, label, repeats, on
   const time = Math.max(0, Math.min(elapsed, total));
   return (
     <div className="relative h-6 w-full min-w-0 shrink-0 overflow-hidden bevel-in bg-[#eef3fa] focus-within:ring-2 focus-within:ring-[#316ac5]" title={label ?? undefined}>
+      {beats.filter(beat => beat >= 0 && beat <= total).map(beat => <span key={beat} aria-hidden="true"
+        className={`absolute bottom-0 w-px ${downbeats.includes(beat) ? 'h-2 bg-[#002fa7]' : 'h-1 bg-[#98acd0]'}`}
+        style={{ left: `${beat / total * 100}%` }} />)}
       {timelineBarSegments(timeline, total).map((segment, index) => (
         <span key={index} aria-hidden="true"
           style={{ left: `${segment.leftPct}%`, width: `${segment.widthPct}%` }}

@@ -70,6 +70,8 @@ import {
 } from '../../services/cifraFavorites';
 import { easeScrollY, stepTimeAtY, type LineScrollAnchor } from '../../engine/lineScroll';
 import { buildScrollTimeline, timelineYAtTime as stepYAtTime, timelineIndexAtTime as currentPhraseIndex, instrumentalCountdown } from '../../engine/scrollTimeline';
+import { CountInIndicator, PulseDisplay } from './BeatIndicators';
+import { beatScrollYAtTime, trustedBeats, countInAtTime, pulseAtTime } from '../../engine/scrollTimeline';
 import { ScrollTimelineBar } from './ScrollTimelineBar';
 import { SyncedChordsPanel } from './SyncedChordsPanel';
 import { buildChordTimeline, chordStripAtTime, type TimedChord } from '../../engine/upcomingChords';
@@ -129,7 +131,7 @@ const SETTLE_MS = 900;
 const LINE_TRANSITION_MS = 300;
 const LINE_REPEAT_MS = 1500;
 const LINE_HIGHLIGHT = 'cifra-line-playing';
-type ViewerLineAnchor = LineScrollAnchor & { lineIndex: number; endTime: number; instrumental: boolean; highlight: HTMLElement[] };
+type ViewerLineAnchor = LineScrollAnchor & { lineIndex: number; endTime: number; instrumental: boolean; kind?: 'lyric' | 'instrumental' | 'hold'; highlight: HTMLElement[] };
 type RepeatBracket = { range: RepeatRange; lane: number; top: number; height: number };
 // Salto dos atalhos ← / →.
 const NUDGE_SEC = 5;
@@ -351,6 +353,15 @@ export const CifraViewer: React.FC = () => {
   const [scrollChoice, setScrollChoice] = useState<ScrollTimingChoice | null>(null);
   const [scrollChooser, setScrollChooser] = useState<(ReturnType<typeof buildScrollTimingChoices> & { switching: boolean }) | null>(null);
   const timingMedia = previewTiming ?? (scrollChoice ? scrollChoice.timing : bestTiming) ?? null;
+  const beats = useMemo(() => trustedBeats(timingMedia), [timingMedia]);
+  const [showPulse, setShowPulse] = useState(() => {
+    try { return localStorage.getItem('viola_show_pulse') === '1'; } catch { return false; }
+  });
+  const togglePulse = () => {
+    const next = !showPulse;
+    setShowPulse(next);
+    try { localStorage.setItem('viola_show_pulse', next ? '1' : '0'); } catch { /* Mantém a escolha nesta sessão se o navegador bloquear o armazenamento. */ }
+  };
   const internalTiming = timingMedia?.variant === 'sem_dedilhado';
   const tabsForcedHidden = autoScroll && internalTiming;
   // A preferência fica guardada enquanto o relógio encurtado exige a cifra sem tabs.
@@ -905,6 +916,7 @@ export const CifraViewer: React.FC = () => {
     let ratedClock: SourceVideoClock | null = null;
     let videoRate = 1;
     let shownChord: TimedChord | null | undefined;
+    let shownBeat = -1;
     const highlight = (line?: ViewerLineAnchor) => {
       if (line === highlighted) return;
       highlighted?.highlight.forEach(el => el.classList.remove(LINE_HIGHLIGHT));
@@ -1004,7 +1016,9 @@ export const CifraViewer: React.FC = () => {
               seekVideo(start);
             }
           }
-          const target = Math.max(0, Math.min(stepYAtTime(lines, elapsedRef.current), maxSc));
+          const gridBeats = trustedBeats(mappedTimingRef.current);
+          const pulseY = gridBeats.length && !semRampa ? beatScrollYAtTime(lines, elapsedRef.current, gridBeats) : stepYAtTime(lines, elapsedRef.current);
+          const target = Math.max(0, Math.min(pulseY, maxSc));
           // O relógio escolhe a linha. O tempo real da animação mantém o salto curto em qualquer velocidade.
           let motion = lineMotionRef.current;
           if (motion?.to !== target) {
@@ -1021,7 +1035,7 @@ export const CifraViewer: React.FC = () => {
             motion = { from: actualY, to: target, start: ts };
             lineMotionRef.current = motion;
           }
-          const y = Math.round(easeScrollY(motion.from, motion.to, ts - motion.start, semRampa || motion.to < motion.from ? 0 : LINE_TRANSITION_MS));
+          const y = Math.round(easeScrollY(motion.from, motion.to, ts - motion.start, semRampa || gridBeats.length || motion.to < motion.from ? 0 : LINE_TRANSITION_MS));
           if (y !== actualY) window.scrollTo(0, y);
           appliedYRef.current = window.scrollY;
           if (internalTiming && elapsedRef.current >= duration && y === target) pauseScroll();
@@ -1094,7 +1108,10 @@ export const CifraViewer: React.FC = () => {
       const chordChanged = shownChord !== undefined && chordNow !== shownChord;
       shownChord = chordNow;
       // Relógio: 4 re-renders por segundo em vez de 60.
-      if (chordChanged || ts - lastClockAtRef.current > 250) {
+      const beatNow = pulseAtTime(elapsedRef.current, mappedTimingRef.current)?.index ?? -1;
+      const beatChanged = beatNow !== shownBeat;
+      shownBeat = beatNow;
+      if (chordChanged || beatChanged || ts - lastClockAtRef.current > 250) {
         lastClockAtRef.current = ts;
         setElapsedDisplay(elapsedRef.current);
       }
@@ -2043,6 +2060,17 @@ export const CifraViewer: React.FC = () => {
   const bpmModified = localBpm !== null && localBpm !== cifra?.bpm;
   // Mesma ordem usada pelo mapa de tempo; aqui só para exibir no painel.
   const effectiveDuration = cifra?.duration ?? videoDuration ?? null;
+  const countIn = autoScroll ? countInAtTime(scrollTimeline, elapsedDisplay, timingMedia) : null;
+  const pulseControls = <>
+    <button type="button" onClick={togglePulse} aria-pressed={showPulse}
+      className={`bevel-out border border-gray-400 px-2 py-1 text-[10px] font-bold ${showPulse ? 'bg-[#316ac5] text-white' : 'bg-[#ece9d8] text-[#002fa7]'}`}>
+      {t('cifra.pulsos')}
+    </button>
+    {showPulse && beats.length > 0 && timingMedia && <PulseDisplay grid={timingMedia} timeRef={elapsedRef} playing={autoScroll && !userSeeking} />}
+    <CountInIndicator count={countIn} />
+  </>;
+  const measuredBpm = timingMedia?.bpmSource === 'audio' && timingMedia.bpm > 0
+    ? t('cifra.bpmMedido', { n: Math.round(timingMedia.bpm) }) : null;
   const durationStr = effectiveDuration != null ? fmtTime(effectiveDuration) : null;
   const durationFromVideo = cifra?.duration == null && videoDuration != null;
 
@@ -2596,7 +2624,7 @@ export const CifraViewer: React.FC = () => {
                 <button onClick={() => seekBySeconds(NUDGE_SEC)} className="flex-1 text-[10px] font-bold py-0.5 border border-gray-400 bg-[#ece9d8] hover:bg-white leading-tight" title={t('cifra.avancarSegundos', { s: NUDGE_SEC })}>▶▶</button>
               </div>
               {totalTime > 0 && (
-                <span className="font-mono text-[10px] font-bold text-[#002fa7] text-center tabular-nums">{fmtTime(elapsedDisplay)} / {fmtTime(totalTime)}</span>
+                <span className="font-mono text-[10px] font-bold text-[#002fa7] text-center tabular-nums">{fmtTime(elapsedDisplay)} / {fmtTime(totalTime)} {measuredBpm}</span>
               )}
               <div className="flex gap-1">
                 {([0.5, 1, 2] as const).map(m => (
@@ -2735,7 +2763,7 @@ export const CifraViewer: React.FC = () => {
                 </button>
                 <button onClick={() => seekBySeconds(NUDGE_SEC)} className="bevel-out px-1.5 py-1 text-xs font-bold border border-gray-400 bg-[var(--color-winxp-panel)] text-[#002fa7] hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white" title={t('cifra.avancarSegundos', { s: NUDGE_SEC })}>▶▶</button>
                 {totalTime > 0 && (
-                  <span className="font-mono text-[10px] font-bold text-[#002fa7] tabular-nums px-1">{fmtTime(elapsedDisplay)} / {fmtTime(totalTime)}</span>
+                  <span className="font-mono text-[10px] font-bold text-[#002fa7] tabular-nums px-1">{fmtTime(elapsedDisplay)} / {fmtTime(totalTime)} {measuredBpm}</span>
                 )}
                 {([0.5, 1, 2] as const).map(m => (
                   <button key={m} onClick={() => setScrollMult(m)} className={`text-[10px] font-bold px-1.5 py-1 border leading-tight ${scrollMult === m ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#ece9d8] border-gray-400 hover:bg-white'}`}>{m}×</button>
@@ -3124,7 +3152,7 @@ export const CifraViewer: React.FC = () => {
           </div>
           {autoScroll && lineMode && (
             <SyncedChordsPanel visible={showSyncedChords} onToggle={toggleSyncedChords}
-              strip={chordStrip} tuning={currentTuning} voicings={syncedVoicings} bpm={timingMedia?.bpm || localBpm || cifra?.bpm || null} degreeOf={syncedDegreeOf} frameRef={syncedPanelFrameRef} />
+              beats={beats} strip={chordStrip} tuning={currentTuning} voicings={syncedVoicings} bpm={timingMedia?.bpm || localBpm || cifra?.bpm || null} degreeOf={syncedDegreeOf} frameRef={syncedPanelFrameRef} />
           )}
         </div>
 
@@ -3233,10 +3261,11 @@ export const CifraViewer: React.FC = () => {
       {!isMobile && (
         <div className="fixed right-4 bottom-12 z-50 max-w-[calc(100vw-2rem)] bevel-out bg-[var(--color-winxp-panel)] border border-gray-500 shadow-xl text-xs select-none">
           {autoScroll && lineMode && totalTime > 0 && (
-            <ScrollTimelineBar timeline={scrollTimeline} total={totalTime} elapsed={elapsedDisplay} repeats={repeatRanges}
+            <ScrollTimelineBar beats={showPulse ? beats : []} downbeats={showPulse && beats.length ? timingMedia?.downbeats : undefined} timeline={scrollTimeline} total={totalTime} elapsed={elapsedDisplay} repeats={repeatRanges}
               label={activeSegment?.label ?? currentSection} onSeek={seekToTime} />
           )}
           <div className="px-2 py-1.5 flex flex-wrap items-center gap-2">
+            {pulseControls}
             <button
               onClick={handleRestart}
               className="bevel-out px-2 py-1 font-bold border border-gray-400 bg-[var(--color-winxp-panel)] text-[#002fa7] hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white"
@@ -3278,7 +3307,7 @@ export const CifraViewer: React.FC = () => {
             </button>
             {totalTime > 0 && (
               <span className="font-mono text-[10px] font-bold text-[#002fa7] border-l border-gray-400 pl-1.5 tabular-nums">
-                {fmtTime(elapsedDisplay)} / {fmtTime(totalTime)}
+                {fmtTime(elapsedDisplay)} / {fmtTime(totalTime)} {measuredBpm}
               </span>
             )}
             <div className="flex gap-0.5">
@@ -3324,10 +3353,12 @@ export const CifraViewer: React.FC = () => {
           onAbrir={setFolhaAberta}
           rolando={autoScroll}
           timeline={autoScroll && lineMode && totalTime > 0 ? (
-            <ScrollTimelineBar timeline={scrollTimeline} total={totalTime} elapsed={elapsedDisplay} repeats={repeatRanges}
+            <ScrollTimelineBar beats={showPulse ? beats : []} downbeats={showPulse && beats.length ? timingMedia?.downbeats : undefined} timeline={scrollTimeline} total={totalTime} elapsed={elapsedDisplay} repeats={repeatRanges}
               label={activeSegment?.label ?? currentSection} onSeek={seekToTime} />
           ) : null}
           transporte={<TransporteMobile
+            pulseControls={pulseControls}
+            measuredBpm={measuredBpm}
             userSeeking={userSeeking}
             onToggle={handleToggleAutoScroll}
             onRestart={handleRestart}

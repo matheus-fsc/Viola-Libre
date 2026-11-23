@@ -1,4 +1,4 @@
-import type { TimingContribution } from '../services/timingApi';
+import type { BeatGrid, TimingContribution } from '../services/timingApi';
 
 export interface ScrollSegment {
   startTime: number;
@@ -99,4 +99,77 @@ export function instrumentalCountdown(segments: readonly ScrollSegment[], time: 
 
 export function timelineYAtTime(anchors: readonly { startTime: number; y: number }[], time: number): number {
   return anchors[timelineIndexAtTime(anchors, time)]?.y ?? 0;
+}
+
+export function trustedBeats(grid: BeatGrid | null | undefined): readonly number[] {
+  return grid && (grid.beatConfidence ?? 0) >= 0.5 && (grid.beats?.length ?? 0) >= 2 ? grid.beats! : [];
+}
+
+function beatIndexAtTime(beats: readonly number[], time: number): number {
+  let low = 0;
+  let high = beats.length;
+  while (low < high) {
+    const mid = (low + high) >>> 1;
+    if (beats[mid] <= time) low = mid + 1;
+    else high = mid;
+  }
+  return low - 1;
+}
+
+export function beatProgress(time: number, beats: readonly number[]): number {
+  if (beats.length < 2 || !Number.isFinite(time)) return 0;
+  if (time <= beats[0]) return 0;
+  const index = beatIndexAtTime(beats, time);
+  if (index >= beats.length - 1) return beats.length - 1;
+  const fraction = (time - beats[index]) / (beats[index + 1] - beats[index]);
+  return index + fraction * fraction * (3 - 2 * fraction);
+}
+
+export function countInAtTime(timeline: readonly ScrollSegment[], time: number, grid?: BeatGrid | null): { beat: number; total: number } | null {
+  const beats = trustedBeats(grid);
+  const total = grid?.timeSignature === '3/4' ? 3 : 4;
+  const entryIndex = timeline.findIndex(s => s.kind === 'lyric' && s.startTime > time);
+  if (entryIndex < 0 || !beats.length) return null;
+  const entry = timeline[entryIndex];
+  const last = beats.findIndex(beat => beat >= entry.startTime);
+  if (last < total) return null;
+  let first = last - total;
+  // O início de compasso medido evita deslocar a contagem quando a voz entra entre pulsos.
+  const downbeat = grid?.downbeats?.filter(beat => beat <= beats[first]).at(-1);
+  if (downbeat != null) {
+    const aligned = beatIndexAtTime(beats, downbeat + 0.05);
+    if (aligned >= 0 && first - aligned < total && Math.abs(beats[aligned] - downbeat) < 0.05) first = aligned;
+  }
+  const previousLyric = timeline.slice(0, entryIndex).filter(s => s.kind === 'lyric').at(-1);
+  const gapStart = previousLyric?.endTime ?? 0;
+  const instrumental = timeline.slice(0, entryIndex).some(s => s.instrumental && s.endTime > gapStart);
+  if ((!instrumental && entry.startTime - gapStart < beats[first + total] - beats[first])
+    || beats[first] < gapStart || time < beats[first] || time >= entry.startTime) return null;
+  const index = beatIndexAtTime(beats, time);
+  return { beat: Math.min(total, index - first + 1), total };
+}
+
+export function pulseAtTime(time: number, grid?: BeatGrid | null): { index: number; bar: number; strong: boolean; lit: boolean } | null {
+  const beats = trustedBeats(grid);
+  if (!beats.length || time < beats[0] || time > beats[beats.length - 1]) return null;
+  const index = beatIndexAtTime(beats, time);
+  const downbeats = grid?.downbeats ?? [];
+  const barIndex = beatIndexAtTime(downbeats, time);
+  const total = grid?.timeSignature === '3/4' ? 3 : 4;
+  const strong = downbeats.length ? Math.abs((downbeats[barIndex] ?? -Infinity) - beats[index]) < 0.05 : index % total === 0;
+  return { index, bar: downbeats.length ? (time < downbeats[0] ? 0 : barIndex + 1) : Math.floor(index / total) + 1,
+    strong, lit: time - beats[index] < 0.18 };
+}
+
+export function beatScrollYAtTime(anchors: readonly { startTime: number; endTime: number; y: number; kind?: ScrollSegment['kind'] }[], time: number, beats: readonly number[]): number {
+  const index = timelineIndexAtTime(anchors, time);
+  const current = anchors[index];
+  const next = anchors[index + 1];
+  if (!current || !next || beats.length < 2 || current.kind === 'hold' || next.y <= current.y) return current?.y ?? 0;
+  // Cada pulso desacelera nas bordas; manter as voltas como saltos conserva a leitura do refrão.
+  const start = beatProgress(current.startTime, beats);
+  const end = beatProgress(current.endTime, beats);
+  if (end - start < 2) return current.y;
+  const progress = Math.max(0, Math.min(1, (beatProgress(time, beats) - start) / (end - start)));
+  return current.y + (next.y - current.y) * progress;
 }
