@@ -33,6 +33,18 @@ describe('player — mídia e duração', () => {
     expect(player().mediaUrl).toBe('');
   });
 
+  it('carrega o tipo de áudio da contribuição mesmo sem extensão no link', () => {
+    const mediaUrl = 'https://example.com/faixas/1';
+    usePlayerStore.setState({ currentTime: 30, isPlaying: true, playerReady: true });
+    player().loadContribution({ mediaUrl, mediaType: 'audio', bpm: 84, duration: 36.5 });
+    expect(player()).toMatchObject({
+      mediaUrl, mediaUrlInput: mediaUrl, mediaType: 'audio', duration: 36.5, bpm: 84,
+      currentTime: 0, isPlaying: false, playerReady: false,
+    });
+    player().loadContribution({ mediaUrl: null, mediaType: null, bpm: null, duration: 24 });
+    expect(player()).toMatchObject({ mediaUrl: '', mediaUrlInput: '', mediaType: null, duration: 24 });
+  });
+
   it.each([
     ['3:05', 185, '3:05'],
     ['3:5', 185, '3:05'],
@@ -155,5 +167,71 @@ describe('seleção do editor de timing', () => {
     expect(sel()).toMatchObject({ selectionMode: 'phrase', selectionStart: null });
     sel().toggleSelectionMode('phrase');
     expect(sel().selectionMode).toBeNull();
+  });
+});
+
+describe('partida após o silêncio digital', () => {
+  it('usa audioStart no áudio e respeita seek explícito para zero', () => {
+    const audio = { currentTime: 0, play: vi.fn(() => Promise.resolve()) };
+    player().loadContribution({ mediaUrl: 'https://example.com/audio.mp3', mediaType: 'audio', bpm: null, duration: 90, audioStart: 2 });
+    player().registerAudio(audio as unknown as HTMLAudioElement);
+    expect(audio.currentTime).toBe(2);
+    player().seek(0);
+    player().play();
+    expect(audio.currentTime).toBe(0);
+    expect(player().currentTime).toBe(0);
+    player().registerAudio(null);
+  });
+});
+
+
+describe('player com cortes', () => {
+  it('áudio pula cortes, exibe o relógio derivado e converte os seeks e a duração', () => {
+    const audio = { currentTime: 0, play: vi.fn(() => Promise.resolve()), pause: vi.fn() };
+    player().loadContribution({ bpm: null, duration: 17, mediaUrl: 'track.mp3', mediaType: 'audio',
+      cuts: [{ start: 5, end: 8 }], variant: 'sem_dedilhado' });
+    player().registerAudio(audio as unknown as HTMLAudioElement);
+    player().setPlayerReady(true, 20);
+    expect(player().duration).toBe(17);
+    player().play();
+    player().tick(0);
+    audio.currentTime = 5;
+    player().tick(5);
+    expect(audio.currentTime).toBe(8);
+    expect(player().currentTime).toBe(5);
+    player().tick(8.5);
+    expect(player().currentTime).toBe(5.5);
+    player().seek(9);
+    expect(audio.currentTime).toBe(12);
+    expect(player().currentTime).toBe(9);
+    player().registerAudio(null);
+    player().loadContribution({ bpm: null, duration: 20 });
+    expect(player()).toMatchObject({ cuts: [], variant: null });
+  });
+
+  it('YouTube pula uma vez enquanto aguarda confirmação e encerra a prévia no tempo derivado', () => {
+    vi.useFakeTimers();
+    let media = 0;
+    const yt = { getCurrentTime: () => media, destroy: vi.fn(), playVideo: vi.fn(), pauseVideo: vi.fn(), seekTo: vi.fn() };
+    player().loadContribution({ bpm: null, duration: 17, mediaUrl: 'https://youtu.be/abcdefghijk', mediaType: 'youtube',
+      cuts: [{ start: 5, end: 8 }], variant: 'sem_dedilhado' });
+    player().registerYtPlayer(yt as never);
+    player().previewRange(0, 7);
+    vi.advanceTimersByTime(250);
+    yt.seekTo.mockClear();
+    media = 4.9;
+    vi.advanceTimersByTime(250);
+    expect(yt.seekTo).toHaveBeenCalledExactlyOnceWith(8, true);
+    media = 5.1;
+    vi.advanceTimersByTime(500);
+    expect(yt.seekTo).toHaveBeenCalledTimes(1);
+    media = 8;
+    vi.advanceTimersByTime(250);
+    expect(player().currentTime).toBe(5);
+    media = 10;
+    vi.advanceTimersByTime(250);
+    expect(player()).toMatchObject({ currentTime: 7, isPlaying: false });
+    player().clearYtPlayer();
+    player().loadContribution({ bpm: null, duration: 20 });
   });
 });

@@ -15,18 +15,16 @@ interface MiniFretboardProps {
 
 /** Abaixo disso o diagrama vira uma tira sem contexto de braço. */
 const MIN_WINDOW = 4;
-/** Acima disso o acorde é impraticável e o desenho fica ilegível de tão esticado. */
-const MAX_WINDOW = 7;
 
 /**
- * Diagrama de acorde em miniatura — a versão de tooltip do FretboardDiagram.
+ * Diagrama de acorde em miniatura: a versão de tooltip do FretboardDiagram.
  *
  * Mesma linguagem visual do diagrama grande (paleta, pestana, marcadores de corda
  * solta/abafada, ordem de cordas do useVisualizationStore), mas sem título, áudio,
  * favoritos ou textos de dificuldade: aqui cabe só o braço.
  *
  * A geometria deriva os paddings do raio do dedo, então nenhum ponto é cortado
- * pela borda do SVG — o desenho inline anterior fixava rPad=3 com dedos de raio
+ * pela borda do SVG: o desenho inline anterior fixava rPad=3 com dedos de raio
  * ~5.7 e comia as cordas das pontas.
  */
 export const MiniFretboard: React.FC<MiniFretboardProps> = ({
@@ -41,6 +39,8 @@ export const MiniFretboard: React.FC<MiniFretboardProps> = ({
 
   const stringOrder = useVisualizationStore(state => state.stringOrder);
   const isInverted = forceInverted !== undefined ? forceInverted : stringOrder === 'inverted';
+  // A troca de instrumento pode deixar uma forma antiga disponível por um render.
+  if (frets.length !== numStrings) return null;
 
   const frettedOnly = frets.filter(f => f > 0);
   const minFret = frettedOnly.length > 0 ? Math.min(...frettedOnly) : 1;
@@ -48,14 +48,15 @@ export const MiniFretboard: React.FC<MiniFretboardProps> = ({
 
   // A janela acompanha a extensão real do acorde. O desenho anterior fixava 5
   // trastes a partir da mínima e descartava silenciosamente qualquer dedo que
-  // sobrasse — acordes abertos como um G com baixo no 7 apareciam incompletos.
+  // sobrasse: acordes abertos como um G com baixo no 7 apareciam incompletos.
   const startFret = maxFret > MIN_WINDOW ? minFret : 1;
-  const numFrets = Math.min(MAX_WINDOW, Math.max(MIN_WINDOW, maxFret - startFret + 1));
+  // A grade mostra toda a extensão; limitar a janela esconderia dedos de formas editadas.
+  const numFrets = Math.max(MIN_WINDOW, maxFret - startFret + 1);
   const showNut = startFret === 1;
 
   // Paddings a partir do raio do dedo: a estimativa usa o espaçamento bruto, que
   // é sempre ≥ o espaçamento final, então a folga reservada nunca fica curta.
-  const labelGutter = showNut ? 0 : 11;
+  const labelGutter = showNut ? 0 : Math.max(11, String(startFret).length * 5);
   const rawSpacing = Math.max(width - labelGutter - 2, 1) / Math.max(numStrings - 1, 1);
   const dotR = Math.min(rawSpacing * 0.34, 5.5);
   const markerR = Math.min(dotR * 0.62, 3.4);
@@ -103,7 +104,7 @@ export const MiniFretboard: React.FC<MiniFretboardProps> = ({
         />
       ))}
 
-      {/* Cordas — a espessura segue a corda física, não a posição na tela */}
+      {/* Cordas: a espessura segue a corda física, não a posição na tela */}
       {Array.from({ length: numStrings }, (_, i) => (
         <line
           key={`string-${i}`}

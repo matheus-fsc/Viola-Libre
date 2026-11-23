@@ -1,3 +1,5 @@
+import { createCutClock, derivedToMedia, type MediaCut } from '../engine/mediaCuts';
+import { playbackStartTime } from '../engine/timingPlayback';
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { MoveDiagonal2 } from 'lucide-react';
 import { useT } from '../i18n';
@@ -13,10 +15,20 @@ import { useLatest } from '../hooks/useLatest';
 // Estados do player do YouTube que interessam aqui (a API devolve números crus).
 const YT_STATE_PLAYING = 1;
 
+export interface SourceVideoClock {
+  readTime(): number;
+  seek(seconds: number): void;
+  setRate(rate: number): void;
+}
+
 interface SourceVideoPanelProps {
   /** URL da source (link do YouTube semeado pela API ou vindo de um timing da comunidade). */
   videoUrl: string;
-  /** Título da música — vai na barra do painel. */
+  audioStart?: number | null;
+  cuts?: readonly MediaCut[] | null;
+  autoPlay?: boolean;
+  mediaType?: 'youtube' | 'audio';
+  /** Título da música exibido na barra do painel. */
   title: string;
   onClose(): void;
   /**
@@ -24,6 +36,8 @@ interface SourceVideoPanelProps {
    * É o que permite trocar o tempo deduzido (BPM × nº de acordes) por tempo medido.
    */
   onDurationDetected(seconds: number): void;
+  onPlayingClockChange(clock: SourceVideoClock | null): void;
+  onSeekReady?(seek: ((time: number) => void) | null): void;
 }
 
 /**
@@ -43,7 +57,7 @@ interface SourceVideoPanelProps {
  * reprodução ao encolher.
  */
 export const SourceVideoPanel: React.FC<SourceVideoPanelProps> = ({
-  videoUrl, title, onClose, onDurationDetected,
+  videoUrl, audioStart, cuts, autoPlay = false, mediaType = 'youtube', title, onClose, onDurationDetected, onPlayingClockChange, onSeekReady,
 }) => {
   const t = useT();
   const [collapsed, setCollapsed] = useState(false);
@@ -67,21 +81,41 @@ export const SourceVideoPanel: React.FC<SourceVideoPanelProps> = ({
   const ytAllowed = useYouTubeJsAllowed();
 
   const hostWrapRef = useRef<HTMLDivElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
   const playerRef = useRef<YTPlayer | null>(null);
   // O callback do pai não precisa ser estável: guardá-lo num ref evita que uma
   // nova referência a cada render destrua e recrie o player no meio da música.
   const onDurationRef = useLatest(onDurationDetected);
+  const onSeekReadyRef = useLatest(onSeekReady);
+  const audioStartRef = useLatest(audioStart);
+  const autoPlayRef = useLatest(autoPlay);
+
+  const playingRef = useLatest(playing);
+  const cutClockRef = useRef<ReturnType<typeof createCutClock> | null>(null);
+  const seekCutTime = useCallback((time: number) => cutClockRef.current?.seek(time), []);
+  const sampleTime = useCallback(() => cutClockRef.current?.sample(
+    audioRef.current?.currentTime ?? playerRef.current?.getCurrentTime?.() ?? 0, playingRef.current,
+  ) ?? 0, [playingRef]);
+  useEffect(() => {
+    cutClockRef.current = createCutClock(cuts ?? [], time => {
+      playerRef.current?.seekTo?.(time, true);
+      if (audioRef.current) audioRef.current.currentTime = time;
+    });
+    const timer = setInterval(sampleTime, 100);
+    return () => { clearInterval(timer); cutClockRef.current = null; };
+  }, [cuts, sampleTime]);
 
   const videoId = extractYouTubeId(videoUrl);
 
   useEffect(() => {
     const wrap = hostWrapRef.current;
-    if (!videoId || !wrap || !ytAllowed) return;
+    if (mediaType !== 'youtube' || !videoId || !wrap || !ytAllowed) return;
 
     let cancelled = false;
+    const notifySeekReady = onSeekReadyRef.current;
     // O YT.Player SUBSTITUI pelo <iframe> o elemento que recebe. Entregamos um nó
     // criado à mão para que o React nunca tente remover um filho que o YouTube já
-    // trocou por outro — o wrapper continua sendo o único nó que o React governa.
+    // trocou por outro; o wrapper continua sendo o único nó que o React governa.
     const host = document.createElement('div');
     wrap.appendChild(host);
 
@@ -95,10 +129,31 @@ export const SourceVideoPanel: React.FC<SourceVideoPanelProps> = ({
           playerVars: { rel: 0, playsinline: 1, modestbranding: 1 },
           events: {
             onReady: () => {
+              const player = playerRef.current;
+              if (player) {
+                const current = player.getCurrentTime();
+                const start = derivedToMedia(playbackStartTime(0, audioStartRef.current, 'youtube'), cuts ?? []);
+                // Inicializa uma vez para que os seeks posteriores no iframe continuem livres.
+                if (start !== current) player.seekTo(start, true);
+                if (autoPlayRef.current) player.playVideo();
+              }
+              // Buscar pausado precisa do mesmo relógio de cortes sem iniciar a reprodução.
+              notifySeekReady?.(seekCutTime);
               const dur = Math.round(playerRef.current?.getDuration() ?? 0);
               if (dur > 0) onDurationRef.current(dur);
             },
-            onStateChange: (e) => setPlaying(e.data === YT_STATE_PLAYING),
+            onStateChange: (e) => {
+              if (cancelled) return;
+              const isPlaying = e.data === YT_STATE_PLAYING;
+              setPlaying(isPlaying);
+              const player = playerRef.current;
+              // No treino, o relógio pausado também segura a cifra enquanto o músico interrompe a gravação.
+              onPlayingClockChange((isPlaying || autoPlayRef.current) && player ? {
+                readTime: sampleTime,
+                seek: seekCutTime,
+                setRate: rate => player.setPlaybackRate?.(rate),
+              } : null);
+            },
           },
         });
       })
@@ -106,14 +161,27 @@ export const SourceVideoPanel: React.FC<SourceVideoPanelProps> = ({
 
     return () => {
       cancelled = true;
+      notifySeekReady?.(null);
+      onPlayingClockChange(null);
       try { playerRef.current?.destroy(); } catch { /* o player pode já ter sumido */ }
       playerRef.current = null;
       wrap.replaceChildren();
     };
     // onDurationRef vem do useLatest, identidade fixa: não recria o player.
-  }, [videoId, ytAllowed, onDurationRef]);
+  }, [mediaType, videoId, ytAllowed, onDurationRef, audioStartRef, autoPlayRef, onPlayingClockChange, onSeekReadyRef, seekCutTime, cuts, sampleTime]);
+
+  useEffect(() => {
+    if (mediaType !== 'audio') return;
+    // Ao fechar o áudio, remove o relógio para a cifra não consultar um elemento desmontado.
+    return () => onPlayingClockChange(null);
+  }, [mediaType, onPlayingClockChange]);
 
   const togglePlay = useCallback(() => {
+    const audio = audioRef.current;
+    if (audio) {
+      if (audio.paused) void audio.play().catch(() => {}); else audio.pause();
+      return;
+    }
     const p = playerRef.current;
     if (!p) return;
     if (playing) p.pauseVideo(); else p.playVideo();
@@ -172,7 +240,7 @@ export const SourceVideoPanel: React.FC<SourceVideoPanelProps> = ({
           className="winxp-gradient-blue text-white px-2 py-1 flex items-center gap-1.5 text-[11px] font-bold cursor-move touch-none"
           title={t('cifra.videoArrastar')}
         >
-          <span className="truncate flex-1" title={title}>▶ Source — {title}</span>
+          <span className="truncate flex-1" title={title}>▶ {title}</span>
           <button onClick={togglePlay} className={btn} title={playing ? t('cifra.videoPausar') : t('cifra.videoTocar')}>
             {playing ? '⏸' : '▶'}
           </button>
@@ -193,7 +261,23 @@ export const SourceVideoPanel: React.FC<SourceVideoPanelProps> = ({
                      [&_iframe]:absolute [&_iframe]:inset-0 [&_iframe]:w-full [&_iframe]:h-full [&_iframe]:border-0"
         >
           <div ref={hostWrapRef} className="absolute inset-0" />
-          {!videoId ? (
+          {mediaType === 'audio' ? (
+            <audio ref={audioRef} src={videoUrl} controls autoPlay={autoPlay}
+              className="absolute inset-x-0 top-1/2 w-full -translate-y-1/2"
+              onLoadedMetadata={event => {
+                const audio = event.currentTarget;
+                audio.currentTime = derivedToMedia(playbackStartTime(0, audioStart, 'audio'), cuts ?? []);
+                if (Number.isFinite(audio.duration)) onDurationDetected(audio.duration);
+              }}
+              onPlay={event => {
+                const audio = event.currentTarget;
+                setPlaying(true);
+                onPlayingClockChange({ readTime: sampleTime,
+                  seek: seekCutTime, setRate: rate => { audio.playbackRate = rate; } });
+              }}
+              onPause={() => { setPlaying(false); if (!autoPlay) onPlayingClockChange(null); }}
+              onEnded={() => { setPlaying(false); if (!autoPlay) onPlayingClockChange(null); }} />
+          ) : !videoId ? (
             <div className="absolute inset-0 flex items-center justify-center text-center text-[11px] text-white/80 px-3">
               {t('cifra.videoNaoReconhecido')}
             </div>
@@ -213,14 +297,14 @@ export const SourceVideoPanel: React.FC<SourceVideoPanelProps> = ({
             confundida com o link. O comportamento de cada uma está no hook. */}
         <div className="flex items-stretch text-[9px] pointer-coarse:text-[11px] text-gray-600">
           <div className="flex-1 min-w-0 px-2 py-0.5 pointer-coarse:py-0 flex items-center justify-between gap-2">
-            <span className="truncate">{t('cifra.videoHospedado')}</span>
+            <span className="truncate">{t(mediaType === 'audio' ? 'cifra.audioReferencia' : 'cifra.videoHospedado')}</span>
             <a
               href={videoUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="text-[#002fa7] font-bold hover:underline shrink-0 pointer-coarse:py-3"
             >
-              {t('cifra.videoAbrirNoYouTube')}
+              {t(mediaType === 'audio' ? 'cifra.abrirGravacao' : 'cifra.videoAbrirNoYouTube')}
             </a>
           </div>
           <div

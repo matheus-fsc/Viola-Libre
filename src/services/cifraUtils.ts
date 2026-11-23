@@ -10,17 +10,40 @@ export interface ChordPos { text: string; col: number; }
 // A barra de compasso pode separar acordes mesmo sem espaço. A barra do baixo é '/'.
 const CHORD_TOKEN_RE = /[^\s|]+/g;
 
+// O acervo às vezes cola dois acordes sem espaço quando o primeiro fecha parêntese:
+// "E(add9)E(#5/add9)" (Falso Brilhante). Só separa quando o token inteiro não é acorde e
+// cada pedaço é, para não quebrar grafias válidas nem transformar palavra em acorde.
+function splitGluedChords(text: string, col: number): ChordPos[] {
+  if (isValidChordToken(text)) return [{ text, col }];
+  const cuts = [...text.matchAll(/\)(?=[A-G])/g)].map(m => m.index + 1);
+  if (cuts.length === 0) return [{ text, col }];
+  const parts: ChordPos[] = [];
+  let start = 0;
+  for (const end of [...cuts, text.length]) {
+    parts.push({ text: text.slice(start, end), col: col + start });
+    start = end;
+  }
+  return parts.every(part => isValidChordToken(part.text)) ? parts : [{ text, col }];
+}
+
+/** Os tokens de uma linha de acordes, com os acordes colados já separados. */
+export function chordLineTokens(line: string): ChordPos[] {
+  return [...line.matchAll(CHORD_TOKEN_RE)].flatMap(match => splitGluedChords(match[0], match.index));
+}
+
 export function isChordLine(line: string): boolean {
-  const tokens = line.match(CHORD_TOKEN_RE);
-  return tokens !== null && tokens.every(isValidChordToken);
+  // Parênteses soltos agrupam uma sequência de acordes, às vezes quebrada em duas linhas:
+  // "( A7  D7  C#7" e "F#m  G7 )  A7" (Punk da Periferia). Sozinhos não são palavra.
+  const tokens = chordLineTokens(line).filter(token => !/^[()]+$/.test(token.text));
+  return tokens.length > 0 && tokens.every(token => isValidChordToken(token.text));
 }
 
 export function parseChordLine(line: string): ChordPos[] {
   const result: ChordPos[] = [];
-  for (const match of line.matchAll(CHORD_TOKEN_RE)) {
-    if (!isValidChordToken(match[0])) continue;
-    const { prefix, core } = splitChordAnnotation(match[0]);
-    result.push({ text: core, col: match.index + prefix.length });
+  for (const token of chordLineTokens(line)) {
+    if (!isValidChordToken(token.text)) continue;
+    const { prefix, core } = splitChordAnnotation(token.text);
+    result.push({ text: core, col: token.col + prefix.length });
   }
   return result;
 }
@@ -72,6 +95,11 @@ function renderChordLine(line: string, semitones: number): string {
   return html + escapeHtml(line.slice(end));
 }
 
+// Os índices dos timings seguem as quebras do texto original, mesmo quando o HTML cria outras quebras visuais.
+export function cifraTimingLines(html: string): string[] {
+  return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').split('\n');
+}
+
 export function formatCifraChordHtml(html: string, semitones = 0): string {
   const decodeAnnotations = (text: string) =>
     text.replace(/&nbsp;/g, '\u00a0').replace(/&quot;|&#34;|&#x22;/gi, '"').replace(/&apos;|&#39;|&#x27;/gi, "'");
@@ -96,7 +124,7 @@ export function formatCifraChordHtml(html: string, semitones = 0): string {
 // stacking its chord (if any) directly above its word. Browsers wrap between units at the
 // normal space boundaries, so a chord always travels with the word it's anchored to instead
 // of the chord-line and lyric-line reflowing independently and drifting out of column-alignment.
-function buildReflowedPair(chordLine: string, lyricLine: string): string {
+function buildReflowedPair(chordLine: string, lyricLine: string, timingAttributes: string): string {
   const chords = parseChordLine(chordLine);
   const words = [...lyricLine.matchAll(/\S+/g)].map(m => ({ text: m[0], col: m.index }));
 
@@ -139,39 +167,47 @@ function buildReflowedPair(chordLine: string, lyricLine: string): string {
     units.push(`<span class="cifra-word"><span class="cifra-word-chord">${chordCell(trailing)}</span><span class="cifra-word-text">\u00A0</span></span>`);
   }
 
-  return `<div class="cifra-line cifra-line-paired">${units.join(' ')}</div>`;
+  return `<div class="cifra-line cifra-line-paired"${timingAttributes}>${units.join(' ')}</div>`;
 }
 
 // Uma linha por <div> permite quebrar o texto em telas estreitas. Quando há letra abaixo,
 // buildReflowedPair mantém o acorde e a palavra correspondente juntos na quebra.
-export function reflowCifraHtml(html: string): string {
+export function reflowCifraHtml(html: string, firstTimingLine?: number): string {
   // Drop any stray <pre> wrapper tags left over from upstream tab-block extraction — they'd
   // otherwise force white-space:pre on part of the content via the browser's own stylesheet.
   const cleaned = formatCifraChordHtml(html.replace(/<\/?pre[^>]*>/gi, ''));
-  const lines = cleaned.split(/\n|<br\s*\/?>/gi);
+  const lines = cleaned.split(/(\n|<br\s*\/?>)/gi);
   const out: string[] = [];
 
-  for (let i = 0; i < lines.length; i++) {
+  let timingLine = firstTimingLine ?? 0;
+  const indexAttribute = (index: number) => firstTimingLine === undefined ? '' : ` data-timing-line="${index}"`;
+  for (let i = 0; i < lines.length; i += 2) {
+    const index = timingLine;
+    // O editor conta as quebras do texto original. Um <br> sozinho só muda o layout.
+    if (lines[i + 1] === '\n') timingLine++;
     const line = lines[i];
     const plain = line.replace(/<[^>]+>/g, '');
 
     if (plain.trim() === '') {
-      out.push('<div class="cifra-line cifra-line-blank">&nbsp;</div>');
+      out.push(`<div class="cifra-line cifra-line-blank"${indexAttribute(index)}>&nbsp;</div>`);
       continue;
     }
 
     if (isChordLine(plain)) {
-      const nextLine = lines[i + 1];
+      const nextLine = lines[i + 2];
       const nextPlain = nextLine !== undefined ? nextLine.replace(/<[^>]+>/g, '') : '';
       const nextIsLyric = nextLine !== undefined && nextPlain.trim() !== '' && !isChordLine(nextPlain);
       if (nextIsLyric) {
-        out.push(buildReflowedPair(plain, nextPlain));
-        i++; // consumed the lyric line too
+        const attrs = firstTimingLine === undefined ? '' : `${indexAttribute(timingLine)} data-timing-chord="${index}"`;
+        out.push(buildReflowedPair(plain, nextPlain, attrs));
+        if (lines[i + 3] === '\n') timingLine++;
+        i += 2;
         continue;
       }
     }
 
-    out.push(`<div class="cifra-line">${line}</div>`);
+    const chord = firstTimingLine !== undefined && isChordLine(plain) ? ' data-timing-chord-row' : '';
+    out.push(`<div class="cifra-line"${indexAttribute(index)}${chord}>${line}</div>`);
   }
 
   return out.join('');

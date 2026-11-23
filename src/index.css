@@ -232,7 +232,10 @@ body {
 }
 :root[data-desempenho] *,
 :root[data-desempenho] *::before,
-:root[data-desempenho] *::after {
+:root[data-desempenho] *::after,
+:root[data-menos-movimento] *,
+:root[data-menos-movimento] *::before,
+:root[data-menos-movimento] *::after {
   animation-duration: 0.01ms !important;
   animation-iteration-count: 1 !important;
   transition-duration: 0.01ms !important;

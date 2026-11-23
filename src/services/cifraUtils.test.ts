@@ -117,3 +117,47 @@ describe('pontuação em linhas de acordes', () => {
     store.setLines([]);
   });
 });
+
+
+describe('índices de linha para o timing', () => {
+  it('preserva os índices de acordes e letra unidos no mesmo bloco', () => {
+    const html = reflowCifraHtml('Am G\nCanta comigo<br>\n\nOutra frase', 4);
+    expect(html).toContain('data-timing-line="5" data-timing-chord="4"');
+    expect(html).toContain('data-timing-line="7">Outra frase');
+  });
+});
+
+describe('isChordLine com parênteses soltos', () => {
+  it('aceita a sequência de acordes entre parênteses quebrada em duas linhas', () => {
+    expect(isChordLine('( A7  D7  C#7  F#m  A7  D7')).toBe(true);
+    expect(isChordLine('F#m  G7  G#7 )     A7')).toBe(true);
+    expect(isChordLine('( Am  Em  Am  Em )')).toBe(true);
+  });
+
+  it('não transforma parênteses vazios ou letra em linha de acorde', () => {
+    expect(isChordLine('( )')).toBe(false);
+    expect(isChordLine('( Das feridas que a pobreza cria')).toBe(false);
+  });
+});
+
+describe('acordes colados depois de parêntese', () => {
+  // Falso Brilhante (João Bosco): o acervo traz os dois acordes sem espaço entre eles.
+  const linha = '   E(add9)E(#5/add9)                ';
+
+  it('reconhece a linha e separa os dois acordes', () => {
+    expect(isChordLine(linha)).toBe(true);
+    expect(parseChordLine(linha)).toEqual([
+      { text: 'E(add9)', col: 3 },
+      { text: 'E(#5/add9)', col: 10 },
+    ]);
+  });
+
+  it('marca cada acorde no seu próprio <b>', () => {
+    expect(acordesDaCifra(`<pre>${linha}\nletra</pre>`)).toEqual(['E(add9)', 'E(#5/add9)']);
+  });
+
+  it('não separa texto que não vira dois acordes', () => {
+    expect(isChordLine('E(add9)Amor')).toBe(false);
+    expect(parseChordLine('Em7(9)')).toEqual([{ text: 'Em7(9)', col: 0 }]);
+  });
+});

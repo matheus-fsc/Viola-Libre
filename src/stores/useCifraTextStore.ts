@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { buildChordLineText, chordLineAnnotations, pixelDeltaToCol, type ChordPos } from '../services/cifraUtils';
+import { buildChordLineText, chordLineAnnotations, chordLineTokens, pixelDeltaToCol, type ChordPos } from '../services/cifraUtils';
 
 // Performance note: updateChordDrag rebuilds the full chord line text on every mousemove
 // (O(line length) per pixel). The hot path could be deferred to endChordDrag(), tracking
@@ -46,7 +46,7 @@ export const useCifraTextStore = create<CifraTextState>((set, get) => {
     startChordDrag: (lineIdx, tokenIdx, chords, startX, charW) => {
       const line = get().lines[lineIdx];
       // Move os afixos junto com o acorde, mas mantém as barras na posição do compasso.
-      const origChords = [...line.matchAll(/[^\s|]+/g)].map(m => ({ text: m[0], col: m.index }));
+      const origChords = chordLineTokens(line);
       _drag = {
         lineIdx, tokenIdx,
         origChords,

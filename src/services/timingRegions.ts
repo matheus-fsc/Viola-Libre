@@ -13,6 +13,7 @@
 // Ambas estão em services/timingApi.ts. Não duplique chamadas de rede aqui.
 // =============================================================================
 
+import { normalizeLoopOccurrences } from './timingApi';
 import type {
   TimingContribution,
   TimingPhrase,
@@ -43,11 +44,8 @@ export interface TimingRegion {
   label: string;
   repeatCount?: number;      // loop apenas — informativo (não precisa === repeats.length)
   sectionType?: SectionType; // section apenas
-  // Ocorrências adicionais de um loop no áudio. A 1ª ocorrência (canônica) é
-  // startTime/endTime da própria region. repeats[] guarda as demais — cada entrada
-  // tem timestamps independentes porque o músico pode variar o andamento por repetição.
-  // Campo local-only por ora: regionsToLegacyPayload não o envia ao backend ainda.
-  // Quando o backend migrar para TimingRegion nativo, remova esse comentário.
+  // A primeira passagem fica na região. Cada passagem seguinte tem tempos
+  // próprios porque o músico pode variar o andamento entre elas.
   repeats?: { startTime: number; endTime: number }[];  // loop apenas
 }
 
@@ -139,6 +137,7 @@ export function legacyToRegions(c: TimingContribution): TimingRegion[] {
       endTime: l.mediaTimestampEnd,
       label: l.label,
       repeatCount: l.repeatCount,
+      ...(l.occurrences?.length && { repeats: l.occurrences.slice(1) }),
     });
   }
 
@@ -229,16 +228,24 @@ export function regionsToLegacyPayload(
           endTime: r.endTime!,
         });
         break;
-      case 'loop':
+      case 'loop': {
+        // Ordena também quando o usuário grava ou move os clipes fora da ordem.
+        const occurrences = r.repeats && normalizeLoopOccurrences([
+          { startTime: r.startTime, endTime: r.endTime },
+          ...r.repeats,
+        ]);
+        const first = occurrences?.[0];
         loops.push({
           label: r.label,
           startLine: r.startLine!,
           endLine: r.endLine!,
           repeatCount: r.repeatCount ?? 2,
-          mediaTimestampStart: r.startTime,
-          mediaTimestampEnd: r.endTime,
+          mediaTimestampStart: first?.startTime ?? r.startTime,
+          mediaTimestampEnd: first?.endTime ?? r.endTime,
+          ...(first && { occurrences }),
         });
         break;
+      }
       case 'instrumental':
         instrumentalSections.push({
           label: r.label,

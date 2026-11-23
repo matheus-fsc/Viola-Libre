@@ -46,6 +46,20 @@ describe('splitHtmlByTabs', () => {
     expect(splitHtmlByTabs(html).find(s => s.type === 'tab')?.content).toMatch(/E\\-{4,}\|$/);
   });
 
+  it('preserva os offsets da letra depois de tablaturas marcadas ou soltas', () => {
+    const caption = 'Parte 1 de 2';
+    const outro = 'Canta comigo';
+    const rawTab = `[Intro]\n${tabLines}\n${outro}`;
+    const taggedTab = `[Intro]\n${caption}\n<span class="tablatura">${tabLines}</span>\nE|-----|\n${outro}`;
+    for (const html of [rawTab, taggedTab]) {
+      const segments = splitHtmlByTabs(html);
+      const lyrics = segments.find(segment => segment.type === 'html' && segment.content.includes(outro));
+      expect(html.slice(lyrics!.sourceStart, lyrics!.sourceStart! + lyrics!.content.length)).toBe(lyrics!.content);
+      const tab = segments.find(segment => segment.type === 'tab');
+      expect(html.slice(tab?.sourceStart, tab?.sourceEnd)).toContain(tabLines);
+    }
+  });
+
   it('não engole linha de letra parecida com tab', () => {
     const html = `<pre>Me      lembrou     Carlitos\n\n<span class="tablatura"><span class="cnt">${tabLines}</span></span>\n</pre>`;
     expect(soHtml(html)).toContain('Me      lembrou     Carlitos');

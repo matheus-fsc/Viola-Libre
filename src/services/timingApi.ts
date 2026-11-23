@@ -1,4 +1,63 @@
+import { normalizeCuts, type MediaCut } from '../engine/mediaCuts';
 import api, { cabecalhoChavePublica } from './api';
+
+export interface MelodyNote {
+  start: number;
+  end: number;
+  midi: number;
+  conf: number;
+}
+
+export interface VocalMelodyNote extends MelodyNote {
+  cents: number;
+  lineIndex?: number;
+}
+
+export interface InstrumentalMelody {
+  label: string;
+  start: number;
+  end: number;
+  notes: (MelodyNote & { velocity: number })[];
+}
+
+export interface TimingMelody {
+  version: 1;
+  vocal: VocalMelodyNote[];
+  instrumental: InstrumentalMelody[];
+}
+
+export function normalizeMelody(raw: unknown): TimingMelody | undefined {
+  const record = (value: unknown): value is Record<string, unknown> =>
+    value !== null && typeof value === 'object' && !Array.isArray(value);
+  const finite = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
+  const interval = (value: Record<string, unknown>) => finite(value.start) && finite(value.end)
+    && value.start >= 0 && value.end > value.start;
+  const note = (value: unknown): value is Record<string, unknown> & MelodyNote => record(value)
+    && interval(value) && Number.isInteger(value.midi) && (value.midi as number) >= 0 && (value.midi as number) <= 127
+    && finite(value.conf) && value.conf >= 0 && value.conf <= 1;
+  // Descartar o conjunto evita apresentar uma linha musical incompleta como se fosse confiável.
+  if (!record(raw) || raw.version !== 1 || !Array.isArray(raw.vocal) || !Array.isArray(raw.instrumental)
+    || !raw.vocal.every(value => note(value) && finite(value.cents) && Math.abs(value.cents) <= 100
+      && (value.lineIndex === undefined || (Number.isInteger(value.lineIndex) && (value.lineIndex as number) >= 0)))
+    || !raw.instrumental.every(value => record(value) && interval(value) && typeof value.label === 'string'
+      && Array.isArray(value.notes) && value.notes.every(n => note(n) && finite(n.velocity) && n.velocity >= 0 && n.velocity <= 127
+        && n.start >= (value.start as number) && n.end <= (value.end as number)))) return undefined;
+  const sorted = <T extends { start: number }>(values: T[]) => values.sort((a, b) => a.start - b.start);
+  return {
+    version: 1,
+    vocal: sorted((raw.vocal as VocalMelodyNote[]).map(({ start, end, midi, cents, conf, lineIndex }) =>
+      ({ start, end, midi, cents, conf, ...(lineIndex !== undefined && { lineIndex }) }))),
+    instrumental: sorted((raw.instrumental as InstrumentalMelody[]).map(({ label, start, end, notes }) => ({
+      label: label.trim(), start, end,
+      notes: sorted(notes.map(({ start, end, midi, velocity, conf }) => ({ start, end, midi, velocity, conf }))),
+    }))),
+  };
+}
+
+export interface TimingOccurrence {
+  startTime: number;
+  endTime: number;
+}
 
 export interface TimingLoop {
   label: string;
@@ -7,11 +66,12 @@ export interface TimingLoop {
   repeatCount: number;
   mediaTimestampStart: number | null;
   mediaTimestampEnd: number | null;
+  occurrences?: TimingOccurrence[];
 }
 
 export interface TimingInstrumental {
   label: string;
-  startLine: number | null;  // null = pure audio passage with no corresponding lyric line (e.g. an instrumental intro)
+  startLine: number | null;  // Sem escrita, o trecho ainda precisa conservar seu tempo no transporte.
   endLine: number | null;
   mediaTimestampStart: number | null;
   mediaTimestampEnd: number | null;
@@ -21,6 +81,14 @@ export interface TimingPhrase {
   lineIndex: number;
   startTime: number;
   endTime: number;
+}
+
+export interface TimingChordTime {
+  time: number;
+  lineIndex: number;
+  chordIndex: number;
+  chord: string;
+  confidence: number;
 }
 
 // Notation markers — point-in-time symbols from sheet music
@@ -76,37 +144,163 @@ export interface TimingSection {
   endLine?: number;
 }
 
-export interface TimingContribution {
+export interface BeatGrid {
+  beats?: number[];
+  downbeats?: number[];
+  timeSignature?: '4/4' | '3/4';
+  beatConfidence?: number;
+  bpmSource?: 'audio' | 'cifra' | 'default';
+}
+
+export function normalizeBeatGrid(raw: Record<string, unknown>): BeatGrid {
+  const grid: BeatGrid = {};
+  for (const key of ['beats', 'downbeats'] as const) {
+    const values = raw[key];
+    // Uma grade parcial por erro de formato pode inventar a entrada do canto.
+    if (Array.isArray(values) && values.every(v => typeof v === 'number' && Number.isFinite(v) && v >= 0)) {
+      const sorted = [...new Set(values as number[])].sort((a, b) => a - b);
+      if (sorted.length >= (key === 'beats' ? 2 : 1)) grid[key] = sorted;
+    }
+  }
+  if (raw.timeSignature === '4/4' || raw.timeSignature === '3/4') grid.timeSignature = raw.timeSignature;
+  if (typeof raw.beatConfidence === 'number' && Number.isFinite(raw.beatConfidence)
+    && raw.beatConfidence >= 0 && raw.beatConfidence <= 1) grid.beatConfidence = raw.beatConfidence;
+  if (raw.bpmSource === 'audio' || raw.bpmSource === 'cifra' || raw.bpmSource === 'default') grid.bpmSource = raw.bpmSource;
+  return grid;
+}
+
+export interface TimingContribution extends BeatGrid {
   id: string;
   editorAlias: string | null;
   mediaUrl: string | null;
   mediaType: 'youtube' | 'audio' | 'other' | null;
   bpm: number;
   duration: number;
+  audioStart?: number | null;
   loops: TimingLoop[];
   instrumentalSections: TimingInstrumental[];
   phrases: TimingPhrase[];
+  chordTimes?: TimingChordTime[];
+  melody?: TimingMelody;
   sections: TimingSection[];
   markers: TimingMarker[];
   votes: number;
   updatedAt: string;
+  source?: 'manual' | 'auto';
+  reviewed?: boolean;
+  variant?: 'sem_dedilhado' | null;
+  cuts?: MediaCut[] | null;
+  reviewedFrom?: string | null;
 }
 
-export interface TimingSubmitPayload {
+export interface TimingSubmitPayload extends BeatGrid {
   editorHash: string;
   editorAlias?: string;
   mediaUrl?: string;
   mediaType?: string;
   bpm?: number;
   duration: number;
+  audioStart?: number | null;
   loops: TimingLoop[];
   instrumentalSections: TimingInstrumental[];
   phrases: TimingPhrase[];
+  chordTimes?: TimingChordTime[];
+  melody?: TimingMelody;
   sections: TimingSection[];
   markers: TimingMarker[];
+  variant?: 'sem_dedilhado' | null;
+  cuts?: MediaCut[] | null;
+  reviewedFrom?: string;
 }
 
 export type MediaType = 'youtube' | 'audio' | 'other' | null;
+
+type RawTimingContribution = Pick<TimingContribution, 'id' | 'duration'> & Partial<Omit<TimingContribution, 'id' | 'duration' | 'loops' | 'chordTimes' | 'melody'>> & {
+  chordTimes?: unknown;
+  melody?: unknown;
+  loops?: (Omit<TimingLoop, 'occurrences'> & { occurrences?: unknown })[];
+  editor_alias?: string | null;
+  media_url?: string | null;
+  media_type?: MediaType;
+  instrumental_sections?: TimingInstrumental[];
+  updated_at?: string;
+  reviewed_from?: string | null;
+  line_timestamps?: { line: number; media_timestamp_start: number }[];
+};
+
+export function normalizeLoopOccurrences(raw: unknown): TimingOccurrence[] {
+  if (!Array.isArray(raw)) return [];
+  const occurrences = raw.filter((entry): entry is TimingOccurrence => {
+    if (!entry || typeof entry !== 'object') return false;
+    const { startTime, endTime } = entry;
+    return typeof startTime === 'number' && Number.isFinite(startTime) && startTime >= 0
+      && typeof endTime === 'number' && Number.isFinite(endTime) && endTime > startTime;
+  });
+  return occurrences.sort((a, b) => a.startTime - b.startTime);
+}
+
+export function normalizeChordTimes(raw: unknown): TimingChordTime[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  // Um alinhamento incompleto por erro de formato não deve substituir a estimativa do bloco.
+  if (!raw.every((entry): entry is TimingChordTime => {
+    if (!entry || typeof entry !== 'object') return false;
+    const { time, lineIndex, chordIndex, chord, confidence } = entry;
+    return typeof time === 'number' && Number.isFinite(time) && time >= 0
+      && Number.isInteger(lineIndex) && lineIndex >= 0
+      && Number.isInteger(chordIndex) && chordIndex >= 0
+      && typeof chord === 'string' && chord.trim().length > 0
+      && typeof confidence === 'number' && Number.isFinite(confidence) && confidence >= 0 && confidence <= 1;
+  })) return undefined;
+  return raw.map(({ time, lineIndex, chordIndex, chord, confidence }) => ({ time, lineIndex, chordIndex, chord, confidence }))
+    .sort((a, b) => a.time - b.time);
+}
+
+export function normalizeContribution(raw: RawTimingContribution): TimingContribution {
+  const {
+    id, duration, bpm = 0, votes = 0,
+    editorAlias = raw.editor_alias ?? null,
+    mediaUrl = raw.media_url ?? null,
+    mediaType = raw.media_type ?? null,
+    instrumentalSections = raw.instrumental_sections,
+    updatedAt = raw.updated_at ?? '',
+    source = 'manual', reviewed, reviewedFrom = raw.reviewed_from,
+  } = raw;
+  const chordTimes = normalizeChordTimes(raw.chordTimes);
+  const melody = normalizeMelody(raw.melody);
+  let phrases = raw.phrases;
+  // Os registros antigos guardavam só o início, então o próximo início delimita cada frase.
+  if (phrases == null && raw.line_timestamps) {
+    const timestamps = [...raw.line_timestamps].sort((a, b) => a.media_timestamp_start - b.media_timestamp_start);
+    phrases = timestamps.map((timestamp, index) => ({
+      lineIndex: timestamp.line,
+      startTime: timestamp.media_timestamp_start,
+      endTime: timestamps[index + 1]?.media_timestamp_start ?? duration,
+    }));
+  }
+
+  return {
+    id, duration, bpm: Number.isFinite(bpm) && bpm > 0 ? bpm : 0, votes, editorAlias, mediaUrl, mediaType, updatedAt, source, reviewed, reviewedFrom,
+    ...normalizeBeatGrid(raw),
+    ...(raw.variant != null && { variant: raw.variant }),
+    ...(raw.cuts != null && { cuts: normalizeCuts(raw.cuts) }),
+    ...(raw.audioStart != null && { audioStart: raw.audioStart }),
+    ...(chordTimes && { chordTimes }),
+    ...(melody && { melody }),
+    loops: (raw.loops ?? []).map(({ occurrences: rawOccurrences, ...loop }) => {
+      const occurrences = normalizeLoopOccurrences(rawOccurrences);
+      const first = occurrences[0];
+      // Os tempos canônicos acompanham a primeira passagem válida para o editor abrir o clipe certo.
+      return first
+        ? { ...loop, occurrences, mediaTimestampStart: first.startTime, mediaTimestampEnd: first.endTime }
+        : loop;
+    }),
+    // Ausência de linhas indica pausa instrumental, por isso não filtra esses trechos.
+    instrumentalSections: instrumentalSections ?? [],
+    phrases: phrases ?? [],
+    sections: raw.sections ?? [],
+    markers: raw.markers ?? [],
+  };
+}
 
 export function getOrCreateEditorHash(): string {
   const key = 'viola_editor_hash';
@@ -154,9 +348,9 @@ export async function submitTiming(
   return data;
 }
 
-export async function fetchTimings(slug: string): Promise<TimingContribution[]> {
-  const { data } = await api.get<TimingContribution[]>(`/api/timings/${slug}`);
-  return data;
+export async function fetchTimings(slug: string, signal?: AbortSignal): Promise<TimingContribution[]> {
+  const { data } = await api.get<RawTimingContribution[]>(`/api/timings/${slug}`, { signal });
+  return data.map(normalizeContribution);
 }
 
 export async function voteTiming(timingId: string): Promise<{ votes: number }> {
@@ -176,9 +370,9 @@ export async function voteTiming(timingId: string): Promise<{ votes: number }> {
 }
 
 export async function fetchBestTiming(slug: string): Promise<TimingContribution | null> {
-  const response = await api.get<TimingContribution>(`/api/timings/${slug}/best`, {
-    validateStatus: (s) => s < 500,
+  const response = await api.get<RawTimingContribution>(`/api/timings/${slug}/best`, {
+    validateStatus: (s) => (s >= 200 && s < 300) || s === 404,
   });
   if (response.status === 204 || response.status === 404) return null;
-  return response.data;
+  return normalizeContribution(response.data);
 }

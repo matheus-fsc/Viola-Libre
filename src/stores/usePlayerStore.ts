@@ -1,3 +1,5 @@
+import { createCutClock, mediaToDerived, normalizeCuts, type MediaCut } from '../engine/mediaCuts';
+import { playbackStartTime } from '../engine/timingPlayback';
 import { create } from 'zustand';
 import { detectMediaType, cleanYouTubeUrl, formatSeconds } from '../services/timingApi';
 import type { MediaType } from '../services/timingApi';
@@ -12,6 +14,9 @@ export interface PlayerState {
   mediaType: MediaType;
   playerReady: boolean;
   currentTime: number;
+  cuts: MediaCut[];
+  variant: 'sem_dedilhado' | null;
+  audioStart: number | null;
   duration: number;
   durationInput: string;
   bpm: number | null;
@@ -59,24 +64,37 @@ export interface PlayerState {
     duration: number;
     mediaUrl?: string | null;
     mediaType?: MediaType;
+    audioStart?: number | null;
+    cuts?: MediaCut[] | null;
+    variant?: 'sem_dedilhado' | null;
   }): void;
 }
 
 export const usePlayerStore = create<PlayerState>((set, get) => {
-  // Private mutable refs — NOT Zustand reactive state (no re-renders, no serialisation)
+  // Referências privadas evitam renderizações a cada consulta do player.
   let _ytPlayer: YTPlayerInstance | null = null;
   let _audio: HTMLAudioElement | null = null;
   let _pollingId: ReturnType<typeof setInterval> | null = null;
+  let _explicitSeek = false;
   let _previewEnd: number | null = null;
   let _tapTimes: number[] = [];
   let _tapResetTimer: ReturnType<typeof setTimeout> | null = null;
 
+  const seekMedia = (time: number) => {
+    _ytPlayer?.seekTo(time, true);
+    if (_audio && _audio.currentTime !== time) _audio.currentTime = time;
+  };
+  let clock = createCutClock([], seekMedia);
+
   return {
+    cuts: [],
+    variant: null,
     mediaUrlInput: '',
     mediaUrl: '',
     mediaType: null,
     playerReady: false,
     currentTime: 0,
+    audioStart: null,
     duration: 0,
     durationInput: '',
     bpm: null,
@@ -89,7 +107,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       if (!raw) return;
       const type = detectMediaType(raw);
       const url = type === 'youtube' ? cleanYouTubeUrl(raw) : raw;
-      set({ mediaUrl: url, mediaUrlInput: url, mediaType: type, playerReady: false, currentTime: 0, isPlaying: false });
+      _explicitSeek = false;
+      clock = createCutClock([], seekMedia);
+      set({ cuts: [], variant: null, audioStart: null, mediaUrl: url, mediaUrlInput: url, mediaType: type, playerReady: false, currentTime: 0, isPlaying: false });
     },
 
     setDuration: (n) => set({ duration: n, durationInput: n > 0 ? formatSeconds(n) : '' }),
@@ -108,6 +128,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     setBpm: (bpm) => set({ bpm }),
 
     play: () => {
+      const state = get();
+      const start = playbackStartTime(state.currentTime, state.audioStart, state.mediaType, _explicitSeek);
+      if (start !== state.currentTime) get().seek(start);
+      _explicitSeek = false;
       _ytPlayer?.playVideo();
       _audio?.play().catch(() => {});
       set({ isPlaying: true });
@@ -120,8 +144,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     },
 
     seek: (t) => {
-      _ytPlayer?.seekTo(t, true);
-      if (_audio) _audio.currentTime = t;
+      _explicitSeek = true;
+      clock.seek(t);
       set({ currentTime: t });
     },
 
@@ -135,13 +159,14 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       const patch: Partial<PlayerState> = { playerReady: ready };
       if (!ready) { patch.currentTime = 0; patch.isPlaying = false; }
       if (detectedDuration != null && detectedDuration > 0) {
-        patch.duration = detectedDuration;
-        patch.durationInput = formatSeconds(detectedDuration);
+        patch.duration = mediaToDerived(detectedDuration, get().cuts);
+        patch.durationInput = formatSeconds(patch.duration);
       }
       set(patch);
     },
 
-    tick: (t) => {
+    tick: (mediaTime) => {
+      const t = clock.sample(mediaTime, get().isPlaying);
       set({ currentTime: t });
       if (_previewEnd != null && t >= _previewEnd) {
         _previewEnd = null;
@@ -164,7 +189,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
 
     registerYtPlayer: (player) => {
       _ytPlayer = player;
-      // Start internal polling — cleared by clearYtPlayer on unmount / media change
+      const current = mediaToDerived(player.getCurrentTime(), get().cuts);
+      const start = playbackStartTime(current, get().audioStart, get().mediaType, _explicitSeek);
+      clock.seek(start);
+      set({ currentTime: start });
+      // A consulta mantém o relógio atualizado e termina ao desmontar o player.
       if (_pollingId) clearInterval(_pollingId);
       _pollingId = setInterval(() => {
         if (!_ytPlayer) return;
@@ -178,20 +207,45 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       _ytPlayer = null;
     },
 
-    registerAudio: (el) => { _audio = el; },
+    registerAudio: (el) => {
+      _audio = el;
+      if (el) {
+        const current = mediaToDerived(el.currentTime, get().cuts);
+        const start = playbackStartTime(current, get().audioStart, get().mediaType, _explicitSeek);
+        clock.seek(start);
+        set({ currentTime: start });
+      }
+    },
 
     loadContribution: (c) => {
+      _explicitSeek = false;
+      const cuts = normalizeCuts(c.cuts ?? []);
+      clock = createCutClock(cuts, seekMedia);
       const patch: Partial<PlayerState> = {
+        cuts, variant: c.variant ?? null, currentTime: 0,
         bpm: c.bpm,
+        audioStart: c.audioStart ?? null,
         duration: c.duration,
         durationInput: c.duration > 0 ? formatSeconds(c.duration) : '',
       };
-      if (c.mediaUrl) {
-        patch.mediaUrl = c.mediaUrl;
-        patch.mediaUrlInput = c.mediaUrl;
-        patch.mediaType = c.mediaType ?? null;
+      if (c.mediaUrl !== undefined) {
+        // Uma contribuição sem mídia precisa limpar a faixa anterior. Snapshots antigos podem omitir o campo.
+        patch.mediaUrl = c.mediaUrl ?? '';
+        patch.mediaUrlInput = patch.mediaUrl;
+        patch.mediaType = c.mediaUrl ? c.mediaType ?? null : null;
+        if (patch.mediaUrl !== get().mediaUrl || patch.mediaType !== get().mediaType) {
+          patch.playerReady = false;
+          patch.currentTime = 0;
+          patch.isPlaying = false;
+        }
+        _previewEnd = null;
       }
       set(patch);
+      if (get().playerReady) {
+        const start = playbackStartTime(0, get().audioStart, get().mediaType, false);
+        clock.seek(start);
+        set({ currentTime: start });
+      }
     },
   };
 });

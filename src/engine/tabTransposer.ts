@@ -4,6 +4,9 @@ import { PRESET_INSTRUMENTS } from './tunings';
 export interface ContentSegment {
   type: 'html' | 'tab';
   content: string;
+  // O texto exibido pode mudar ao separar tablaturas. Os offsets preservam os índices do editor.
+  sourceStart?: number;
+  sourceEnd?: number;
 }
 
 export interface TabEvent {
@@ -592,7 +595,7 @@ function takeLeadingTabLines(gap: string): { tail: string; rest: string } {
 // Do fim do trecho de html, arranca as legendas de parte que pertencem à tab que
 // vem logo a seguir. As linhas em branco ficam no html para o CifraViewer ainda
 // enxergar "tabs coladas" e mesclá-las num bloco só.
-function takeTrailingCaption(gap: string): { lead: string; rest: string } {
+function takeTrailingCaption(gap: string): { lead: string; rest: string; leadOffset: number } {
   const lines = gap.split('\n');
   let cut = lines.length;
   let found = false;
@@ -603,10 +606,11 @@ function takeTrailingCaption(gap: string): { lead: string; rest: string } {
     cut = i;
     found = true;
   }
-  if (!found) return { lead: '', rest: gap };
+  if (!found) return { lead: '', rest: gap, leadOffset: gap.length };
   const leadLines = lines.slice(cut).map(stripTags);
   while (leadLines.length > 0 && leadLines[leadLines.length - 1].trim() === '') leadLines.pop();
-  return { lead: leadLines.join('\n'), rest: lines.slice(0, cut).join('\n') };
+  const rest = lines.slice(0, cut).join('\n');
+  return { lead: leadLines.join('\n'), rest, leadOffset: cut === 0 ? 0 : rest.length + 1 };
 }
 
 // Main function: split HTML into html/tab segments
@@ -622,24 +626,29 @@ export function splitHtmlByTabs(html: string): ContentSegment[] {
 
   // Fecha o trecho de html anterior à tab, devolvendo a ela tudo que é dela:
   // linhas soltas que ficaram depois do bloco anterior e a legenda da próxima.
-  const flushGap = (until: number, nextIsTab: boolean): string => {
+  const flushGap = (until: number, nextIsTab: boolean) => {
     let gap = html.slice(lastIdx, until);
+    let sourceStart = lastIdx;
     const prev = segments[segments.length - 1];
     if (prev?.type === 'tab') {
       const { tail, rest } = takeLeadingTabLines(gap);
       if (tail) {
         prev.content += '\n' + tail;
+        sourceStart += gap.length - rest.length;
+        prev.sourceEnd = sourceStart;
         gap = rest;
       }
     }
     let lead = '';
+    let tabStart = until;
     if (nextIsTab) {
       const taken = takeTrailingCaption(gap);
       lead = taken.lead;
+      if (lead) tabStart = sourceStart + taken.leadOffset;
       gap = taken.rest;
     }
-    if (gap) segments.push({ type: 'html', content: gap });
-    return lead;
+    if (gap) segments.push({ type: 'html', content: gap, sourceStart });
+    return { lead, tabStart };
   };
 
   while ((match = openTagRe.exec(html)) !== null) {
@@ -665,10 +674,15 @@ export function splitHtmlByTabs(html: string): ContentSegment[] {
 
     if (tabLineCount < 2) continue;
 
-    const lead = flushGap(match.index, true);
+    const { lead, tabStart } = flushGap(match.index, true);
     // A legenda vira um "sistema" próprio dentro do bloco (separada por linha em
     // branco), então continua visível — só que agora some junto com a tab.
-    segments.push({ type: 'tab', content: lead ? `${lead}\n\n${innerText.replace(/^\n+/, '')}` : innerText });
+    segments.push({
+      type: 'tab',
+      content: lead ? `${lead}\n\n${innerText.replace(/^\n+/, '')}` : innerText,
+      sourceStart: tabStart,
+      sourceEnd: bounds.elEnd,
+    });
     lastIdx = bounds.elEnd;
     openTagRe.lastIndex = bounds.elEnd;
   }
@@ -693,16 +707,21 @@ function detectRawTabBlocks(html: string): ContentSegment[] {
 
   const segments: ContentSegment[] = [];
   let currentHtml = '';
+  let currentStart = 0;
+  let tabStart = 0;
+  let tabEnd = 0;
+  let offset = 0;
   let tabBuffer: string[] = [];
   let tabHtmlBuffer: string[] = [];
 
   const flushTab = () => {
     if (tabBuffer.length >= 3) {
-      if (currentHtml) { segments.push({ type: 'html', content: currentHtml }); currentHtml = ''; }
-      segments.push({ type: 'tab', content: tabBuffer.join('\n') });
+      if (currentHtml) { segments.push({ type: 'html', content: currentHtml, sourceStart: currentStart }); currentHtml = ''; }
+      segments.push({ type: 'tab', content: tabBuffer.join('\n'), sourceStart: tabStart, sourceEnd: tabEnd });
       tabBuffer = [];
       tabHtmlBuffer = [];
     } else {
+      if (!currentHtml && tabBuffer.length) currentStart = tabStart;
       currentHtml += tabHtmlBuffer.join('');
       tabBuffer = [];
       tabHtmlBuffer = [];
@@ -710,12 +729,15 @@ function detectRawTabBlocks(html: string): ContentSegment[] {
   };
 
   for (const part of parts) {
+    const start = offset;
+    offset += part.length;
     if (/^<br/i.test(part) || part === '\n') {
       // It's a line break separator
       if (tabBuffer.length > 0) {
         // might be between tab lines
         tabHtmlBuffer.push(part);
       } else {
+        if (!currentHtml) currentStart = start;
         currentHtml += part;
       }
       continue;
@@ -725,18 +747,21 @@ function detectRawTabBlocks(html: string): ContentSegment[] {
     const stripped = part.replace(/<[^>]+>/g, '').trim();
     const isTabLn = (/^[A-Ga-g#b]{1,3}\|/.test(stripped) || /^\|+[-x0-9]/.test(stripped) || isBareTabLine(stripped)) && stripped.includes('-');
     if (isTabLn) {
+      if (!tabBuffer.length) tabStart = start;
+      tabEnd = offset;
       tabBuffer.push(stripped);
       tabHtmlBuffer.push(part);
     } else {
       flushTab();
+      if (!currentHtml) currentStart = start;
       currentHtml += part;
     }
   }
 
   flushTab();
-  if (currentHtml) segments.push({ type: 'html', content: currentHtml });
+  if (currentHtml) segments.push({ type: 'html', content: currentHtml, sourceStart: currentStart });
 
-  return segments.length > 0 ? segments : [{ type: 'html', content: html }];
+  return segments.length > 0 ? segments : [{ type: 'html', content: html, sourceStart: 0 }];
 }
 
 // Get target string labels (high to low) for a tuning

@@ -11,6 +11,7 @@ import { useTimingRegionsStore } from '../../stores/useTimingRegionsStore';
 import { useTimingSelectionStore } from '../../stores/useTimingSelectionStore';
 import { usePlayerStore } from '../../stores/usePlayerStore';
 import { InlineMarkerDot } from './InlineMarkerDot';
+import { activePlaybackRegion, isLineInRange } from '../../engine/timingPlayback';
 
 // ── Chord parsing ────────────────────────────────────────────────────────────
 const SECTION_LINE_RE = /^\[([^\]]+)\]$/;
@@ -76,6 +77,7 @@ function dotOpacity(col: number, currentCol: number): number {
 export interface CifraGridEditorProps {
   lineRefs: React.MutableRefObject<(HTMLElement | null)[]>;
   onLineClick: (idx: number) => void;
+  highlightPhrases: boolean;
   /** Starts the reassign-lines flow for a specific region — state lives in TimingEditor (shared
    *  with its own "Trechos vinculados" sidebar list, which triggers the same flow). */
   onStartReassign: (region: TimingRegion) => void;
@@ -93,13 +95,20 @@ const GUTTER_W = 32;
 
 // ── Component ────────────────────────────────────────────────────────────────
 export const CifraGridEditor: React.FC<CifraGridEditorProps> = ({
-  lineRefs, onLineClick, onStartReassign,
+  lineRefs, onLineClick, onStartReassign, highlightPhrases,
 }) => {
   const t = useT();
   const { lines, chordDragVisual } = useCifraTextStore();
   const { regions, markers } = useTimingRegionsStore();
   const { selectionMode, selectionStart, selectionEnd } = useTimingSelectionStore();
   const blocks = useMemo(() => parseBlocks(lines), [lines]);
+  const activeRegion = usePlayerStore(s => highlightPhrases ? activePlaybackRegion(regions, s.currentTime) : null);
+  const activePhraseLine = activeRegion?.startLine ?? null;
+
+  useEffect(() => {
+    if (activePhraseLine === null) return;
+    lineRefs.current[activePhraseLine]?.scrollIntoView({ block: 'nearest' });
+  }, [activePhraseLine, lineRefs]);
 
   // ── Line-link margin indicator ──
   // Every region with both a line range AND a time range fully set gets a small colored bar
@@ -186,6 +195,8 @@ export const CifraGridEditor: React.FC<CifraGridEditorProps> = ({
 
   // ── Appearance ──
   const getLineBg = (idx: number): { className: string; style?: React.CSSProperties } => {
+    if (isLineInRange(lines[idx], idx, activeRegion))
+      return { className: 'bg-purple-200 border-l-2 border-purple-600' };
     if (selectionStart !== null && selectionEnd === null && idx === selectionStart)
       return { className: 'bg-yellow-200 border-l-2 border-yellow-500' };
     if (selectionStart !== null && selectionEnd !== null && idx >= selectionStart && idx <= selectionEnd)

@@ -1,3 +1,5 @@
+import { InstrumentalIndicator } from './InstrumentalIndicator';
+import { isLineInRange } from '../../engine/timingPlayback';
 import React, { useEffect, useRef } from 'react';
 import { useT } from '../../i18n';
 import { formatSeconds } from '../../services/timingApi';
@@ -6,25 +8,23 @@ import { useTimingRegionsStore } from '../../stores/useTimingRegionsStore';
 import { usePlayerStore } from '../../stores/usePlayerStore';
 import { useAutoScroll } from '../../hooks/useAutoScroll';
 
-// Read-only preview: tests auto-scroll against useTimingRegionsStore's in-memory regions
-// (nothing needs to be saved first) and usePlayerStore's real playback clock. Deliberately NOT
-// built on CifraGridEditor — that component's chord-drag handlers (onMouseDown) have no
-// read-only gate, so reusing it here would let a stray click mutate the shared cifra text from
-// what's supposed to be a passive scroll check. Renders plain text lines instead: no chord
-// tokens, no drag targets, no click handlers. Rendered inside TimingEditor's existing scrollable
-// container (see the `overflow-y-auto` wrapper around it) — no scroll container of its own.
+// A prévia usa o relógio do editor para testar sem salvar nem alterar o texto.
 export const AutoScrollPreview: React.FC = () => {
   const t = useT();
   const { lines } = useCifraTextStore();
   const { regions } = useTimingRegionsStore();
   const currentTime = usePlayerStore(s => s.currentTime);
-  const { activeRegionId, scrollToLine } = useAutoScroll(regions, currentTime);
+  const { activeRegionId, scrollToLine, countdown } = useAutoScroll(regions, currentTime);
 
+  const previousLine = useRef<number | null>(null);
   const lineRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   useEffect(() => {
     if (scrollToLine === null) return;
-    lineRefs.current[scrollToLine]?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    const backwards = previousLine.current != null && scrollToLine < previousLine.current;
+    lineRefs.current[scrollToLine]?.scrollIntoView({ block: 'center',
+      behavior: backwards || window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
+    previousLine.current = scrollToLine;
   }, [scrollToLine]);
 
   const activeRegion = activeRegionId ? regions.find(r => r.id === activeRegionId) ?? null : null;
@@ -36,14 +36,12 @@ export const AutoScrollPreview: React.FC = () => {
         {activeRegion ? (
           <span className="text-[#005500] font-bold">▶ {activeRegion.label || activeRegion.kind}</span>
         ) : (
-          <span className="text-gray-600 italic">— sem seção vinculada neste tempo (gap) —</span>
+          <span className="text-gray-600 italic">{t('cifra.rolagemGap')}</span>
         )}
         <span className="ml-auto font-mono text-gray-500">{formatSeconds(currentTime)}</span>
       </div>
       {lines.map((line, idx) => {
-        const isActiveLine = !!activeRegion
-          && activeRegion.startLine !== null && activeRegion.endLine !== null
-          && idx >= activeRegion.startLine && idx <= activeRegion.endLine;
+        const isActiveLine = isLineInRange(line, idx, activeRegion);
         return (
           <div
             key={idx}
@@ -51,6 +49,11 @@ export const AutoScrollPreview: React.FC = () => {
             className={`whitespace-pre px-3 ${isActiveLine ? 'bg-yellow-100 border-l-2 border-yellow-500' : ''}`}
             style={{ lineHeight: '20px', minHeight: 20 }}
           >
+            {activeRegion?.kind === 'instrumental' && idx === (activeRegion.startLine ?? scrollToLine) && (
+              <InstrumentalIndicator label={activeRegion.label}
+                countdown={countdown}
+                progress={(currentTime - activeRegion.startTime!) / (activeRegion.endTime! - activeRegion.startTime!)} />
+            )}
             {line || ' '}
           </div>
         );

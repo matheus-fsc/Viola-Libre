@@ -49,9 +49,10 @@ interface Props {
   /** Enquanto true, a barra troca os destinos pelo transporte. */
   rolando: boolean;
   transporte: ReactNode;
+  timeline?: ReactNode;
 }
 
-export function MobileCifraBar({ destinos, aberto, onAbrir, rolando, transporte }: Props) {
+export function MobileCifraBar({ destinos, aberto, onAbrir, rolando, transporte, timeline }: Props) {
   // A folha fica montada enquanto desce: `aberto` vira null no começo da saída, e quem
   // segura o id até a mola terminar é `saindo`. O ajuste é durante o render (e não num
   // efeito) para não haver um frame com a folha já desmontada.
@@ -80,6 +81,7 @@ export function MobileCifraBar({ destinos, aberto, onAbrir, rolando, transporte 
           e as duas juntas empilhariam dois níveis de controle no mesmo canto. */}
       {!folha && (
         <div className="fixed inset-x-2 bottom-2 z-50 md:hidden bevel-out bg-[var(--color-winxp-panel)] border border-gray-500 shadow-xl mb-[env(safe-area-inset-bottom)]">
+          {rolando && timeline}
           {rolando ? (
             transporte
           ) : (
@@ -241,6 +243,8 @@ export function Stepper({ onMenos, onMais, children, rotuloMenos = '−', rotulo
 // ---------------------------------------------------------------------------
 
 interface TransporteProps {
+  pulseControls?: ReactNode;
+  measuredBpm?: string | null;
   userSeeking: boolean;
   onToggle(): void;
   onRestart(): void;
@@ -251,12 +255,16 @@ interface TransporteProps {
   total: number;
   fmtTime(s: number): string;
   secao: string | null;
+  syncLabel: string | null;
+  repeatLabel: string | null;
+  onSwitchTiming(): void;
   loopA: number | null;
   loopB: number | null;
   onLoopA(): void;
   onLoopB(): void;
   onLoopLimpar(): void;
   showTabs: boolean;
+  tabsForcedHidden: boolean;
   onToggleTabs(): void;
 }
 
@@ -277,6 +285,7 @@ export function TransporteMobile(p: TransporteProps) {
 
   return (
     <div className="flex flex-col">
+      <div className="flex flex-wrap items-center gap-1 px-1.5">{p.pulseControls}</div>
       {/* Uma linha só, e apertada: numa viewport de 296px o slider é o primeiro a ser
           espremido, então tudo em volta anda com gap-1.5 e o mostrador numérico só
           aparece quando há largura para ele. */}
@@ -341,6 +350,17 @@ export function TransporteMobile(p: TransporteProps) {
         </button>
       </div>
 
+      {p.syncLabel && (
+        <span className="flex flex-wrap items-baseline gap-x-1.5 px-2 pb-1 text-[10px] font-bold text-[#005500]">
+          {p.syncLabel}
+          <button type="button" onClick={p.onSwitchTiming} className="text-[#002fa7] underline">
+            {t('cifra.rolagemTrocarTiming')}
+          </button>
+          <span role="status" className="empty:sr-only whitespace-nowrap text-[#002fa7]">
+            {p.repeatLabel}
+          </span>
+        </span>
+      )}
       {expandido && (
         <div className="flex flex-wrap items-center gap-1.5 px-2 pb-2 pt-1 border-t border-gray-400">
           <button onClick={p.onRestart} className={btn} title={t('cifra.inicioDica')} aria-label={t('cifra.barraInicioAria')}><SkipBack size={14} /></button>
@@ -348,7 +368,7 @@ export function TransporteMobile(p: TransporteProps) {
           <button onClick={() => p.onSeek(NUDGE_SEC)} className={btn} title={t('cifra.barraAvancarSegundos', { s: NUDGE_SEC })} aria-label={t('cifra.barraAvancarSegundosAria', { s: NUDGE_SEC })}><FastForward size={14} /></button>
           {p.total > 0 && (
             <span className="font-mono text-[10px] font-bold text-[#002fa7] tabular-nums px-1">
-              {p.fmtTime(p.elapsed)} / {p.fmtTime(p.total)}
+              {p.fmtTime(p.elapsed)} / {p.fmtTime(p.total)} {p.measuredBpm}
             </span>
           )}
           <button
@@ -372,7 +392,8 @@ export function TransporteMobile(p: TransporteProps) {
           )}
           <button
             onClick={p.onToggleTabs}
-            className={`px-2.5 py-2 text-[10px] font-bold border leading-tight flex items-center gap-1 ${!p.showTabs ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#ece9d8] border-gray-400'}`}
+            disabled={p.tabsForcedHidden}
+            className={`px-2.5 py-2 text-[10px] font-bold border leading-tight flex items-center gap-1 disabled:opacity-50 ${!p.showTabs ? 'bg-[#316ac5] text-white border-[#316ac5]' : 'bg-[#ece9d8] border-gray-400'}`}
             title={p.showTabs ? t('cifra.tabsOcultarDica') : t('cifra.tabsMostrarDica')}
           >
             {t('cifra.folhaTabs')} {p.showTabs ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
