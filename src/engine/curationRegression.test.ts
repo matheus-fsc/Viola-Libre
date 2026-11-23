@@ -96,7 +96,8 @@ describe.skipIf(rows.length === 0)('curadoria humana', () => {
     // Um voicing curado que o motor nem produz é um bug de geração (filtro ou requisito
     // obrigatório rígido demais), não de ordenação — falha bem mais grave que rank ruim.
     expect(missing).toBe(0);
-  });
+    // Gera todas as formas do corpus: no Orange Pi (Cortex-A55) leva mais que os 5 s padrão.
+  }, 60_000);
 
   it('as escolhas humanas aparecem perto do topo', () => {
     const { ranks } = rankOfCuratedShapes();
@@ -113,5 +114,5 @@ describe.skipIf(rows.length === 0)('curadoria humana', () => {
     expect(median).toBeLessThanOrEqual(4);
     expect(p90).toBeLessThanOrEqual(35);
     expect(top5 / ranks.length).toBeGreaterThanOrEqual(0.62);
-  });
+  }, 60_000);
 });
