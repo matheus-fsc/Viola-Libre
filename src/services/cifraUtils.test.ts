@@ -161,3 +161,16 @@ describe('acordes colados depois de parêntese', () => {
     expect(parseChordLine('Em7(9)')).toEqual([{ text: 'Em7(9)', col: 0 }]);
   });
 });
+
+describe('isChordLine com marcador de seção', () => {
+  it('aceita o marcador no início da linha de acordes (Pra Ver a Voz)', () => {
+    expect(isChordLine('[Intro] C#m7  A7M  F#m7(11)  C#m7 ')).toBe(true);
+    expect(parseChordLine('[Intro] C#m7  A7M  F#m7(11)  C#m7 ').map(c => c.text)).toEqual(['C#m7', 'A7M', 'F#m7(11)', 'C#m7']);
+  });
+
+  it('marcador sozinho ou seguido de letra não é linha de acordes', () => {
+    expect(isChordLine('[Intro]')).toBe(false);
+    expect(isChordLine('[Refrão] Eu choro sim')).toBe(false);
+    expect(isChordLine('C#m7 [Intro]')).toBe(false);
+  });
+});
