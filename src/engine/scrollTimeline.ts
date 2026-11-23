@@ -4,6 +4,7 @@ export interface ScrollSegment {
   startTime: number;
   endTime: number;
   lineIndex: number;
+  // -1 conserva a âncora de rolagem sem atribuir letra ou acordes ao trecho sem linhas.
   endLine: number;
   kind: 'lyric' | 'instrumental' | 'hold';
   instrumental: boolean;
@@ -26,13 +27,30 @@ export function timelineBarSegments(timeline: readonly ScrollSegment[], totalTim
 
 type TimelineTiming = Pick<TimingContribution, 'phrases' | 'instrumentalSections'> & Partial<Pick<TimingContribution, 'duration' | 'audioStart'>>;
 
+export function instrumentalScrollSegments(timing: Pick<TimingContribution, 'phrases' | 'instrumentalSections'>): ScrollSegment[] {
+  const phrases = [...timing.phrases].filter(p => Number.isFinite(p.startTime) && Number.isFinite(p.endTime)
+    && p.startTime >= 0 && p.endTime > p.startTime
+    // Frases legadas de acordes dentro de outro instrumental não são uma entrada vocal.
+    && !timing.instrumentalSections.some(s => s.mediaTimestampStart != null && s.mediaTimestampEnd != null
+      && p.startTime >= s.mediaTimestampStart && p.startTime < s.mediaTimestampEnd)).sort((a, b) => a.startTime - b.startTime);
+  return timing.instrumentalSections.flatMap(section => {
+    const { startLine, endLine, mediaTimestampStart: startTime, mediaTimestampEnd: endTime } = section;
+    const withoutLines = startLine === null && endLine === null;
+    if (startTime == null || endTime == null || !Number.isFinite(startTime) || !Number.isFinite(endTime)
+      || startTime < 0 || endTime <= startTime
+      || (!withoutLines && (startLine == null || endLine == null || endLine < startLine))) return [];
+    // A próxima entrada vocal orienta a leitura, mas permanece sem destaque durante a pausa.
+    const anchor = phrases.find(p => p.startTime >= endTime)?.lineIndex
+      ?? phrases.filter(p => p.startTime < startTime).at(-1)?.lineIndex ?? 0;
+    return [{ startTime, endTime, lineIndex: withoutLines ? anchor : startLine!,
+      endLine: withoutLines ? -1 : endLine!, kind: 'instrumental' as const, instrumental: true, label: section.label }];
+  });
+}
+
 export function buildScrollTimeline(timing: TimelineTiming): ScrollSegment[] {
   const events: ScrollSegment[] = [
     ...timing.phrases.map(p => ({ ...p, endLine: p.lineIndex, kind: 'lyric' as const, instrumental: false })),
-    ...timing.instrumentalSections.flatMap(s => s.startLine != null && s.endLine != null
-      && s.endLine >= s.startLine && s.mediaTimestampStart != null && s.mediaTimestampEnd != null
-      ? [{ startTime: s.mediaTimestampStart, endTime: s.mediaTimestampEnd, lineIndex: s.startLine,
-        endLine: s.endLine, kind: 'instrumental' as const, instrumental: true, label: s.label }] : []),
+    ...instrumentalScrollSegments(timing),
   ].filter(s => Number.isFinite(s.startTime) && Number.isFinite(s.endTime)
     && s.startTime >= 0 && s.endTime > s.startTime).sort((a, b) => a.startTime - b.startTime);
   if (!events.length) return [];

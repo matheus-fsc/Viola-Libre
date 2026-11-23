@@ -20,7 +20,8 @@ export function useAutoScroll(regions: TimingRegion[], currentTime: number): Aut
   const segment = timeline[timelineIndexAtTime(timeline, currentTime)];
   const active = segment && segment.kind !== 'hold' && currentTime >= segment.startTime && currentTime < segment.endTime
     ? regions.find(r => r.kind === (segment.instrumental ? 'instrumental' : 'phrase')
-      && r.startLine === segment.lineIndex && r.startTime != null && r.endTime != null
+      && (segment.endLine < 0 ? r.startLine === null && r.endLine === null : r.startLine === segment.lineIndex)
+      && r.startTime != null && r.endTime != null
       && r.startTime <= currentTime && r.endTime > currentTime) : null;
   return { activeRegionId: active?.id ?? null, scrollToLine: segment?.lineIndex ?? null, countdown: instrumentalCountdown(timeline, currentTime) };
 }

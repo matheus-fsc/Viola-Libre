@@ -53,3 +53,36 @@ describe('faixa temporal de acordes', () => {
     expect(chordStripAtTime([], 0)).toEqual({ previous: null, current: null, next: null, startsIn: null });
   });
 });
+
+describe('harmonia durante instrumentais no meio da música', () => {
+  const lines = ['C', 'Primeira letra', '[Solo]', 'G D', 'Am', 'F', 'Segunda letra', 'E', 'Próxima letra'];
+  const timeline = buildScrollTimeline({ phrases: [
+    { lineIndex: 1, startTime: 0, endTime: 10 },
+    { lineIndex: 6, startTime: 20, endTime: 30 },
+    { lineIndex: 8, startTime: 40, endTime: 50 },
+  ], instrumentalSections: [
+    { label: 'Solo', startLine: 2, endLine: 4, mediaTimestampStart: 10, mediaTimestampEnd: 20 },
+    { label: 'Instrumental', startLine: null, endLine: null, mediaTimestampStart: 30, mediaTimestampEnd: 40 },
+  ] });
+  const chords = buildChordTimeline(timeline, lines);
+
+  it('mostra todos os acordes do solo na ordem escrita', () => {
+    expect(chords.filter(c => c.startTime >= 10 && c.startTime < 20).map(c => c.name)).toEqual(['G', 'D', 'Am']);
+  });
+
+  it('mantém o último acorde e anuncia o primeiro acorde da próxima frase na pausa', () => {
+    expect(chords.filter(c => c.startTime >= 30 && c.startTime < 40)).toEqual([]);
+    expect(chordStripAtTime(chords, 35)).toMatchObject({ current: { name: 'F' }, next: { name: 'E', startTime: 40 }, startsIn: 5 });
+  });
+
+  it('anuncia a retomada mesmo quando a letra começa com o mesmo acorde anterior à pausa', () => {
+    const timeline = buildScrollTimeline({ phrases: [
+      { lineIndex: 1, startTime: 0, endTime: 10 },
+      { lineIndex: 3, startTime: 20, endTime: 30 },
+    ], instrumentalSections: [
+      { label: 'Riff', startLine: null, endLine: null, mediaTimestampStart: 10, mediaTimestampEnd: 20 },
+    ] });
+    const chords = buildChordTimeline(timeline, ['C', 'Antes', 'C', 'Depois']);
+    expect(chordStripAtTime(chords, 15)).toMatchObject({ current: { name: 'C', startTime: 0 }, next: { name: 'C', startTime: 20 } });
+  });
+});

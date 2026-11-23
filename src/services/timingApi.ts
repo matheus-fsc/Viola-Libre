@@ -18,7 +18,7 @@ export interface TimingLoop {
 
 export interface TimingInstrumental {
   label: string;
-  startLine: number | null;  // null = pure audio passage with no corresponding lyric line (e.g. an instrumental intro)
+  startLine: number | null;  // Sem escrita, o trecho ainda precisa conservar seu tempo no transporte.
   endLine: number | null;
   mediaTimestampStart: number | null;
   mediaTimestampEnd: number | null;
@@ -181,6 +181,7 @@ export function normalizeContribution(raw: RawTimingContribution): TimingContrib
         ? { ...loop, occurrences, mediaTimestampStart: first.startTime, mediaTimestampEnd: first.endTime }
         : loop;
     }),
+    // Ausência de linhas indica pausa instrumental, por isso não filtra esses trechos.
     instrumentalSections: instrumentalSections ?? [],
     phrases: phrases ?? [],
     sections: raw.sections ?? [],

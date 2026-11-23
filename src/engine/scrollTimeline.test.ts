@@ -1,5 +1,6 @@
+import { isLineInRange } from './timingPlayback';
 import { describe, expect, it } from 'vitest';
-import { buildScrollTimeline, instrumentalCountdown, timelineIndexAtTime, timelineYAtTime } from './scrollTimeline';
+import { buildScrollTimeline, instrumentalCountdown, timelineIndexAtTime, timelineYAtTime, timelineBarSegments } from './scrollTimeline';
 import { getRepeatRanges, repeatPassAtTime } from './repeatRanges';
 
 const phrases = [27, 29, 32, 34, 27, 29, 32, 34, 38].map((lineIndex, i) => ({
@@ -83,5 +84,45 @@ describe('contagem para a próxima letra', () => {
     expect(instrumentalCountdown(timeline, 8.1)).toBe(2);
     expect(instrumentalCountdown(timeline, 9.9)).toBe(1);
     for (const time of [-1, 0, 10, 14, 56, 65, 100]) expect(instrumentalCountdown(timeline, time)).toBeNull();
+  });
+});
+
+describe('instrumentais no meio da música', () => {
+  const segments = buildScrollTimeline({
+    phrases: [
+      { lineIndex: 1, startTime: 0, endTime: 10 },
+      { lineIndex: 6, startTime: 20, endTime: 30 },
+      { lineIndex: 8, startTime: 40, endTime: 50 },
+    ],
+    instrumentalSections: [
+      { label: 'Solo', startLine: 2, endLine: 4, mediaTimestampStart: 10, mediaTimestampEnd: 20 },
+      { label: 'Instrumental', startLine: null, endLine: null, mediaTimestampStart: 30, mediaTimestampEnd: 40 },
+    ],
+  });
+
+  it('conserva o solo completo e a pausa sem linhas como instrumentais', () => {
+    expect(segments[timelineIndexAtTime(segments, 15)]).toMatchObject({
+      kind: 'instrumental', label: 'Solo', lineIndex: 2, endLine: 4,
+    });
+    expect(segments[timelineIndexAtTime(segments, 35)]).toMatchObject({
+      kind: 'instrumental', label: 'Instrumental', lineIndex: 8, endLine: -1,
+    });
+    expect(timelineBarSegments(segments, 50).filter(s => s.kind === 'instrumental')).toEqual([
+      { leftPct: 20, widthPct: 20, kind: 'instrumental' },
+      { leftPct: 60, widthPct: 20, kind: 'instrumental' },
+    ]);
+  });
+
+  it('conta até a próxima letra e segura a rolagem nela sem criar faixa de destaque', () => {
+    expect(instrumentalCountdown(segments, 15.2)).toBe(5);
+    expect(instrumentalCountdown(segments, 35.2)).toBe(5);
+    expect(instrumentalCountdown(segments, 39.99)).toBe(1);
+    expect(instrumentalCountdown(segments, 40)).toBeNull();
+    const anchors = segments.map(s => ({ ...s, y: s.lineIndex * 20 }));
+    for (const time of [30, 35, 39.99]) {
+      expect(timelineYAtTime(anchors, time)).toBe(160);
+      const segment = segments[timelineIndexAtTime(segments, time)];
+      expect(isLineInRange('Próxima letra', 8, { startLine: segment.lineIndex, endLine: segment.endLine })).toBe(false);
+    }
   });
 });

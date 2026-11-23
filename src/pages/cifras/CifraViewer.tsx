@@ -355,8 +355,7 @@ export const CifraViewer: React.FC = () => {
   const showTabs = prefersTabs && !tabsForcedHidden;
   const toggleTabs = () => setPrefersTabs(value => !value);
   const lineMode = (timingMedia?.phrases?.length ?? 0) >= (scrollChoice && !previewTiming ? 1 : 2)
-    || !!timingMedia?.instrumentalSections.some(section => section.startLine != null && section.endLine != null
-      && section.mediaTimestampStart != null && section.mediaTimestampEnd != null);
+    || !!timingMedia?.instrumentalSections.some(section => section.mediaTimestampStart != null && section.mediaTimestampEnd != null);
   const scrollTimeline = useMemo(() => timingMedia ? buildScrollTimeline(timingMedia) : [], [timingMedia]);
   const repeatRanges = useMemo(() =>
     lineMode && timingMedia ? getRepeatRanges(timingMedia.loops ?? [], timingMedia.phrases) : [],

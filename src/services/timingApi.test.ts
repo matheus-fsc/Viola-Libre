@@ -139,3 +139,14 @@ describe('detectMediaType', () => {
     expect(detectMediaType('')).toBeNull();
   });
 });
+
+describe('normalização de instrumentais sem linhas no meio da música', () => {
+  it.each(['instrumentalSections', 'instrumental_sections'] as const)('preserva %s e seus tempos', key => {
+    const section = { label: 'Interlúdio', startLine: null, endLine: null, mediaTimestampStart: 15, mediaTimestampEnd: 25 };
+    const timing = normalizeContribution({ id: 'interludio', duration: 40, [key]: [section], phrases: [
+      { lineIndex: 1, startTime: 0, endTime: 15 },
+      { lineIndex: 3, startTime: 25, endTime: 40 },
+    ] });
+    expect(timing.instrumentalSections).toEqual([section]);
+  });
+});

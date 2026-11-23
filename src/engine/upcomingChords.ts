@@ -3,6 +3,7 @@ import { isChordLine, parseChordLine } from '../services/cifraUtils';
 import type { ScrollSegment } from './scrollTimeline';
 
 export function segmentChords(segment: ScrollSegment, lines: readonly string[]): string[] {
+  if (segment.endLine < segment.lineIndex) return [];
   if (!Number.isInteger(segment.lineIndex) || segment.lineIndex < 0 || segment.lineIndex >= lines.length) return [];
   const chordsAt = (index: number) => isChordLine(lines[index] ?? '')
     ? parseChordLine(lines[index]).map(chord => chord.text) : [];
@@ -24,7 +25,7 @@ export function upcomingChords(timeline: readonly ScrollSegment[], lines: readon
 }[] {
   if (!Number.isFinite(time) || !Number.isFinite(count) || count <= 0) return [];
   // Não deduplica índices: cada volta do refrão é uma ocorrência diferente no transporte.
-  return timeline.filter(segment => segment.kind !== 'hold' && segment.startTime > time)
+  return timeline.filter(segment => segment.kind !== 'hold' && segment.endLine >= segment.lineIndex && segment.startTime > time)
     .slice(0, Math.floor(count)).map(segment => ({ lineIndex: segment.lineIndex,
       chords: segmentChords(segment, lines), startsIn: segment.startTime - time }));
 }
@@ -56,7 +57,10 @@ export function buildChordTimeline(segments: readonly ScrollSegment[], lines: re
     }
   }
   const sorted = events.sort((a, b) => a.startTime - b.startTime);
-  return sorted.filter((chord, index) => index === 0 || chordIdentity(chord.name) !== chordIdentity(sorted[index - 1].name));
+  // A volta da letra precisa continuar anunciada mesmo quando repete o acorde anterior à pausa.
+  return sorted.filter((chord, index) => index === 0 || chordIdentity(chord.name) !== chordIdentity(sorted[index - 1].name)
+    || segments.some(segment => segment.instrumental && segment.endLine < segment.lineIndex
+      && segment.startTime > sorted[index - 1].startTime && segment.endTime <= chord.startTime));
 }
 
 /** A busca independe do histórico, então voltar no vídeo restaura a harmonia correta. */

@@ -76,3 +76,20 @@ describe('audioStart', () => {
     expect(playbackStartTime(0, 3, null)).toBe(0);
   });
 });
+
+describe('pausa instrumental sem escrita', () => {
+  const section = { label: 'Instrumental', startLine: null, endLine: null, mediaTimestampStart: 10, mediaTimestampEnd: 20 };
+  const payload = normalizeContribution({ id: 'pausa', duration: 30, instrumentalSections: [section], phrases: [
+    { lineIndex: 1, startTime: 0, endTime: 10 },
+    { lineIndex: 5, startTime: 20, endTime: 30 },
+  ] });
+
+  it('preserva a região ativa e sua âncora sem destacar a próxima frase', () => {
+    const range = playbackLineRanges(payload)[1];
+    expect(range).toMatchObject({ startTime: 10, endTime: 20, instrumental: true, lineIndex: 5, endLine: -1 });
+    const region = activePlaybackRegion(legacyToRegions(payload), 15);
+    expect(region).toMatchObject({ kind: 'instrumental', startLine: null, endLine: null });
+    expect(isLineInRange('Letra', 5, region)).toBe(false);
+    expect(activePlaybackRegion(legacyToRegions(payload), 20)?.kind).toBe('phrase');
+  });
+});

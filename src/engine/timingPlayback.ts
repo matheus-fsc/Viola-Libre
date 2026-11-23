@@ -1,3 +1,4 @@
+import { instrumentalScrollSegments } from './scrollTimeline';
 import type { MediaType, TimingContribution } from '../services/timingApi';
 import type { TimingRegion } from '../services/timingRegions';
 
@@ -14,8 +15,9 @@ export function isLineInRange(line: string, index: number, range: { startLine: n
 
 export function activePlaybackRegion(regions: readonly TimingRegion[], time: number): TimingRegion | null {
   const active = regions.filter(region => (region.kind === 'phrase' || region.kind === 'instrumental')
-    && region.startLine != null && region.endLine != null
-    && region.startTime != null && region.endTime != null && region.endLine >= region.startLine
+    && ((region.kind === 'instrumental' && region.startLine === null && region.endLine === null)
+      || (region.startLine != null && region.endLine != null && region.endLine >= region.startLine))
+    && region.startTime != null && region.endTime != null
     && time >= region.startTime && time < region.endTime);
   // O bloco instrumental explícito prevalece sobre frases antigas que ainda cubram o mesmo tempo.
   return active.find(region => region.kind === 'instrumental')
@@ -28,13 +30,7 @@ export function playbackLineRanges(timing: Pick<TimingContribution, 'phrases' | 
       lineIndex: phrase.lineIndex, endLine: phrase.lineIndex,
       startTime: phrase.startTime, endTime: phrase.endTime, instrumental: false,
     })),
-    ...timing.instrumentalSections.flatMap(section =>
-      section.startLine != null && section.endLine != null && section.endLine >= section.startLine
-        && section.mediaTimestampStart != null && section.mediaTimestampEnd != null
-        && section.mediaTimestampEnd > section.mediaTimestampStart
-        ? [{ lineIndex: section.startLine, endLine: section.endLine,
-          startTime: section.mediaTimestampStart, endTime: section.mediaTimestampEnd, instrumental: true }]
-        : []),
+    ...instrumentalScrollSegments(timing),
   ];
   // Payloads antigos podem conter frases de acordes dentro do bloco, sem dividir sua duração.
   return ranges.filter(range => range.instrumental || !ranges.some(section => section.instrumental

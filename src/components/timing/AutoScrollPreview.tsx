@@ -49,7 +49,7 @@ export const AutoScrollPreview: React.FC = () => {
             className={`whitespace-pre px-3 ${isActiveLine ? 'bg-yellow-100 border-l-2 border-yellow-500' : ''}`}
             style={{ lineHeight: '20px', minHeight: 20 }}
           >
-            {activeRegion?.kind === 'instrumental' && idx === activeRegion.startLine && (
+            {activeRegion?.kind === 'instrumental' && idx === (activeRegion.startLine ?? scrollToLine) && (
               <InstrumentalIndicator label={activeRegion.label}
                 countdown={countdown}
                 progress={(currentTime - activeRegion.startTime!) / (activeRegion.endTime! - activeRegion.startTime!)} />
