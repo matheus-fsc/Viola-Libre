@@ -24,7 +24,10 @@ export function ScrollTimelineBar({ timeline, total, elapsed, label, repeats, be
           style={{ left: `${segment.leftPct}%`, width: `${segment.widthPct}%` }}
           className={`absolute top-2 h-1 ${segment.kind === 'instrumental' ? 'bg-[#996600]'
             : segment.kind === 'hold' ? 'bg-[#d4d0c8]'
-              : repeatPassAtTime(repeats, segment.leftPct / 100 * total) ? 'bg-[#385683]' : 'bg-[#558855]'}`} />
+              // Só as voltas ficam azuis: músicas feitas de repetições pintariam tudo na primeira passada.
+              // O meio do segmento evita cair na borda da ocorrência vizinha por arredondamento.
+              : (repeatPassAtTime(repeats, (segment.leftPct + segment.widthPct / 2) / 100 * total)?.pass ?? 1) > 1
+                ? 'bg-[#385683]' : 'bg-[#558855]'}`} />
       ))}
       <span aria-hidden="true" className="absolute top-0 bottom-0 w-0.5 bg-[#cc3300] pointer-events-none"
         style={{ left: `calc(${time / total * 100}% - ${time === total ? 2 : 0}px)` }} />
