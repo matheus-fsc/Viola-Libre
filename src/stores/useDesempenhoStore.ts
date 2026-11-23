@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from 'react';
 import { create } from 'zustand';
 
 /**
@@ -15,34 +16,54 @@ import { create } from 'zustand';
  *   `animacoesDesligadas()` antes de começar cada movimento.
  */
 const CHAVE = 'viola_libre_modo_desempenho';
+/**
+ * Reduzir movimento: a mesma escolha do sistema operacional, feita aqui dentro, para quem
+ * passa mal com movimento e não pode (ou não quer) mudar o aparelho inteiro. Atributo
+ * `data-menos-movimento` no <html>.
+ */
+const CHAVE_MOVIMENTO = 'viola_libre_menos_movimento';
 
-function ler(): boolean {
+function ler(chave: string): boolean {
   try {
-    return localStorage.getItem(CHAVE) === '1';
+    return localStorage.getItem(chave) === '1';
   } catch {
     return false;
   }
 }
 
-function marcarDocumento(ligado: boolean) {
-  if (ligado) document.documentElement.setAttribute('data-desempenho', '');
-  else document.documentElement.removeAttribute('data-desempenho');
+function gravar(chave: string, valor: boolean) {
+  try { localStorage.setItem(chave, valor ? '1' : '0'); } catch { /* vale só na sessão */ }
+}
+
+function marcarDocumento(atributo: string, ligado: boolean) {
+  if (ligado) document.documentElement.setAttribute(atributo, '');
+  else document.documentElement.removeAttribute(atributo);
 }
 
 interface DesempenhoState {
   ligado: boolean;
   setLigado: (ligado: boolean) => void;
+  menosMovimento: boolean;
+  setMenosMovimento: (ligado: boolean) => void;
 }
 
 export const useDesempenhoStore = create<DesempenhoState>((set) => {
-  const ligado = ler();
-  marcarDocumento(ligado);
+  const ligado = ler(CHAVE);
+  const menosMovimento = ler(CHAVE_MOVIMENTO);
+  marcarDocumento('data-desempenho', ligado);
+  marcarDocumento('data-menos-movimento', menosMovimento);
   return {
     ligado,
     setLigado: (valor) => {
-      try { localStorage.setItem(CHAVE, valor ? '1' : '0'); } catch { /* vale só na sessão */ }
-      marcarDocumento(valor);
+      gravar(CHAVE, valor);
+      marcarDocumento('data-desempenho', valor);
       set({ ligado: valor });
+    },
+    menosMovimento,
+    setMenosMovimento: (valor) => {
+      gravar(CHAVE_MOVIMENTO, valor);
+      marcarDocumento('data-menos-movimento', valor);
+      set({ menosMovimento: valor });
     },
   };
 });
@@ -57,5 +78,21 @@ export function sistemaPedeMenosMovimento(): boolean {
  * não guardado: trocar a preferência vale já no próximo.
  */
 export function animacoesDesligadas(): boolean {
-  return useDesempenhoStore.getState().ligado || sistemaPedeMenosMovimento();
+  const { ligado, menosMovimento } = useDesempenhoStore.getState();
+  return ligado || menosMovimento || sistemaPedeMenosMovimento();
+}
+
+const CONSULTA_MOVIMENTO = '(prefers-reduced-motion: reduce)';
+
+function assinarSistema(avisar: () => void) {
+  const consulta = window.matchMedia(CONSULTA_MOVIMENTO);
+  consulta.addEventListener('change', avisar);
+  return () => consulta.removeEventListener('change', avisar);
+}
+
+/** Versão reativa de `animacoesDesligadas()`, para componentes que desenham diferente sem animação. */
+export function useAnimacoesDesligadas(): boolean {
+  const escolha = useDesempenhoStore(s => s.ligado || s.menosMovimento);
+  const sistema = useSyncExternalStore(assinarSistema, sistemaPedeMenosMovimento, () => false);
+  return escolha || sistema;
 }

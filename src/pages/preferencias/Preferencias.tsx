@@ -22,6 +22,7 @@ import { SeletorDeIdioma } from '../../components/SeletorDeIdioma';
 import { SeletorDeNotacao } from '../../components/SeletorDeNotacao';
 import { YouTubeJsConsentControl } from '../../components/YouTubeJsGate';
 import { useVisualizationStore } from '../../stores/useVisualizationStore';
+import { useNotationStore } from '../../stores/useNotationStore';
 import { sistemaPedeMenosMovimento, useDesempenhoStore } from '../../stores/useDesempenhoStore';
 import { useT } from '../../i18n';
 
@@ -90,6 +91,10 @@ export const Preferencias: React.FC<Props> = ({ instrument, onInstrumentChange }
   const setStringOrder = useVisualizationStore(s => s.setStringOrder);
   const desempenho = useDesempenhoStore(s => s.ligado);
   const setDesempenho = useDesempenhoStore(s => s.setLigado);
+  const menosMovimento = useDesempenhoStore(s => s.menosMovimento);
+  const chordLabel = useNotationStore(s => s.chordLabel);
+  const setChordLabel = useNotationStore(s => s.setChordLabel);
+  const setMenosMovimento = useDesempenhoStore(s => s.setMenosMovimento);
 
   return (
     <div className="p-2 sm:p-4">
@@ -163,6 +168,26 @@ export const Preferencias: React.FC<Props> = ({ instrument, onInstrumentChange }
                   {t('preferencias.cordasNota')}
                 </p>
               </div>
+              <div className="flex flex-col gap-1 border-t border-[#d4d0c8] pt-2">
+                <h3 className="text-[11px] font-bold font-mono text-gray-700">{t('preferencias.rotuloTitulo')}</h3>
+                <div className="flex flex-wrap gap-px">
+                  <Opcao
+                    rotulo={t('preferencias.rotuloNome')}
+                    legenda="G · C · D7"
+                    selecionado={chordLabel === 'nome'}
+                    onClick={() => setChordLabel('nome')}
+                  />
+                  <Opcao
+                    rotulo={t('preferencias.rotuloGrau')}
+                    legenda="I · IV · V7"
+                    selecionado={chordLabel === 'grau'}
+                    onClick={() => setChordLabel('grau')}
+                  />
+                </div>
+                <p className="px-0.5 text-[9px] text-gray-500 select-none leading-tight">
+                  {t('preferencias.rotuloNota')}
+                </p>
+              </div>
             </Secao>
 
             <Secao titulo={t('preferencias.desempenhoTitulo')} nota={t('preferencias.desempenhoNota')}>
@@ -187,6 +212,23 @@ export const Preferencias: React.FC<Props> = ({ instrument, onInstrumentChange }
                   {t('preferencias.desempenhoSistema')}
                 </p>
               )}
+            </Secao>
+
+            <Secao titulo={t('preferencias.movimentoTitulo')} nota={t('preferencias.movimentoNota')}>
+              <div className="flex flex-wrap gap-px">
+                <Opcao
+                  rotulo={t('preferencias.movimentoNormal')}
+                  legenda={t('preferencias.movimentoNormalNota')}
+                  selecionado={!menosMovimento}
+                  onClick={() => setMenosMovimento(false)}
+                />
+                <Opcao
+                  rotulo={t('preferencias.movimentoReduzido')}
+                  legenda={t('preferencias.movimentoReduzidoNota')}
+                  selecionado={menosMovimento}
+                  onClick={() => setMenosMovimento(true)}
+                />
+              </div>
             </Secao>
 
             <Secao titulo={t('preferencias.terceirosTitulo')} nota={t('preferencias.terceirosNota')}>

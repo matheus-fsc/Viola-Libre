@@ -82,6 +82,8 @@ export function buildChordTimeline(segments: readonly ScrollSegment[], lines: re
 /** A busca independe do histórico, então voltar no vídeo restaura a harmonia correta. */
 export function chordStripAtTime(timeline: readonly TimedChord[], time: number): {
   previous: TimedChord | null; current: TimedChord | null; next: TimedChord | null; startsIn: number | null;
+  /** O que vem depois do próximo: dá a duração do próximo. */
+  afterNext: TimedChord | null;
 } {
   let low = 0;
   let high = timeline.length;
@@ -92,5 +94,28 @@ export function chordStripAtTime(timeline: readonly TimedChord[], time: number):
   }
   const next = timeline[low] ?? null;
   return { previous: timeline[low - 2] ?? null, current: timeline[low - 1] ?? null,
-    next, startsIn: next ? next.startTime - time : null };
+    next, startsIn: next ? next.startTime - time : null, afterNext: timeline[low + 1] ?? null };
+}
+
+/** Abaixo disto a barra fica cheia e parada: encher e zerar várias vezes por segundo pisca e enjoa. */
+export const CHORD_PROGRESS_MIN_SECONDS = 0.6;
+
+/**
+ * Quanto do acorde atual já passou, de 0 a 1, até a entrada do próximo. Antes do primeiro
+ * acorde, conta a introdução: do começo da música (0) até ele. Com `steps`, a barra enche em
+ * blocos inteiros, um por tempo: o bloco aceso é o tempo em que a música está, como contar
+ * "1, 2, 3, 4". `null` quando não há troca à frente.
+ */
+export function chordProgress(current: TimedChord | null, next: TimedChord | null, time: number, steps = 0): number | null {
+  if (!next) return null;
+  const start = current?.startTime ?? 0;
+  const span = next.startTime - start;
+  if (!(span >= CHORD_PROGRESS_MIN_SECONDS)) return 1;
+  const p = Math.max(0, Math.min(1, (time - start) / span));
+  return steps > 0 ? Math.ceil(p * steps) / steps : p;
+}
+
+/** Duração do acorde atual (ou da introdução, antes do primeiro), em segundos. */
+export function currentChordSeconds(current: TimedChord | null, next: TimedChord | null): number | null {
+  return next ? next.startTime - (current?.startTime ?? 0) : null;
 }

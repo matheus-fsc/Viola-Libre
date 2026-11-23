@@ -16,7 +16,7 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';
-import { detectKey, isChordDiatonic, campoHarmonico, MODOS } from './detectKey';
+import { detectKey, isChordDiatonic, campoHarmonico, grauDoAcorde, MODOS } from './detectKey';
 
 describe('detectKey — tom é sempre tríade', () => {
   it('reduz a tétrade de abertura a um tom possível', () => {
@@ -1030,5 +1030,29 @@ describe.skipIf(!temDump)('detectKey — regressão sobre o acervo', () => {
         expect(reg.key).toMatch(/^[A-G][#b]?m?$/);
       }
     }
+  });
+});
+
+describe('grauDoAcorde', () => {
+  const jonio = MODOS.find(m => m.nome === 'jônio')!;
+  const eolio = MODOS.find(m => m.nome === 'eólio')!;
+  it('escreve o acorde como grau do tom, com o resto do sufixo', () => {
+    expect(grauDoAcorde('C', 0, jonio)).toBe('I');
+    expect(grauDoAcorde('G7', 0, jonio)).toBe('V7');
+    expect(grauDoAcorde('Am7', 0, jonio)).toBe('vi7');
+    expect(grauDoAcorde('F7M', 0, jonio)).toBe('IV7M');
+    expect(grauDoAcorde('B°', 0, jonio)).toBe('vii°');
+    expect(grauDoAcorde('Bb', 0, jonio)).toBe('bVII');
+  });
+  it('mantém o baixo como grau', () => {
+    expect(grauDoAcorde('C/E', 0, jonio)).toBe('I/III');
+  });
+  it('vale em qualquer tom e modo', () => {
+    expect(grauDoAcorde('D7', 7, jonio)).toBe('V7');
+    expect(grauDoAcorde('Am', 9, eolio)).toBe('i');
+    expect(grauDoAcorde('G', 9, eolio)).toBe('bVII');
+  });
+  it('sem fundamental não inventa grau', () => {
+    expect(grauDoAcorde('N.C.', 0, jonio)).toBeNull();
   });
 });

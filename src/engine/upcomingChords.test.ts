@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildChordTimeline, chordStripAtTime } from './upcomingChords';
+import { buildChordTimeline, chordProgress, chordStripAtTime, currentChordSeconds, type TimedChord } from './upcomingChords';
 import { buildScrollTimeline, type ScrollSegment } from './scrollTimeline';
 
 const lyric = (lineIndex: number, startTime = 10, endTime = 20): ScrollSegment => ({
@@ -81,8 +81,8 @@ describe('faixa temporal de acordes', () => {
     const events = buildChordTimeline([lyric(1)], ['C   G7   F7', 'abcdefghij']);
     expect(chordStripAtTime(events, 19)).toMatchObject({ previous: { name: 'G7' }, current: { name: 'F7' }, next: null });
     expect(chordStripAtTime(events, 10)).toMatchObject({ previous: null, current: { name: 'C' }, next: { name: 'G7' } });
-    expect(chordStripAtTime(events, 0)).toEqual({ previous: null, current: null, next: events[0], startsIn: 10 });
-    expect(chordStripAtTime([], 0)).toEqual({ previous: null, current: null, next: null, startsIn: null });
+    expect(chordStripAtTime(events, 0)).toEqual({ previous: null, current: null, next: events[0], startsIn: 10, afterNext: events[1] });
+    expect(chordStripAtTime([], 0)).toEqual({ previous: null, current: null, next: null, startsIn: null, afterNext: null });
   });
 });
 
@@ -116,5 +116,31 @@ describe('harmonia durante instrumentais no meio da música', () => {
     ] });
     const chords = buildChordTimeline(timeline, ['C', 'Antes', 'C', 'Depois']);
     expect(chordStripAtTime(chords, 15)).toMatchObject({ current: { name: 'C', startTime: 0 }, next: { name: 'C', startTime: 20 } });
+  });
+});
+
+describe('chordProgress', () => {
+  const chord = (name: string, startTime: number) => ({ name, startTime }) as TimedChord;
+  it('vai de 0 a 1 entre o atual e o próximo', () => {
+    expect(chordProgress(chord('G', 10), chord('C', 12), 11)).toBeCloseTo(0.5);
+    expect(chordProgress(chord('G', 10), chord('C', 12), 9)).toBe(0);
+    expect(chordProgress(chord('G', 10), chord('C', 12), 13)).toBe(1);
+  });
+  it('acende o bloco do tempo em que a música está', () => {
+    expect(chordProgress(chord('G', 10), chord('C', 12), 10.2, 4)).toBe(0.25);
+    expect(chordProgress(chord('G', 10), chord('C', 12), 11.9, 4)).toBe(1);
+    expect(chordProgress(chord('G', 10), chord('C', 12), 10, 4)).toBe(0);
+  });
+  it('fica cheia e parada em trocas rápidas demais', () => {
+    expect(chordProgress(chord('G', 10), chord('C', 10.3), 10.1)).toBe(1);
+  });
+  it('sem próximo acorde não há barra', () => {
+    expect(chordProgress(chord('G', 10), null, 11)).toBeNull();
+  });
+  it('antes do primeiro acorde, conta a introdução desde o começo', () => {
+    expect(chordProgress(null, chord('C', 8), 2)).toBeCloseTo(0.25);
+    expect(currentChordSeconds(null, chord('C', 8))).toBe(8);
+    expect(currentChordSeconds(chord('G', 10), chord('C', 12))).toBe(2);
+    expect(currentChordSeconds(chord('G', 10), null)).toBeNull();
   });
 });

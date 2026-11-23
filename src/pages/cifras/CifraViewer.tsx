@@ -12,7 +12,9 @@ import {
 } from '../../services/api';
 import type { Voicing } from '../../engine/types';
 import { buildChord, calculateVoicings, parseChordString, transposeChordString } from '../../engine/chordCalculator';
-import { detectKey, isChordDiatonic, type DeteccaoTom } from '../../engine/detectKey';
+import { detectKey, grauDoAcorde, isChordDiatonic, type DeteccaoTom } from '../../engine/detectKey';
+import type { PitchClass } from '../../engine/types';
+import { useNotationStore } from '../../stores/useNotationStore';
 import { PRESET_INSTRUMENTS } from '../../engine/tunings';
 import { AudioEngine } from '../../engine/AudioEngine';
 import { FretboardDiagram } from '../../components/FretboardDiagram';
@@ -448,7 +450,7 @@ export const CifraViewer: React.FC = () => {
   const lastClockAtRef = useRef(0);
   // Lidos pelo laço do rAF: a troca de acorde no painel sai no quadro certo, e o painel acompanha a rolagem sem esperar o evento de scroll.
   const chordTimelineRef = useRef<readonly TimedChord[]>([]);
-  const syncedPanelPositionRef = useRef<(() => void) | null>(null);
+  const syncedPanelFrameRef = useRef<((time: number) => void) | null>(null);
   const railRef = useRef<HTMLDivElement>(null);
   const railDragRef = useRef(false);
   // Espelhos para o laço do rAF, que vive entre renders e precisa ler o valor atual.
@@ -1026,7 +1028,7 @@ export const CifraViewer: React.FC = () => {
         }
         const activeLine = lines[currentPhraseIndex(lines, elapsedRef.current)];
         highlight(activeLine?.instrumental && elapsedRef.current >= activeLine.endTime ? undefined : activeLine);
-        syncedPanelPositionRef.current?.();
+        syncedPanelFrameRef.current?.(elapsedRef.current);
       } else if (settling) {
         highlight();
         // Motor em silêncio: a inércia do toque/trackpad termina sozinha e o
@@ -1561,6 +1563,13 @@ export const CifraViewer: React.FC = () => {
     [scrollTimeline, syncedChordLines, timingMedia?.chordTimes]);
   const chordStrip = chordStripAtTime(chordTimeline, elapsedDisplay);
   useLayoutEffect(() => { chordTimelineRef.current = chordTimeline; }, [chordTimeline]);
+  // O painel lê acordes já transpostos, então o grau é medido contra o tom que está na tela.
+  const chordLabel = useNotationStore(s => s.chordLabel);
+  const syncedDegreeOf = useMemo(() => {
+    if (chordLabel !== 'grau' || !deteccao) return undefined;
+    const tonic = (((deteccao.tonic + transposeOffset) % 12) + 12) % 12 as PitchClass;
+    return (name: string) => grauDoAcorde(name, tonic, deteccao.modo);
+  }, [chordLabel, deteccao, transposeOffset]);
   const activeChordLine = activeInstrumental && chordStrip.current?.lineIndex !== undefined
     && chordStrip.current.startTime >= activeInstrumental.startTime
     && chordStrip.current.startTime < activeInstrumental.endTime ? chordStrip.current.lineIndex : null;
@@ -3115,7 +3124,7 @@ export const CifraViewer: React.FC = () => {
           </div>
           {autoScroll && lineMode && (
             <SyncedChordsPanel visible={showSyncedChords} onToggle={toggleSyncedChords}
-              strip={chordStrip} tuning={currentTuning} voicings={syncedVoicings} positionRef={syncedPanelPositionRef} />
+              strip={chordStrip} tuning={currentTuning} voicings={syncedVoicings} bpm={timingMedia?.bpm || localBpm || cifra?.bpm || null} degreeOf={syncedDegreeOf} frameRef={syncedPanelFrameRef} />
           )}
         </div>
 

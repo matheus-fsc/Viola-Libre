@@ -1684,3 +1684,30 @@ export function isChordDiatonic(chordName: string, key: string, modo?: Modo): bo
   // qualidade de uma vez: Am cabe em C, mas A maior não, porque traz o C# de fora.
   return acordeEsq.pcs.every(pc => colecao.has(pc));
 }
+
+/**
+ * O acorde escrito como grau do tom: 'G7' em Dó vira 'V7', 'Am7' vira 'vi7', 'C/E' vira
+ * 'I/III'. Mesma convenção do campo harmônico (maiúscula maior, minúscula menor, ° diminuta);
+ * o resto do sufixo segue como está, porque a tensão é a mesma em qualquer tom.
+ *
+ * `null` quando o acorde não tem fundamental reconhecível (N.C., marcação solta).
+ */
+export function grauDoAcorde(acorde: string, tonic: PitchClass, modo: Modo): string | null {
+  let partes: ReturnType<typeof parseChordString>;
+  try {
+    partes = parseChordString(acorde);
+  } catch {
+    return null;
+  }
+  const { root, suffix, bass } = partes;
+  if (!/^[A-G][#b]?$/.test(root)) return null;
+  const raizDoModo = ESCALA_MAIOR[modo.grau];
+  const temQuartaJusta = ESCALA_MAIOR.some((_, i) => (ESCALA_MAIOR[(modo.grau + i) % 7] - raizDoModo + 12) % 12 === 5);
+  const intervalo = (nota: string) => (noteNameToPitchClass(nota) - tonic + 12) % 12;
+  const diminuto = /^(°|º|dim)/.exec(suffix);
+  const menor = !diminuto && /^m(?!aj)/.test(suffix);
+  const qualidade = diminuto ? '°' : menor ? 'm' : '';
+  const resto = diminuto ? suffix.slice(diminuto[0].length) : menor ? suffix.slice(1) : suffix;
+  const grau = numeralDoGrau(intervalo(root), qualidade, temQuartaJusta) + resto;
+  return bass ? `${grau}/${numeralDoGrau(intervalo(bass), '', temQuartaJusta)}` : grau;
+}
