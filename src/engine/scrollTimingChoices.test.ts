@@ -25,6 +25,15 @@ const manual: TimingContribution = { ...auto, id: 'editor', source: 'manual', ed
 const legacy: TimingContribution = { ...manual, id: 'legacy', source: undefined, editorAlias: null, reviewed: false };
 
 describe('buildScrollTimingChoices', () => {
+  it('desloca os acordes alinhados e descarta os que caem nos cortes de dedilhado', () => {
+    const chordTimes = [0, 3, 5, 9, 11, 12].map(time => ({ time, lineIndex: 0, chordIndex: 0, chord: 'C', confidence: 0.8 }));
+    const timing = { ...auto, chordTimes };
+    const { choices } = buildScrollTimingChoices([timing], ['lyric', 'tab', 'lyric'], timing, null);
+    expect(choices[1].timing?.chordTimes).toEqual(chordTimes);
+    expect(choices[2].timing?.chordTimes).toEqual([chordTimes[0], ...chordTimes.slice(3).map(c => ({ ...c, time: c.time - 6 }))]);
+    expect(timing.chordTimes.map(c => c.time)).toEqual([0, 3, 5, 9, 11, 12]);
+  });
+
   it('oferece o original, a variante encurtada e uma opção por contribuição da comunidade', () => {
     const { choices, selected } = buildScrollTimingChoices([manual, auto, legacy], ['lyric', 'tab', 'lyric'], manual, null);
     expect(choices.map(choice => choice.id)).toEqual(['default', 'auto-original', 'auto-sem-dedilhado', 'editor', 'legacy']);

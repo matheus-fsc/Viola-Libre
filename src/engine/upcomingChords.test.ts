@@ -7,6 +7,38 @@ const lyric = (lineIndex: number, startTime = 10, endTime = 20): ScrollSegment =
 });
 
 describe('faixa temporal de acordes', () => {
+  it('usa os tempos exatos no instrumental e conserva as colunas da letra', () => {
+    const segment: ScrollSegment = { ...lyric(0, 0, 10), endLine: 2, kind: 'instrumental', instrumental: true };
+    const aligned = (time: number, lineIndex: number, chordIndex: number) => ({ time, lineIndex, chordIndex, chord: 'C', confidence: 0.95 });
+    const events = buildChordTimeline([segment, lyric(4, 10, 20)], ['D E', '', 'F', 'G    A', 'abcdefghij'], [
+      aligned(8, 2, 0), aligned(1.2, 0, 0), aligned(3.7, 0, 1),
+      aligned(12, 3, 1), aligned(4, 0, 9), aligned(5, 1, 0), aligned(10, 0, 0),
+    ]);
+    expect(events.map(c => [c.name, c.startTime])).toEqual([['D', 1.2], ['E', 3.7], ['F', 8], ['G', 10], ['A', 15]]);
+    expect(events[2]).toMatchObject({ lineIndex: 2, chordIndex: 0 });
+    expect(chordStripAtTime(events, 7)).toMatchObject({ previous: { name: 'D' }, current: { name: 'E' },
+      next: { name: 'F', startTime: 8 }, startsIn: 1 });
+    expect(buildChordTimeline([segment], ['D E'], [aligned(11, 0, 0)]).map(c => c.startTime)).toEqual([0, 5]);
+  });
+
+  it('mantém cada ocorrência da introdução cíclica mesmo repetindo o mesmo acorde', () => {
+    const segment: ScrollSegment = { ...lyric(0, 0, 12), endLine: 1, kind: 'instrumental', instrumental: true };
+    const chordTimes = [
+      { time: 0.5, lineIndex: 0, chordIndex: 0, chord: 'C', confidence: 1 },
+      { time: 2, lineIndex: 0, chordIndex: 1, chord: 'G', confidence: 1 },
+      { time: 4, lineIndex: 1, chordIndex: 0, chord: 'C', confidence: 1 },
+      { time: 6, lineIndex: 0, chordIndex: 0, chord: 'C', confidence: 1 },
+      { time: 8.5, lineIndex: 0, chordIndex: 1, chord: 'G', confidence: 1 },
+      { time: 11, lineIndex: 1, chordIndex: 0, chord: 'C', confidence: 1 },
+    ];
+    const events = buildChordTimeline([segment, { ...segment, startTime: 20, endTime: 32 }], ['C G', 'C'],
+      [...chordTimes, ...chordTimes.map(c => ({ ...c, time: c.time + 20 }))]);
+    expect(events.map(c => [c.startTime, c.lineIndex, c.chordIndex]))
+      .toEqual([...chordTimes, ...chordTimes.map(c => ({ ...c, time: c.time + 20 }))].map(c => [c.time, c.lineIndex, c.chordIndex]));
+    expect(chordStripAtTime(events, 6)).toMatchObject({ previous: { lineIndex: 1 }, current: { lineIndex: 0 }, startsIn: 2.5 });
+    expect(chordStripAtTime(events, 1)).toMatchObject({ current: { startTime: 0.5 }, startsIn: 1 });
+  });
+
   it('distribui pelas colunas usando a maior largura entre letra e harmonia', () => {
     expect(buildChordTimeline([lyric(1)], ['C    G', 'abcdefghij'])).toEqual([
       { name: 'C', startTime: 10 }, { name: 'G', startTime: 15 },

@@ -70,7 +70,7 @@ import { easeScrollY, stepTimeAtY, type LineScrollAnchor } from '../../engine/li
 import { buildScrollTimeline, timelineYAtTime as stepYAtTime, timelineIndexAtTime as currentPhraseIndex, instrumentalCountdown } from '../../engine/scrollTimeline';
 import { ScrollTimelineBar } from './ScrollTimelineBar';
 import { SyncedChordsPanel } from './SyncedChordsPanel';
-import { buildChordTimeline, chordStripAtTime } from '../../engine/upcomingChords';
+import { buildChordTimeline, chordStripAtTime, type TimedChord } from '../../engine/upcomingChords';
 import { displayedChordVoicing, type ChordVoicingContext } from '../../services/displayedChordVoicing';
 import { InstrumentalIndicator } from '../../components/timing/InstrumentalIndicator';
 import { getRepeatRanges, repeatPassAtTime, type RepeatRange } from '../../engine/repeatRanges';
@@ -446,6 +446,9 @@ export const CifraViewer: React.FC = () => {
   const totalTimeRef = useRef(0);
   const videoDurationRef = useLatest(videoDuration);
   const lastClockAtRef = useRef(0);
+  // Lidos pelo laço do rAF: a troca de acorde no painel sai no quadro certo, e o painel acompanha a rolagem sem esperar o evento de scroll.
+  const chordTimelineRef = useRef<readonly TimedChord[]>([]);
+  const syncedPanelPositionRef = useRef<(() => void) | null>(null);
   const railRef = useRef<HTMLDivElement>(null);
   const railDragRef = useRef(false);
   // Espelhos para o laço do rAF, que vive entre renders e precisa ler o valor atual.
@@ -899,6 +902,7 @@ export const CifraViewer: React.FC = () => {
     let manualLineSeek = false;
     let ratedClock: SourceVideoClock | null = null;
     let videoRate = 1;
+    let shownChord: TimedChord | null | undefined;
     const highlight = (line?: ViewerLineAnchor) => {
       if (line === highlighted) return;
       highlighted?.highlight.forEach(el => el.classList.remove(LINE_HIGHLIGHT));
@@ -1022,6 +1026,7 @@ export const CifraViewer: React.FC = () => {
         }
         const activeLine = lines[currentPhraseIndex(lines, elapsedRef.current)];
         highlight(activeLine?.instrumental && elapsedRef.current >= activeLine.endTime ? undefined : activeLine);
+        syncedPanelPositionRef.current?.();
       } else if (settling) {
         highlight();
         // Motor em silêncio: a inércia do toque/trackpad termina sozinha e o
@@ -1082,8 +1087,12 @@ export const CifraViewer: React.FC = () => {
           setCurrentSection(secLabel);
         }
       }
+      // A troca de acorde não espera o próximo tique do relógio: o painel anima no tempo da música.
+      const chordNow = chordTimelineRef.current.length ? chordStripAtTime(chordTimelineRef.current, elapsedRef.current).current : null;
+      const chordChanged = shownChord !== undefined && chordNow !== shownChord;
+      shownChord = chordNow;
       // Relógio: 4 re-renders por segundo em vez de 60.
-      if (ts - lastClockAtRef.current > 250) {
+      if (chordChanged || ts - lastClockAtRef.current > 250) {
         lastClockAtRef.current = ts;
         setElapsedDisplay(elapsedRef.current);
       }
@@ -1548,8 +1557,21 @@ export const CifraViewer: React.FC = () => {
   }, [cifra, transposeOffset]);
 
   const syncedChordLines = useMemo(() => cifraTimingLines(displayHtml), [displayHtml]);
-  const chordTimeline = useMemo(() => buildChordTimeline(scrollTimeline, syncedChordLines), [scrollTimeline, syncedChordLines]);
+  const chordTimeline = useMemo(() => buildChordTimeline(scrollTimeline, syncedChordLines, timingMedia?.chordTimes),
+    [scrollTimeline, syncedChordLines, timingMedia?.chordTimes]);
   const chordStrip = chordStripAtTime(chordTimeline, elapsedDisplay);
+  useLayoutEffect(() => { chordTimelineRef.current = chordTimeline; }, [chordTimeline]);
+  const activeChordLine = activeInstrumental && chordStrip.current?.lineIndex !== undefined
+    && chordStrip.current.startTime >= activeInstrumental.startTime
+    && chordStrip.current.startTime < activeInstrumental.endTime ? chordStrip.current.lineIndex : null;
+
+  useLayoutEffect(() => {
+    if (activeChordLine === null) return;
+    // A linha alinhada orienta as voltas do instrumental sem retirar o destaque do bloco.
+    const row = contentRef.current?.querySelector<HTMLElement>(`[data-timing-chord="${activeChordLine}"], [data-timing-line="${activeChordLine}"]`);
+    row?.classList.add('cifra-chord-line-playing');
+    return () => row?.classList.remove('cifra-chord-line-playing');
+  }, [activeChordLine, displayHtml, showTabs, geometryToken]);
 
   // Split displayHtml into html/tab segments for the tab transposer
   const cifraSegments = useMemo(() => {
@@ -3093,7 +3115,7 @@ export const CifraViewer: React.FC = () => {
           </div>
           {autoScroll && lineMode && (
             <SyncedChordsPanel visible={showSyncedChords} onToggle={toggleSyncedChords}
-              strip={chordStrip} tuning={currentTuning} voicings={syncedVoicings} />
+              strip={chordStrip} tuning={currentTuning} voicings={syncedVoicings} positionRef={syncedPanelPositionRef} />
           )}
         </div>
 

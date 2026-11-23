@@ -28,6 +28,10 @@ export function buildCommunityCards(
       if (removedDuration > 0) {
         const derived: TimingContribution = {
           ...timing, phrases, loops, cuts, variant: 'sem_dedilhado', reviewedFrom: timing.id,
+          // Um acorde dentro do corte não soa; os demais acompanham o mesmo relógio das frases.
+          ...(timing.chordTimes && { chordTimes: timing.chordTimes
+            .filter(chord => !cuts.some(cut => chord.time >= cut.start && chord.time < cut.end))
+            .map(chord => ({ ...chord, time: mediaToDerived(chord.time, cuts) })) }),
           audioStart: timing.audioStart == null ? null : mediaToDerived(timing.audioStart, cuts),
           sections: timing.sections.map(section => ({ ...section, startTime: mediaToDerived(section.startTime, cuts),
             endTime: section.endTime == null ? null : mediaToDerived(section.endTime, cuts) })),

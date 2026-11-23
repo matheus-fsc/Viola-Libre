@@ -1,6 +1,7 @@
 import { chordIdentity } from './chordIdentity';
 import { isChordLine, parseChordLine } from '../services/cifraUtils';
 import type { ScrollSegment } from './scrollTimeline';
+import type { TimingChordTime } from '../services/timingApi';
 
 export function segmentChords(segment: ScrollSegment, lines: readonly string[]): string[] {
   if (segment.endLine < segment.lineIndex) return [];
@@ -33,15 +34,29 @@ export function upcomingChords(timeline: readonly ScrollSegment[], lines: readon
 export interface TimedChord {
   name: string;
   startTime: number;
+  lineIndex?: number;
+  chordIndex?: number;
 }
 
 /** Usa ocorrências do transporte, pois a mesma linha pode voltar em cada refrão. */
-export function buildChordTimeline(segments: readonly ScrollSegment[], lines: readonly string[]): TimedChord[] {
+export function buildChordTimeline(segments: readonly ScrollSegment[], lines: readonly string[], chordTimes: readonly TimingChordTime[] = []): TimedChord[] {
   const events: TimedChord[] = [];
   for (const segment of segments) {
     const duration = segment.endTime - segment.startTime;
     if (segment.kind === 'hold' || !Number.isFinite(segment.startTime) || !Number.isFinite(duration) || duration <= 0) continue;
     if (segment.instrumental) {
+      const aligned = chordTimes.flatMap(chord => {
+        if (chord.time < segment.startTime || chord.time >= segment.endTime
+          || chord.lineIndex < segment.lineIndex || chord.lineIndex > segment.endLine) return [];
+        const line = lines[chord.lineIndex];
+        const parsed = line && isChordLine(line) ? parseChordLine(line)[chord.chordIndex] : undefined;
+        // O índice preserva a transposição exibida; o nome vindo do áudio está no tom original.
+        return parsed ? [{ name: parsed.text, startTime: chord.time, lineIndex: chord.lineIndex, chordIndex: chord.chordIndex }] : [];
+      });
+      if (aligned.length) {
+        events.push(...aligned);
+        continue;
+      }
       const chords = segmentChords(segment, lines);
       chords.forEach((name, index) => events.push({ name, startTime: segment.startTime + index / chords.length * duration }));
       continue;
@@ -58,7 +73,8 @@ export function buildChordTimeline(segments: readonly ScrollSegment[], lines: re
   }
   const sorted = events.sort((a, b) => a.startTime - b.startTime);
   // A volta da letra precisa continuar anunciada mesmo quando repete o acorde anterior à pausa.
-  return sorted.filter((chord, index) => index === 0 || chordIdentity(chord.name) !== chordIdentity(sorted[index - 1].name)
+  return sorted.filter((chord, index) => index === 0 || chord.lineIndex !== undefined
+    || chordIdentity(chord.name) !== chordIdentity(sorted[index - 1].name)
     || segments.some(segment => segment.instrumental && segment.endLine < segment.lineIndex
       && segment.startTime > sorted[index - 1].startTime && segment.endTime <= chord.startTime));
 }

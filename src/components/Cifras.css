@@ -51,6 +51,12 @@
   box-shadow: inset 2px 0 var(--color-purple-600);
 }
 
+/* A faixa mais forte indica a linha atual sem mudar as medidas do bloco instrumental. */
+.cifra-chord-line-playing {
+  background-color: var(--color-purple-300);
+  box-shadow: inset 4px 0 var(--color-purple-800);
+}
+
 .cifra-viewer-content .cifra-line-blank {
   min-height: 1em;
 }
@@ -113,6 +119,21 @@
 .synced-chords-panel {
   display: none;
 }
+
+/* Troca de acorde no painel guiado: a fileira anda uma casa, o acorde que chega cresce até o
+   tamanho de atual e o que sai esmaece para anterior. Só transform e opacity, para não mexer no layout. */
+.synced-chords-forward { animation: synced-chords-slide-forward 280ms cubic-bezier(0.22, 1, 0.36, 1); }
+.synced-chords-back { animation: synced-chords-slide-back 280ms cubic-bezier(0.22, 1, 0.36, 1); }
+.synced-chords-forward > .synced-chords-slot:nth-child(1) { animation: synced-chords-leave 280ms ease-out; }
+.synced-chords-forward > .synced-chords-slot:nth-child(2),
+.synced-chords-back > .synced-chords-slot:nth-child(2) { animation: synced-chords-arrive 280ms cubic-bezier(0.22, 1, 0.36, 1); }
+.synced-chords-forward > .synced-chords-slot:nth-child(3) { animation: synced-chords-appear 280ms ease-out; }
+
+@keyframes synced-chords-slide-forward { from { transform: translateX(34%); } }
+@keyframes synced-chords-slide-back { from { transform: translateX(-34%); } }
+@keyframes synced-chords-leave { from { opacity: 1; } }
+@keyframes synced-chords-arrive { from { opacity: 0.4; transform: scale(0.85); } }
+@keyframes synced-chords-appear { from { opacity: 0; } }
 
 @container (min-width: 900px) {
   .synced-chords-panel {

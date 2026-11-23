@@ -30,6 +30,14 @@ export interface TimingPhrase {
   endTime: number;
 }
 
+export interface TimingChordTime {
+  time: number;
+  lineIndex: number;
+  chordIndex: number;
+  chord: string;
+  confidence: number;
+}
+
 // Notation markers — point-in-time symbols from sheet music
 export type MarkerType =
   | 'segno'           // 𝄋 — ponto de retorno para D.S.
@@ -94,6 +102,7 @@ export interface TimingContribution {
   loops: TimingLoop[];
   instrumentalSections: TimingInstrumental[];
   phrases: TimingPhrase[];
+  chordTimes?: TimingChordTime[];
   sections: TimingSection[];
   markers: TimingMarker[];
   votes: number;
@@ -116,6 +125,7 @@ export interface TimingSubmitPayload {
   loops: TimingLoop[];
   instrumentalSections: TimingInstrumental[];
   phrases: TimingPhrase[];
+  chordTimes?: TimingChordTime[];
   sections: TimingSection[];
   markers: TimingMarker[];
   variant?: 'sem_dedilhado' | null;
@@ -125,7 +135,8 @@ export interface TimingSubmitPayload {
 
 export type MediaType = 'youtube' | 'audio' | 'other' | null;
 
-type RawTimingContribution = Pick<TimingContribution, 'id' | 'duration'> & Partial<Omit<TimingContribution, 'id' | 'duration' | 'loops'>> & {
+type RawTimingContribution = Pick<TimingContribution, 'id' | 'duration'> & Partial<Omit<TimingContribution, 'id' | 'duration' | 'loops' | 'chordTimes'>> & {
+  chordTimes?: unknown;
   loops?: (Omit<TimingLoop, 'occurrences'> & { occurrences?: unknown })[];
   editor_alias?: string | null;
   media_url?: string | null;
@@ -147,6 +158,22 @@ export function normalizeLoopOccurrences(raw: unknown): TimingOccurrence[] {
   return occurrences.sort((a, b) => a.startTime - b.startTime);
 }
 
+export function normalizeChordTimes(raw: unknown): TimingChordTime[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  // Um alinhamento incompleto por erro de formato não deve substituir a estimativa do bloco.
+  if (!raw.every((entry): entry is TimingChordTime => {
+    if (!entry || typeof entry !== 'object') return false;
+    const { time, lineIndex, chordIndex, chord, confidence } = entry;
+    return typeof time === 'number' && Number.isFinite(time) && time >= 0
+      && Number.isInteger(lineIndex) && lineIndex >= 0
+      && Number.isInteger(chordIndex) && chordIndex >= 0
+      && typeof chord === 'string' && chord.trim().length > 0
+      && typeof confidence === 'number' && Number.isFinite(confidence) && confidence >= 0 && confidence <= 1;
+  })) return undefined;
+  return raw.map(({ time, lineIndex, chordIndex, chord, confidence }) => ({ time, lineIndex, chordIndex, chord, confidence }))
+    .sort((a, b) => a.time - b.time);
+}
+
 export function normalizeContribution(raw: RawTimingContribution): TimingContribution {
   const {
     id, duration, bpm = 0, votes = 0,
@@ -157,6 +184,7 @@ export function normalizeContribution(raw: RawTimingContribution): TimingContrib
     updatedAt = raw.updated_at ?? '',
     source = 'manual', reviewed, reviewedFrom = raw.reviewed_from,
   } = raw;
+  const chordTimes = normalizeChordTimes(raw.chordTimes);
   let phrases = raw.phrases;
   // Os registros antigos guardavam só o início, então o próximo início delimita cada frase.
   if (phrases == null && raw.line_timestamps) {
@@ -173,6 +201,7 @@ export function normalizeContribution(raw: RawTimingContribution): TimingContrib
     ...(raw.variant != null && { variant: raw.variant }),
     ...(raw.cuts != null && { cuts: normalizeCuts(raw.cuts) }),
     ...(raw.audioStart != null && { audioStart: raw.audioStart }),
+    ...(chordTimes && { chordTimes }),
     loops: (raw.loops ?? []).map(({ occurrences: rawOccurrences, ...loop }) => {
       const occurrences = normalizeLoopOccurrences(rawOccurrences);
       const first = occurrences[0];

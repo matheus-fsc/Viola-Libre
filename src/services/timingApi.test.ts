@@ -2,6 +2,31 @@ import { describe, expect, it } from 'vitest';
 import { cleanYouTubeUrl, detectMediaType, extractYouTubeId, normalizeContribution } from './timingApi';
 
 describe('normalizeContribution', () => {
+  it('preserva e ordena os acordes alinhados sem alterar a entrada ou perder voltas', () => {
+    const chord = { time: 3, lineIndex: 0, chordIndex: 1, chord: 'G7', confidence: 0.9 };
+    const chordTimes = [chord, { ...chord, time: 1 }];
+    expect(normalizeContribution({ id: 'auto', duration: 10, chordTimes }).chordTimes)
+      .toEqual([chordTimes[1], chordTimes[0]]);
+    expect(chordTimes[0].time).toBe(3);
+    expect(normalizeContribution({ id: 'auto', duration: 10, chordTimes: [] }).chordTimes).toEqual([]);
+  });
+
+  it('descarta o campo inteiro quando o alinhamento tem formato inválido', () => {
+    const chord = { time: 1, lineIndex: 0, chordIndex: 0, chord: 'C', confidence: 1 };
+    const invalid = [null, 'inválido', {}, { ...chord, time: -1 }, { ...chord, time: NaN },
+      { ...chord, time: Infinity }, { ...chord, time: '1' }, { ...chord, lineIndex: -1 },
+      { ...chord, lineIndex: 0.5 }, { ...chord, chordIndex: -1 }, { ...chord, chordIndex: 0.5 },
+      { ...chord, chord: ' ' }, { ...chord, confidence: -0.1 }, { ...chord, confidence: 1.1 },
+      { ...chord, confidence: NaN }, { ...chord, confidence: undefined }];
+    for (const entry of invalid) {
+      expect(normalizeContribution({ id: 'auto', duration: 10, chordTimes: [chord, entry] }))
+        .not.toHaveProperty('chordTimes');
+    }
+    for (const chordTimes of [undefined, null, {}, 'inválido']) {
+      expect(normalizeContribution({ id: 'auto', duration: 10, chordTimes })).not.toHaveProperty('chordTimes');
+    }
+  });
+
   it('preserva o contrato camelCase e os formatos das regiões', () => {
     const raw = {
       id: 'manual-1',
