@@ -35,7 +35,11 @@ export function isChordLine(line: string): boolean {
   // Parênteses soltos agrupam uma sequência de acordes, às vezes quebrada em duas linhas:
   // "( A7  D7  C#7" e "F#m  G7 )  A7" (Punk da Periferia). Sozinhos não são palavra.
   const tokens = chordLineTokens(line).filter(token => !/^[()]+$/.test(token.text));
-  return tokens.length > 0 && tokens.every(token => isValidChordToken(token.text));
+  // "[Intro] C#m7  A7M" (Pra Ver a Voz): o marcador de seção abre a primeira linha do bloco.
+  // Sem isso a primeira volta da introdução sumia do painel e dos tempos dos acordes.
+  const marker = tokens[0] && /^\[[^\]]+\]$/.test(tokens[0].text) && !isValidChordToken(tokens[0].text);
+  const chords = marker ? tokens.slice(1) : tokens;
+  return chords.length > 0 && chords.every(token => isValidChordToken(token.text));
 }
 
 export function parseChordLine(line: string): ChordPos[] {
