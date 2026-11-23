@@ -1,6 +1,59 @@
 import { normalizeCuts, type MediaCut } from '../engine/mediaCuts';
 import api, { cabecalhoChavePublica } from './api';
 
+export interface MelodyNote {
+  start: number;
+  end: number;
+  midi: number;
+  conf: number;
+}
+
+export interface VocalMelodyNote extends MelodyNote {
+  cents: number;
+  lineIndex?: number;
+}
+
+export interface InstrumentalMelody {
+  label: string;
+  start: number;
+  end: number;
+  notes: (MelodyNote & { velocity: number })[];
+}
+
+export interface TimingMelody {
+  version: 1;
+  vocal: VocalMelodyNote[];
+  instrumental: InstrumentalMelody[];
+}
+
+export function normalizeMelody(raw: unknown): TimingMelody | undefined {
+  const record = (value: unknown): value is Record<string, unknown> =>
+    value !== null && typeof value === 'object' && !Array.isArray(value);
+  const finite = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
+  const interval = (value: Record<string, unknown>) => finite(value.start) && finite(value.end)
+    && value.start >= 0 && value.end > value.start;
+  const note = (value: unknown): value is Record<string, unknown> & MelodyNote => record(value)
+    && interval(value) && Number.isInteger(value.midi) && (value.midi as number) >= 0 && (value.midi as number) <= 127
+    && finite(value.conf) && value.conf >= 0 && value.conf <= 1;
+  // Descartar o conjunto evita apresentar uma linha musical incompleta como se fosse confiável.
+  if (!record(raw) || raw.version !== 1 || !Array.isArray(raw.vocal) || !Array.isArray(raw.instrumental)
+    || !raw.vocal.every(value => note(value) && finite(value.cents) && Math.abs(value.cents) <= 100
+      && (value.lineIndex === undefined || (Number.isInteger(value.lineIndex) && (value.lineIndex as number) >= 0)))
+    || !raw.instrumental.every(value => record(value) && interval(value) && typeof value.label === 'string'
+      && Array.isArray(value.notes) && value.notes.every(n => note(n) && finite(n.velocity) && n.velocity >= 0 && n.velocity <= 127
+        && n.start >= (value.start as number) && n.end <= (value.end as number)))) return undefined;
+  const sorted = <T extends { start: number }>(values: T[]) => values.sort((a, b) => a.start - b.start);
+  return {
+    version: 1,
+    vocal: sorted((raw.vocal as VocalMelodyNote[]).map(({ start, end, midi, cents, conf, lineIndex }) =>
+      ({ start, end, midi, cents, conf, ...(lineIndex !== undefined && { lineIndex }) }))),
+    instrumental: sorted((raw.instrumental as InstrumentalMelody[]).map(({ label, start, end, notes }) => ({
+      label: label.trim(), start, end,
+      notes: sorted(notes.map(({ start, end, midi, velocity, conf }) => ({ start, end, midi, velocity, conf }))),
+    }))),
+  };
+}
+
 export interface TimingOccurrence {
   startTime: number;
   endTime: number;
@@ -128,6 +181,7 @@ export interface TimingContribution extends BeatGrid {
   instrumentalSections: TimingInstrumental[];
   phrases: TimingPhrase[];
   chordTimes?: TimingChordTime[];
+  melody?: TimingMelody;
   sections: TimingSection[];
   markers: TimingMarker[];
   votes: number;
@@ -151,6 +205,7 @@ export interface TimingSubmitPayload extends BeatGrid {
   instrumentalSections: TimingInstrumental[];
   phrases: TimingPhrase[];
   chordTimes?: TimingChordTime[];
+  melody?: TimingMelody;
   sections: TimingSection[];
   markers: TimingMarker[];
   variant?: 'sem_dedilhado' | null;
@@ -160,8 +215,9 @@ export interface TimingSubmitPayload extends BeatGrid {
 
 export type MediaType = 'youtube' | 'audio' | 'other' | null;
 
-type RawTimingContribution = Pick<TimingContribution, 'id' | 'duration'> & Partial<Omit<TimingContribution, 'id' | 'duration' | 'loops' | 'chordTimes'>> & {
+type RawTimingContribution = Pick<TimingContribution, 'id' | 'duration'> & Partial<Omit<TimingContribution, 'id' | 'duration' | 'loops' | 'chordTimes' | 'melody'>> & {
   chordTimes?: unknown;
+  melody?: unknown;
   loops?: (Omit<TimingLoop, 'occurrences'> & { occurrences?: unknown })[];
   editor_alias?: string | null;
   media_url?: string | null;
@@ -210,6 +266,7 @@ export function normalizeContribution(raw: RawTimingContribution): TimingContrib
     source = 'manual', reviewed, reviewedFrom = raw.reviewed_from,
   } = raw;
   const chordTimes = normalizeChordTimes(raw.chordTimes);
+  const melody = normalizeMelody(raw.melody);
   let phrases = raw.phrases;
   // Os registros antigos guardavam só o início, então o próximo início delimita cada frase.
   if (phrases == null && raw.line_timestamps) {
@@ -228,6 +285,7 @@ export function normalizeContribution(raw: RawTimingContribution): TimingContrib
     ...(raw.cuts != null && { cuts: normalizeCuts(raw.cuts) }),
     ...(raw.audioStart != null && { audioStart: raw.audioStart }),
     ...(chordTimes && { chordTimes }),
+    ...(melody && { melody }),
     loops: (raw.loops ?? []).map(({ occurrences: rawOccurrences, ...loop }) => {
       const occurrences = normalizeLoopOccurrences(rawOccurrences);
       const first = occurrences[0];

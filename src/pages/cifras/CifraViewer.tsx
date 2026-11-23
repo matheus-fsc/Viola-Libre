@@ -1,3 +1,4 @@
+import { SyncedMelody } from './SyncedMelody';
 import { playbackStartTime } from '../../engine/timingPlayback';
 import React, { useCallback, useEffect, useLayoutEffect, useState, useMemo, useRef } from 'react';
 import { tSeo, useT } from '../../i18n';
@@ -338,6 +339,15 @@ export const CifraViewer: React.FC = () => {
     // Navegação privada pode negar persistência, mas nunca deve impedir o controle.
     try { localStorage.setItem('viola_synced_chords', String(next)); } catch { /* A preferência vale nesta sessão. */ }
   };
+  const [showMelody, setShowMelody] = useState(() => {
+    try { return localStorage.getItem('viola_synced_melody') === 'true'; } catch { return false; }
+  });
+  const toggleMelody = () => {
+    const next = !showMelody;
+    setShowMelody(next);
+    // O bloqueio de armazenamento não deve impedir a visualização nesta sessão.
+    try { localStorage.setItem('viola_synced_melody', String(next)); } catch { /* A escolha continua em memória. */ }
+  };
   const [scrollMult, setScrollMult] = useState(1);
   const [loopA, setLoopA] = useState<number | null>(null);
   const [loopB, setLoopB] = useState<number | null>(null);
@@ -462,6 +472,7 @@ export const CifraViewer: React.FC = () => {
   // Lidos pelo laço do rAF: a troca de acorde no painel sai no quadro certo, e o painel acompanha a rolagem sem esperar o evento de scroll.
   const chordTimelineRef = useRef<readonly TimedChord[]>([]);
   const syncedPanelFrameRef = useRef<((time: number) => void) | null>(null);
+  const melodyFrameRef = useRef<((time: number) => void) | null>(null);
   const railRef = useRef<HTMLDivElement>(null);
   const railDragRef = useRef(false);
   // Espelhos para o laço do rAF, que vive entre renders e precisa ler o valor atual.
@@ -1043,6 +1054,7 @@ export const CifraViewer: React.FC = () => {
         const activeLine = lines[currentPhraseIndex(lines, elapsedRef.current)];
         highlight(activeLine?.instrumental && elapsedRef.current >= activeLine.endTime ? undefined : activeLine);
         syncedPanelFrameRef.current?.(elapsedRef.current);
+        melodyFrameRef.current?.(elapsedRef.current);
       } else if (settling) {
         highlight();
         // Motor em silêncio: a inércia do toque/trackpad termina sozinha e o
@@ -1718,7 +1730,7 @@ export const CifraViewer: React.FC = () => {
       cancelAnimationFrame(frame);
       window.removeEventListener('resize', measure);
     };
-  }, [timingMedia, scrollTimeline, lineMode, totalTime, cifraSegments, showTabs, geometryToken, autoScroll, syncPlayheadToScroll, bracketLanes]);
+  }, [timingMedia, scrollTimeline, lineMode, totalTime, cifraSegments, showTabs, geometryToken, autoScroll, syncPlayheadToScroll, bracketLanes, showMelody]);
 
   useLayoutEffect(() => {
     const content = contentRef.current;
@@ -2062,10 +2074,19 @@ export const CifraViewer: React.FC = () => {
   const effectiveDuration = cifra?.duration ?? videoDuration ?? null;
   const countIn = autoScroll ? countInAtTime(scrollTimeline, elapsedDisplay, timingMedia) : null;
   const pulseControls = <>
-    <button type="button" onClick={togglePulse} aria-pressed={showPulse}
-      className={`bevel-out border border-gray-400 px-2 py-1 text-[10px] font-bold ${showPulse ? 'bg-[#316ac5] text-white' : 'bg-[#ece9d8] text-[#002fa7]'}`}>
-      {t('cifra.pulsos')}
-    </button>
+    {lineMode && timingMedia?.melody && (timingMedia.melody.vocal.length > 0 || timingMedia.melody.instrumental.some(s => s.notes.length > 0)) && (
+      <button type="button" onClick={toggleMelody} aria-pressed={showMelody}
+        className={`bevel-out px-2 py-1 border border-gray-400 text-[10px] font-bold ${showMelody ? 'bg-[#316ac5] text-white' : 'bg-[#ece9d8] text-[#002fa7]'}`}>
+        {t('melody.toggle')}
+      </button>
+    )}
+    {/* Sem grade confiável o botão não teria efeito nenhum; só aparece quando há batidas usáveis. */}
+    {beats.length > 0 && (
+      <button type="button" onClick={togglePulse} aria-pressed={showPulse}
+        className={`bevel-out border border-gray-400 px-2 py-1 text-[10px] font-bold ${showPulse ? 'bg-[#316ac5] text-white' : 'bg-[#ece9d8] text-[#002fa7]'}`}>
+        {t('cifra.pulsos')}
+      </button>
+    )}
     {showPulse && beats.length > 0 && timingMedia && <PulseDisplay grid={timingMedia} timeRef={elapsedRef} playing={autoScroll && !userSeeking} />}
     <CountInIndicator count={countIn} />
   </>;
@@ -3107,6 +3128,10 @@ export const CifraViewer: React.FC = () => {
                   countdown={instrumentalCountdown(scrollTimeline, elapsedDisplay)}
                   progress={(elapsedDisplay - activeInstrumental.startTime) / (activeInstrumental.endTime - activeInstrumental.startTime)} />
               </div>
+            )}
+            {autoScroll && lineMode && showMelody && timingMedia?.melody && (
+              <SyncedMelody timing={timingMedia} tuning={currentTuning} contentRef={contentRef}
+                frameRef={melodyFrameRef} time={elapsedDisplay} layoutKey={cifraSegments} showTabs={showTabs} />
             )}
             {repeatBrackets.map(({ range, lane, top, height }, index) => bracketLanes.has(range) && (
               <div

@@ -1,3 +1,5 @@
+import type { TimingMelody } from '../services/timingApi';
+
 export interface MediaCut { start: number; end: number }
 
 export function normalizeCuts(cuts: readonly MediaCut[]): MediaCut[] {
@@ -54,4 +56,21 @@ export function createCutClock(cuts: readonly MediaCut[], seekMedia: (time: numb
 export function cutBeatTimes(times: readonly number[], cuts: readonly MediaCut[]): number[] {
   return times.filter(time => !cuts.some(cut => time >= cut.start && time < cut.end))
     .map(time => mediaToDerived(time, cuts));
+}
+
+export function cutMelody(melody: TimingMelody, cuts: readonly MediaCut[]): TimingMelody {
+  const merged = normalizeCuts(cuts);
+  const shift = <T extends { start: number; end: number }>(entry: T): T => ({
+    ...entry, start: mediaToDerived(entry.start, merged), end: mediaToDerived(entry.end, merged),
+  });
+  const survives = (entry: { start: number; end: number }) =>
+    mediaToDerived(entry.end, merged) > mediaToDerived(entry.start, merged);
+  // Notas que atravessam um corte conservam só o tempo audível, como as frases.
+  return {
+    version: 1,
+    vocal: melody.vocal.filter(survives).map(shift),
+    instrumental: melody.instrumental.filter(survives).map(section => ({
+      ...shift(section), notes: section.notes.filter(survives).map(shift),
+    })),
+  };
 }

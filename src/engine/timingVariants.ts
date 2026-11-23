@@ -1,4 +1,4 @@
-import { cutBeatTimes, mediaToDerived } from './mediaCuts';
+import { cutMelody, cutBeatTimes, mediaToDerived } from './mediaCuts';
 import { withoutFingerpicking } from './lineScroll';
 import type { TimingContribution } from '../services/timingApi';
 import type { LineType } from '../utils/lineClassifier';
@@ -28,6 +28,7 @@ export function buildCommunityCards(
       if (removedDuration > 0) {
         const derived: TimingContribution = {
           ...timing, phrases, loops, cuts,
+          ...(timing.melody && { melody: cutMelody(timing.melody, cuts) }),
           ...(timing.beats && { beats: cutBeatTimes(timing.beats, cuts) }),
           ...(timing.downbeats && { downbeats: cutBeatTimes(timing.downbeats, cuts) }),
           variant: 'sem_dedilhado', reviewedFrom: timing.id,

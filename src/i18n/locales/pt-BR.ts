@@ -44,6 +44,16 @@ export const ptBR = {
     nota: 'Muda os textos da interface. O acervo de cifras continua como está.',
   },
 
+  melody: {
+    toggle: 'MELODIA',
+    automatic: 'melodia automática, pode conter erros',
+    vocal: 'Melodia vocal',
+    instrumental: 'Tablatura da melodia',
+    position: 'Corda {string}, casa {fret}',
+    unavailable: 'Nota fora do alcance desta afinação',
+    do: 'Dó', re: 'Ré', mi: 'Mi', fa: 'Fá', sol: 'Sol', la: 'Lá', si: 'Si',
+  },
+
   notacao: {
     titulo: 'Notação',
     grupo: 'Padrão de notação',

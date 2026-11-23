@@ -47,6 +47,16 @@ export const en: Dicionario = {
     nota: 'Changes the interface text. The chord chart collection stays as it is.',
   },
 
+  melody: {
+    toggle: 'MELODY',
+    automatic: 'automatic melody, may contain errors',
+    vocal: 'Vocal melody',
+    instrumental: 'Melody tablature',
+    position: 'String {string}, fret {fret}',
+    unavailable: 'Note outside this tuning range',
+    do: 'Dó', re: 'Ré', mi: 'Mi', fa: 'Fá', sol: 'Sol', la: 'Lá', si: 'Si',
+  },
+
   notacao: {
     titulo: 'Notation',
     grupo: 'Notation standard',

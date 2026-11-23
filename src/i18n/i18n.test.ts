@@ -130,6 +130,8 @@ describe('dicionários', () => {
       // Cifra de acorde e a palavra «Original», que os dois idiomas escrevem igual.
       'musica.comoIv7',
       'musica.descOriginal',
+      // O solfejo brasileiro acompanha o nome MIDI mesmo quando a interface usa inglês.
+      'melody.do', 'melody.re', 'melody.mi', 'melody.fa', 'melody.sol', 'melody.la', 'melody.si',
     ]);
     for (const chave of Object.keys(PT)) {
       if (iguaisDePropósito.has(chave)) continue;
