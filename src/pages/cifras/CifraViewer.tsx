@@ -1159,10 +1159,16 @@ export const CifraViewer: React.FC = () => {
   // motor não disputar o primeiro pixel do arraste com o dedo do músico.
   useEffect(() => {
     if (!autoScroll) return;
+    const release = () => { touchHeldRef.current = false; };
     const mark = (event: Event) => {
       // Com o dedo na tela o motor espera: disputar o arraste era o que travava a rolagem.
-      touchHeldRef.current = event.type === 'touchmove'
-        || (event.type === 'touchstart' && !(event.target as HTMLElement | null)?.closest?.('button, input, a, [role="dialog"]'));
+      const touched = event.target as HTMLElement | null;
+      if (event.type === 'touchstart' && touched && !touched.closest?.('button, input, a, svg, [role="dialog"], [role="slider"]')) {
+        touchHeldRef.current = true;
+        // Um nó retirado da tela no meio do toque recebe o touchend sem propagá-lo até a janela.
+        touched.addEventListener('touchend', release, { once: true });
+        touched.addEventListener('touchcancel', release, { once: true });
+      }
       // No modo por linha, só uma mudança de posição deve buscar outro tempo.
       if (!lineMapRef.current.length) lastGestureRef.current = performance.now();
     };
@@ -1170,7 +1176,6 @@ export const CifraViewer: React.FC = () => {
     window.addEventListener('wheel', mark, opts);
     window.addEventListener('touchstart', mark, opts);
     window.addEventListener('touchmove', mark, opts);
-    const release = () => { touchHeldRef.current = false; };
     window.addEventListener('touchend', release, opts);
     window.addEventListener('touchcancel', release, opts);
     return () => {
@@ -3270,6 +3275,7 @@ export const CifraViewer: React.FC = () => {
           audioStart={timingMedia?.audioStart}
           cuts={timingMedia?.cuts}
           autoPlay={trainingPlayback}
+          compact={isMobile && trainingPlayback}
           mediaType={videoTiming?.mediaType === 'audio' && videoTiming.mediaUrl?.trim() ? 'audio' : 'youtube'}
           videoUrl={sourceVideoUrl}
           title={cifra.title}
