@@ -48,6 +48,7 @@ export const ptBR = {
     toggle: 'MELODIA',
     group: 'Melodia visível',
     wordless: 'Voz sem letra',
+    drag: 'Arraste para avançar ou voltar a música',
     showVocal: 'Voz',
     showGuitar: 'Violão',
     empty: 'Sem melodia neste trecho',

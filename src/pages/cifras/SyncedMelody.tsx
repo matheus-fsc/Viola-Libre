@@ -1,21 +1,25 @@
-import { useLayoutEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState, type MutableRefObject, type PointerEvent } from 'react';
 import { melodyNoteName, melodySolfege, notesToTab } from '../../engine/melody';
 import { melodyRangeAt, melodyRanges, type MelodyRange, type MelodyView } from '../../engine/melodyView';
+import { scrubTime, type ScrubBase } from '../../engine/melodyScrub';
 import type { Tuning } from '../../engine/types';
 import type { TimingContribution } from '../../services/timingApi';
 import { useT } from '../../i18n';
 
 /** Faixa fixa na barra da rolagem. Dentro da letra ela abria um vão em cada frase. */
-export function SyncedMelody({ timing, tuning, view, frameRef, time }: {
+export function SyncedMelody({ timing, tuning, view, frameRef, time, onSeek }: {
   timing: TimingContribution;
   tuning: Tuning;
   view: MelodyView;
   frameRef: MutableRefObject<((time: number) => void) | null>;
   time: number;
+  onSeek(time: number): void;
 }) {
   const t = useT();
   const [frameTime, setFrameTime] = useState({ source: time, now: time });
-  const clock = frameTime.source === time ? frameTime.now : time;
+  const [scrub, setScrub] = useState<number | null>(null);
+  const drag = useRef<{ id: number; x: number; moved: boolean; time: number; base: ScrubBase } | null>(null);
+  const clock = scrub ?? (frameTime.source === time ? frameTime.now : time);
   useLayoutEffect(() => {
     frameRef.current = now => setFrameTime({ source: time, now });
     return () => { frameRef.current = null; };
@@ -23,8 +27,36 @@ export function SyncedMelody({ timing, tuning, view, frameRef, time }: {
   const wordless = t('melody.wordless');
   const ranges = useMemo(() => timing.melody ? melodyRanges(timing.melody, timing.phrases, view, wordless) : [], [timing, view, wordless]);
   const range = melodyRangeAt(ranges, clock);
+  // O gesto mora na moldura, que não desmonta quando o arraste passa de um trecho a outro.
+  const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
+    if (!e.isPrimary || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    const box = e.currentTarget.querySelector<HTMLElement>('[data-melody-strip]');
+    const seconds = range ? Math.max(0.01, range.end - range.start) : 8;
+    const width = box ? Number(box.dataset.melodyWidth) || box.clientWidth : e.currentTarget.clientWidth;
+    drag.current = { id: e.pointerId, x: e.clientX, moved: false, time: clock,
+      base: { time: clock, scale: width / seconds, contentFollows: !range || range.instrumental } };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+  const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
+    const d = drag.current;
+    if (!d || d.id !== e.pointerId) return;
+    const dx = e.clientX - d.x;
+    if (!d.moved && Math.abs(dx) < 6) return;
+    d.moved = true;
+    d.time = scrubTime(d.base, dx, timing.duration);
+    setScrub(d.time);
+  };
+  const onPointerEnd = (e: PointerEvent<HTMLDivElement>) => {
+    const d = drag.current;
+    if (!d || d.id !== e.pointerId) return;
+    drag.current = null;
+    setScrub(null);
+    // O vídeo só busca ao soltar: buscar a cada pixel engasga o player.
+    if (d.moved && e.type === 'pointerup') onSeek(d.time);
+  };
   // Altura fixa: a barra não pode pular a cada troca entre canto e pausa.
-  return <div className="bevel-in bg-[#f5f8ff] border border-[#98acd0] px-1 py-0.5 text-[10px] text-[#002fa7] font-mono leading-tight w-full min-w-0 md:w-0 md:min-w-full h-[132px] overflow-hidden">
+  return <div className="bevel-in bg-[#f5f8ff] border border-[#98acd0] px-1 py-0.5 text-[10px] text-[#002fa7] font-mono leading-tight w-full min-w-0 md:w-0 md:min-w-full h-[132px] overflow-hidden touch-pan-y select-none cursor-ew-resize"
+    title={t('melody.drag')} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerEnd} onPointerCancel={onPointerEnd}>
     <div className="text-[#8a4b00] font-bold">⚠ {t('melody.automatic')}</div>
     {range ? <MelodyStrip key={`${range.start}-${range.instrumental}`} range={range} tuning={tuning} time={clock} />
       : <div className="h-[110px] flex items-center justify-center text-gray-600">{t('melody.empty')}</div>}
@@ -61,7 +93,7 @@ function MelodyStrip({ range, tuning, time }: { range: MelodyRange; tuning: Tuni
             : t('melody.position', { string: tuning.strings.length - current.stringIndex, fret: current.fret })}</>}
       </span>
     </div>
-    <div ref={viewport} className="overflow-x-auto overflow-y-hidden retro-scrollbar max-w-full">
+    <div ref={viewport} data-melody-strip data-melody-width={instrumental ? width - gutter : undefined} className="overflow-hidden max-w-full">
       <svg role="img" aria-label={t(instrumental ? 'melody.instrumental' : 'melody.vocal')}
         viewBox={`0 0 ${width} ${height}`} style={{ width: instrumental ? width : '100%', height, display: 'block' }}>
         {instrumental ? tuning.strings.map((open, i) => {

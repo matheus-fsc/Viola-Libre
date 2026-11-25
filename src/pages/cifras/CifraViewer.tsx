@@ -2114,7 +2114,7 @@ export const CifraViewer: React.FC = () => {
     guitar: !!timingMedia?.melody?.instrumental.some(section => section.notes.length > 0) };
   const melodyDock = autoScroll && lineMode && timingMedia?.melody
     && ((melodyView.vocal && melodyParts.vocal) || (melodyView.guitar && melodyParts.guitar)) ? (
-      <SyncedMelody timing={timingMedia} tuning={currentTuning} view={melodyView} frameRef={melodyFrameRef} time={elapsedDisplay} />
+      <SyncedMelody timing={timingMedia} tuning={currentTuning} view={melodyView} frameRef={melodyFrameRef} time={elapsedDisplay} onSeek={seekToTime} />
     ) : null;
   const instrumentalIndicator = (wide: boolean) => activeInstrumental && (
     <InstrumentalIndicator wide={wide} label={activeInstrumental.label ?? ''}

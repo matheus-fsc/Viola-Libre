@@ -51,6 +51,7 @@ export const en: Dicionario = {
     toggle: 'MELODY',
     group: 'Visible melody',
     wordless: 'Wordless voice',
+    drag: 'Drag to move through the song',
     showVocal: 'Voice',
     showGuitar: 'Guitar',
     empty: 'No melody in this part',
