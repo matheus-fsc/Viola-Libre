@@ -49,7 +49,11 @@ export const en: Dicionario = {
 
   melody: {
     toggle: 'MELODY',
-    automatic: 'automatic melody, may contain errors',
+    group: 'Visible melody',
+    showVocal: 'Voice',
+    showGuitar: 'Guitar',
+    empty: 'No melody in this part',
+    automatic: 'generated automatically, may contain errors',
     vocal: 'Vocal melody',
     instrumental: 'Melody tablature',
     position: 'String {string}, fret {fret}',

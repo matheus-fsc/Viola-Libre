@@ -46,7 +46,11 @@ export const ptBR = {
 
   melody: {
     toggle: 'MELODIA',
-    automatic: 'melodia automática, pode conter erros',
+    group: 'Melodia visível',
+    showVocal: 'Voz',
+    showGuitar: 'Violão',
+    empty: 'Sem melodia neste trecho',
+    automatic: 'gerada automaticamente, pode ter erros',
     vocal: 'Melodia vocal',
     instrumental: 'Tablatura da melodia',
     position: 'Corda {string}, casa {fret}',

@@ -160,16 +160,3 @@ export function pulseAtTime(time: number, grid?: BeatGrid | null): { index: numb
   return { index, bar: downbeats.length ? (time < downbeats[0] ? 0 : barIndex + 1) : Math.floor(index / total) + 1,
     strong, lit: time - beats[index] < 0.18 };
 }
-
-export function beatScrollYAtTime(anchors: readonly { startTime: number; endTime: number; y: number; kind?: ScrollSegment['kind'] }[], time: number, beats: readonly number[]): number {
-  const index = timelineIndexAtTime(anchors, time);
-  const current = anchors[index];
-  const next = anchors[index + 1];
-  if (!current || !next || beats.length < 2 || current.kind === 'hold' || next.y <= current.y) return current?.y ?? 0;
-  // Cada pulso desacelera nas bordas; manter as voltas como saltos conserva a leitura do refrão.
-  const start = beatProgress(current.startTime, beats);
-  const end = beatProgress(current.endTime, beats);
-  if (end - start < 2) return current.y;
-  const progress = Math.max(0, Math.min(1, (beatProgress(time, beats) - start) / (end - start)));
-  return current.y + (next.y - current.y) * progress;
-}

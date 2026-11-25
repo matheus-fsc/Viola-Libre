@@ -1,76 +1,37 @@
-import { useLayoutEffect, useMemo, useRef, useState, type MutableRefObject, type RefObject } from 'react';
-import { createPortal } from 'react-dom';
+import { useLayoutEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { melodyNoteName, melodySolfege, notesToTab } from '../../engine/melody';
+import { melodyRangeAt, melodyRanges, type MelodyRange, type MelodyView } from '../../engine/melodyView';
 import type { Tuning } from '../../engine/types';
-import type { MelodyNote, TimingContribution } from '../../services/timingApi';
+import type { TimingContribution } from '../../services/timingApi';
 import { useT } from '../../i18n';
 
-type Range = { start: number; end: number; notes: readonly MelodyNote[]; label?: string };
-type Slot = { element: HTMLDivElement; range: Range; instrumental: boolean };
-
-export function SyncedMelody({ timing, tuning, contentRef, frameRef, time, layoutKey, showTabs }: {
+/** Faixa fixa na barra da rolagem. Dentro da letra ela abria um vão em cada frase. */
+export function SyncedMelody({ timing, tuning, view, frameRef, time }: {
   timing: TimingContribution;
   tuning: Tuning;
-  contentRef: RefObject<HTMLDivElement | null>;
+  view: MelodyView;
   frameRef: MutableRefObject<((time: number) => void) | null>;
   time: number;
-  layoutKey: unknown;
-  showTabs: boolean;
 }) {
-  const [slots, setSlots] = useState<Slot[]>([]);
+  const t = useT();
   const [frameTime, setFrameTime] = useState({ source: time, now: time });
   const clock = frameTime.source === time ? frameTime.now : time;
   useLayoutEffect(() => {
     frameRef.current = now => setFrameTime({ source: time, now });
     return () => { frameRef.current = null; };
   }, [frameRef, time]);
-  useLayoutEffect(() => {
-    const content = contentRef.current;
-    const melody = timing.melody;
-    if (!content || !melody) return;
-    const created: Slot[] = [];
-    const elements = new Map<HTMLElement, HTMLDivElement>();
-    const add = (line: number | null | undefined, range: Range, instrumental: boolean) => {
-      const fallbackLine = timing.phrases.find(p => p.startTime >= range.end)?.lineIndex
-        ?? timing.phrases.at(-1)?.lineIndex;
-      const anchorLine = line ?? fallbackLine;
-      const row = anchorLine == null ? null : content.querySelector<HTMLElement>(`[data-timing-line="${anchorLine}"]:not(.cifra-line-blank)`)
-        ?? [...content.querySelectorAll<HTMLElement>('[data-timing-tab-start]')].find(el =>
-          Number(el.dataset.timingTabStart) <= anchorLine && Number(el.dataset.timingTabEnd) >= anchorLine);
-      // Um trecho sem linha escrita usa a letra próxima para manter a melodia na área de leitura.
-      const parent = row ?? content;
-      let element = elements.get(parent);
-      if (!element) {
-        element = document.createElement('div');
-        element.style.cssText = 'height:144px;width:100%;min-width:0;flex-basis:100%;white-space:normal';
-        element.dataset.melodySlot = 'true';
-        if (row) row.appendChild(element);
-        else content.prepend(element);
-        elements.set(parent, element);
-      }
-      created.push({ element, range, instrumental });
-    };
-    for (const phrase of timing.phrases) {
-      const notes = melody.vocal.filter(note => note.start < phrase.endTime && note.end > phrase.startTime
-        && (note.lineIndex === undefined || note.lineIndex === phrase.lineIndex));
-      if (notes.length) add(phrase.lineIndex, { start: phrase.startTime, end: phrase.endTime, notes }, false);
-    }
-    for (const section of melody.instrumental) {
-      if (!section.notes.length) continue;
-      const linked = timing.instrumentalSections.find(s => s.mediaTimestampStart != null && s.mediaTimestampEnd != null
-        && s.mediaTimestampStart <= section.start && s.mediaTimestampEnd > section.start);
-      const structural = timing.sections.find(s => s.startTime <= section.start && s.endTime != null && s.endTime > section.start);
-      add(linked?.startLine ?? structural?.startLine, section, true);
-    }
-    // Reservar as faixas uma vez mantém as âncoras de rolagem estáveis durante a troca de frase.
-    setSlots(created);
-    return () => { for (const element of elements.values()) element.remove(); };
-  }, [timing, contentRef, layoutKey, showTabs]);
-  return <>{slots.filter(slot => clock >= slot.range.start && clock < slot.range.end).map((slot, i) =>
-    createPortal(<MelodyStrip range={slot.range} instrumental={slot.instrumental} tuning={tuning} time={clock} />, slot.element, String(i)))}</>;
+  const ranges = useMemo(() => timing.melody ? melodyRanges(timing.melody, timing.phrases, view) : [], [timing, view]);
+  const range = melodyRangeAt(ranges, clock);
+  // Altura fixa: a barra não pode pular a cada troca entre canto e pausa.
+  return <div className="bevel-in bg-[#f5f8ff] border border-[#98acd0] px-1 py-0.5 text-[10px] text-[#002fa7] font-mono leading-tight w-full min-w-0 md:w-0 md:min-w-full h-[132px] overflow-hidden">
+    <div className="text-[#8a4b00] font-bold">⚠ {t('melody.automatic')}</div>
+    {range ? <MelodyStrip key={`${range.start}-${range.instrumental}`} range={range} tuning={tuning} time={clock} />
+      : <div className="h-[110px] flex items-center justify-center text-gray-600">{t('melody.empty')}</div>}
+  </div>;
 }
 
-function MelodyStrip({ range, instrumental, tuning, time }: { range: Range; instrumental: boolean; tuning: Tuning; time: number }) {
+function MelodyStrip({ range, tuning, time }: { range: MelodyRange; tuning: Tuning; time: number }) {
+  const { instrumental } = range;
   const t = useT();
   const tab = useMemo(() => notesToTab(range.notes, tuning), [range.notes, tuning]);
   const viewport = useRef<HTMLDivElement>(null);
@@ -90,15 +51,14 @@ function MelodyStrip({ range, instrumental, tuning, time }: { range: Range; inst
   const height = 80;
   const y = (midi: number) => 8 + (maxPitch - midi) / (maxPitch - minPitch) * 60;
   const names = [t('melody.do'), t('melody.re'), t('melody.mi'), t('melody.fa'), t('melody.sol'), t('melody.la'), t('melody.si')];
-  return <div className="bevel-in bg-[#f5f8ff] border border-[#98acd0] px-1 py-0.5 text-[10px] text-[#002fa7] font-mono leading-tight my-1" onPointerDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
-    <div className="flex flex-wrap justify-between gap-x-2">
+  return <div>
+    <div className="flex gap-2 h-4 overflow-hidden whitespace-nowrap">
       <span>{range.label || t(instrumental ? 'melody.instrumental' : 'melody.vocal')}</span>
-      <span>{t('melody.automatic')}</span>
-    </div>
-    <div className="h-7 overflow-hidden font-bold" aria-live="off">
-      {current && <>{melodyNoteName(current.midi)} ({melodySolfege(current.midi, names)}){' '}
-        {current.fret === null || current.stringIndex === null ? t('melody.unavailable')
-          : t('melody.position', { string: tuning.strings.length - current.stringIndex, fret: current.fret })}</>}
+      <span className="font-bold" aria-live="off">
+        {current && <>{melodyNoteName(current.midi)} ({melodySolfege(current.midi, names)}){' '}
+          {current.fret === null || current.stringIndex === null ? t('melody.unavailable')
+            : t('melody.position', { string: tuning.strings.length - current.stringIndex, fret: current.fret })}</>}
+      </span>
     </div>
     <div ref={viewport} className="overflow-x-auto overflow-y-hidden retro-scrollbar max-w-full">
       <svg role="img" aria-label={t(instrumental ? 'melody.instrumental' : 'melody.vocal')}
