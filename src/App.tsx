@@ -1371,7 +1371,9 @@ function App() {
       {/* --- MOBILE FOOTER (browsewrap) --- */}
       {/* A taskbar (footer XP) é escondida no mobile, então este é o ponto de acesso
           discreto aos Termos de Uso em telas pequenas. */}
-      <div className="md:hidden w-full flex justify-center py-3 z-10">
+      {/* Abaixo da página (z-10): na mesma camada ele cobria a barra da rolagem. Rolando, some
+          sem sair do layout, para a altura da página não mudar no meio da música. */}
+      <div className={`md:hidden w-full flex justify-center py-3 z-[5] ${immersive ? 'invisible' : ''}`}>
         <button
           onClick={() => goToTab('termos')}
           className={`text-[11px] font-mono underline underline-offset-2 cursor-pointer select-none transition-colors ${

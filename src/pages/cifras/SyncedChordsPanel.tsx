@@ -7,6 +7,7 @@ import { useAnimacoesDesligadas } from '../../stores/useDesempenhoStore';
 import { MiniFretboard } from '../../components/MiniFretboard';
 import { useT } from '../../i18n';
 import { useLayoutEffect, useRef, useState, type CSSProperties, type MutableRefObject } from 'react';
+import { chordNameFit } from '../../engine/chordNameFit';
 
 /** Blocos da barra sem BPM para contar tempos. Com BPM, é um bloco por tempo do acorde. */
 const PROGRESS_STEPS = 10;
@@ -115,18 +116,20 @@ export function SyncedChordsPanel({ visible, onToggle, strip, tuning, voicings, 
                 ['cifra.acordesProximo', strip.next]] as const).map(([label, chord], index) => {
                 const voicing = chord ? voicings[chord.name] : null;
                 return (
-                  <div key={label} className={`synced-chords-slot min-w-0 text-center ${index === 1 ? '' : 'opacity-40'}`}>
+                  <div key={label} style={{ containerType: 'inline-size' }}
+                    className={`synced-chords-slot min-w-0 text-center ${index === 1 ? '' : 'opacity-40'}`}>
                     <h3 className="text-[10px] uppercase text-gray-600">{t(label)}</h3>
                     {index === 1 && intro && (
                       <div className="font-mono text-sm font-bold text-[#002fa7] break-words min-h-7">{t('cifra.acordesIntro')}</div>
                     )}
                     {chord && (
                       <>
-                        <div className={`font-mono text-[#002fa7] break-words min-h-7 ${index === 1 ? 'text-lg font-bold' : 'text-sm'}`}>
+                        <div className={`font-mono text-[#002fa7] min-h-7 ${index === 1 ? 'font-bold' : ''}`}
+                          style={chordNameFit(degreeOf?.(chord.name) ?? chord.name, index === 1 ? 18 : 14)}>
                           {degreeOf?.(chord.name) ?? chord.name}
                         </div>
                         {degreeOf?.(chord.name) && (
-                          <div className="font-mono text-[10px] text-gray-600 break-words -mt-1">{chord.name}</div>
+                          <div className="font-mono text-gray-600 -mt-1" style={chordNameFit(chord.name, 10)}>{chord.name}</div>
                         )}
                         {voicing && (
                           <div className="w-full [&>svg]:w-full [&>svg]:h-auto">

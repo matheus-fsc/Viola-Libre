@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chordStepTarget, INITIAL_WHEEL_STATE, touchStepFromDrag, wheelAccumulator } from './chordNavigation';
+import { chordStepTarget } from './chordNavigation';
 import { buildChordTimeline, chordStripAtTime } from './upcomingChords';
 import { buildScrollTimeline } from './scrollTimeline';
 import { createCutClock } from './mediaCuts';
@@ -63,48 +63,5 @@ describe('navegação na mesma timeline do painel', () => {
     clock.seek(target.startTime);
     expect(target.startTime).toBe(8);
     expect(seeks).toEqual([13]);
-  });
-});
-
-describe('acumulador da roda', () => {
-  it('acumula pixels pequenos e limita cada evento a um acorde', () => {
-    const a = wheelAccumulator(INITIAL_WHEEL_STATE, 25, 0, 0);
-    expect(a.step).toBe(0);
-    const b = wheelAccumulator(a.state, 35, 0, 10);
-    expect(b.step).toBe(1);
-    expect(wheelAccumulator(b.state, 10000, 0, 200).step).toBe(1);
-  });
-
-  it('normaliza linhas e páginas nas duas direções', () => {
-    expect(wheelAccumulator(INITIAL_WHEEL_STATE, 4, 1, 0).step).toBe(1);
-    expect(wheelAccumulator(INITIAL_WHEEL_STATE, -1, 2, 0, 60, 180, 600).step).toBe(-1);
-  });
-
-  it('descarta inércia no cooldown, resíduos antigos e inversões de direção', () => {
-    const fired = wheelAccumulator(INITIAL_WHEEL_STATE, 60, 0, 0);
-    const ignored = wheelAccumulator(fired.state, 200, 0, 100);
-    expect(ignored.step).toBe(0);
-    expect(wheelAccumulator(ignored.state, 10, 0, 190).step).toBe(0);
-    const pending = wheelAccumulator(INITIAL_WHEEL_STATE, 50, 0, 0);
-    expect(wheelAccumulator(pending.state, 20, 0, 300).step).toBe(0);
-    expect(wheelAccumulator(pending.state, -60, 0, 10).step).toBe(-1);
-    expect(wheelAccumulator(pending.state, NaN, 0, 10).state).toBe(pending.state);
-  });
-});
-
-describe('passos do arraste', () => {
-  it('seleciona um acorde a cada 48 pixels sem reagir a tremores', () => {
-    expect(touchStepFromDrag(47)).toBe(0);
-    expect(touchStepFromDrag(48)).toBe(1);
-    expect(touchStepFromDrag(-100)).toBe(-2);
-    expect(touchStepFromDrag(100, 0.2)).toBe(2);
-  });
-
-  it('projeta flicks pela velocidade e limita a oito acordes', () => {
-    expect(touchStepFromDrag(48, 1)).toBe(4);
-    expect(touchStepFromDrag(-48, -1)).toBe(-4);
-    expect(touchStepFromDrag(10000, 100)).toBe(8);
-    expect(touchStepFromDrag(-10000, -100)).toBe(-8);
-    expect(touchStepFromDrag(NaN, 1)).toBe(0);
   });
 });

@@ -1,7 +1,7 @@
 import { createCutClock, derivedToMedia, type MediaCut } from '../engine/mediaCuts';
 import { playbackStartTime } from '../engine/timingPlayback';
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { MoveDiagonal2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, FastForward, MoveDiagonal2, Pause, Play, Rewind, X } from 'lucide-react';
 import { useT } from '../i18n';
 import { extractYouTubeId } from '../services/timingApi';
 import { loadYouTubeApi, type YTPlayer } from '../services/youtubeApi';
@@ -27,6 +27,8 @@ interface SourceVideoPanelProps {
   audioStart?: number | null;
   cuts?: readonly MediaCut[] | null;
   autoPlay?: boolean;
+  /** Treino no celular: barra no topo, com o vídeo recolhido e controles do tamanho do dedo. */
+  compact?: boolean;
   mediaType?: 'youtube' | 'audio';
   /** Título da música exibido na barra do painel. */
   title: string;
@@ -57,16 +59,15 @@ interface SourceVideoPanelProps {
  * reprodução ao encolher.
  */
 export const SourceVideoPanel: React.FC<SourceVideoPanelProps> = ({
-  videoUrl, audioStart, cuts, autoPlay = false, mediaType = 'youtube', title, onClose, onDurationDetected, onPlayingClockChange, onSeekReady,
+  videoUrl, audioStart, cuts, autoPlay = false, compact = false, mediaType = 'youtube', title, onClose, onDurationDetected, onPlayingClockChange, onSeekReady,
 }) => {
   const t = useT();
-  const [collapsed, setCollapsed] = useState(false);
   const [mobile] = useState(getIsMobile);
   // O que mora no pé da tela: no desktop a barra de tarefas (h-10 do App), no celular a
   // barra de destinos da cifra (56px de altura mais 8px de folga, mais a margem).
   const baseOcupada = mobile ? 72 : 40;
   const { janelaRef, barra, canto, reassentar } = useFloatingWindow({
-    chave: `viola_video_janela_${mobile ? 'mobile' : 'desktop'}`,
+    chave: `viola_video_janela_${compact ? 'treino' : mobile ? 'mobile' : 'desktop'}`,
     baseOcupada,
     inicial: (alturaDe) => {
       const vw = window.innerWidth;
@@ -79,6 +80,9 @@ export const SourceVideoPanel: React.FC<SourceVideoPanelProps> = ({
   const [failed, setFailed] = useState(false);
   // O player só nasce depois que a pessoa autoriza o JS não-livre do YouTube.
   const ytAllowed = useYouTubeJsAllowed();
+  // O pedido de autorização mora dentro do vídeo, então sem ela a barra abre inteira.
+  const [collapsed, setCollapsed] = useState(compact && mediaType === 'youtube' && ytAllowed);
+  const [startCollapsed] = useState(collapsed);
 
   const hostWrapRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -215,12 +219,24 @@ export const SourceVideoPanel: React.FC<SourceVideoPanelProps> = ({
     const el = videoRef.current;
     if (!el) return;
     el.style.height = p >= 1 ? '' : `${Math.max(0, p) * el.offsetWidth * 9 / 16}px`;
-  }, 1);
-  const alternarRecolhido = () => {
-    const recolher = !collapsed;
+  }, startCollapsed ? 0 : 1);
+  useLayoutEffect(() => {
+    if (startCollapsed && videoRef.current) videoRef.current.style.height = '0px';
+  }, [startCollapsed]);
+  const recolherPara = useCallback((recolher: boolean) => {
     setCollapsed(recolher);
     recolhimento.ir(recolher ? 0 : 1, recolher ? undefined : reassentar);
-  };
+  }, [recolhimento, reassentar]);
+  const alternarRecolhido = () => recolherPara(!collapsed);
+  // Celulares costumam barrar o play automático; o primeiro toque precisa ser no próprio vídeo.
+  const startedRef = useRef(false);
+  useEffect(() => { if (playing) startedRef.current = true; }, [playing]);
+  useEffect(() => {
+    if (!startCollapsed) return;
+    const timer = setTimeout(() => { if (!startedRef.current) recolherPara(false); }, 5000);
+    return () => clearTimeout(timer);
+  }, [startCollapsed, recolherPara]);
+  const saltar = (segundos: number) => seekCutTime(Math.max(0, sampleTime() + segundos));
 
   const btn = 'bevel-out bg-[var(--color-winxp-panel)] text-black px-1.5 py-0 text-[11px] leading-tight font-bold border border-gray-400 hover:bg-white active:border-t-gray-500 active:border-l-gray-500 active:border-b-white active:border-r-white';
 
@@ -241,7 +257,7 @@ export const SourceVideoPanel: React.FC<SourceVideoPanelProps> = ({
           title={t('cifra.videoArrastar')}
         >
           <span className="truncate flex-1" title={title}>▶ {title}</span>
-          <button onClick={togglePlay} className={btn} title={playing ? t('cifra.videoPausar') : t('cifra.videoTocar')}>
+          {!compact && <><button onClick={togglePlay} className={btn} title={playing ? t('cifra.videoPausar') : t('cifra.videoTocar')}>
             {playing ? '⏸' : '▶'}
           </button>
           <button
@@ -251,8 +267,21 @@ export const SourceVideoPanel: React.FC<SourceVideoPanelProps> = ({
           >
             {collapsed ? '▲' : '▼'}
           </button>
-          <button onClick={fechar} className={`${btn} text-[#cc3300]`} title={t('cifra.videoFechar')}>✕</button>
+          <button onClick={fechar} className={`${btn} text-[#cc3300]`} title={t('cifra.videoFechar')}>✕</button></>}
         </div>
+        {compact && (
+          <div className="flex items-stretch gap-1 p-1 touch-manipulation">
+            <TrainingButton onClick={() => saltar(-5)} label={t('cifra.barraVoltarSegundosAria', { s: 5 })}><Rewind size={18} /></TrainingButton>
+            <TrainingButton onClick={togglePlay} label={playing ? t('cifra.videoPausar') : t('cifra.videoTocar')} className="flex-[2] bg-[#316ac5] text-white">
+              {playing ? <Pause size={20} /> : <Play size={20} />}
+            </TrainingButton>
+            <TrainingButton onClick={() => saltar(5)} label={t('cifra.barraAvancarSegundosAria', { s: 5 })}><FastForward size={18} /></TrainingButton>
+            <TrainingButton onClick={alternarRecolhido} label={collapsed ? t('cifra.videoMostrar') : t('cifra.videoRecolher')}>
+              {collapsed ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
+            </TrainingButton>
+            <TrainingButton onClick={fechar} label={t('cifra.videoFechar')} className="flex-1 text-[#cc3300]"><X size={18} /></TrainingButton>
+          </div>
+        )}
 
         {/* Vídeo: 16:9 preservado, a largura vem da janela. */}
         <div
@@ -295,7 +324,7 @@ export const SourceVideoPanel: React.FC<SourceVideoPanelProps> = ({
             discreta no canto. Dedo (`pointer-coarse`): o rodapé cresce para 44px, o alvo
             mínimo de toque, e a alça vira um botão separado por um filete, para não ser
             confundida com o link. O comportamento de cada uma está no hook. */}
-        <div className="flex items-stretch text-[9px] pointer-coarse:text-[11px] text-gray-600">
+        <div className={`${compact && collapsed ? 'hidden' : 'flex'} items-stretch text-[9px] pointer-coarse:text-[11px] text-gray-600`}>
           <div className="flex-1 min-w-0 px-2 py-0.5 pointer-coarse:py-0 flex items-center justify-between gap-2">
             <span className="truncate">{t(mediaType === 'audio' ? 'cifra.audioReferencia' : 'cifra.videoHospedado')}</span>
             <a
@@ -331,3 +360,14 @@ export const SourceVideoPanel: React.FC<SourceVideoPanelProps> = ({
     </div>
   );
 };
+
+function TrainingButton({ onClick, label, className = 'flex-1 text-[#002fa7]', children }: {
+  onClick(): void; label: string; className?: string; children: React.ReactNode;
+}) {
+  return (
+    <button type="button" onClick={onClick} aria-label={label} title={label}
+      className={`bevel-out border border-gray-400 min-h-11 flex items-center justify-center active:border-t-gray-500 active:border-l-gray-500 ${className}`}>
+      {children}
+    </button>
+  );
+}

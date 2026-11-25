@@ -1,7 +1,7 @@
 import { RecordingTransposeNotice } from '../../components/timing/RecordingTransposeNotice';
-import { MiniFretboard } from '../../components/MiniFretboard';
 import { useChordNavigation } from '../../hooks/useChordNavigation';
 import { SyncedMelody } from './SyncedMelody';
+import { MELODY_VIEW_KEY, readMelodyView, type MelodyView } from '../../engine/melodyView';
 import { playbackStartTime } from '../../engine/timingPlayback';
 import React, { useCallback, useEffect, useLayoutEffect, useState, useMemo, useRef } from 'react';
 import { tSeo, useT } from '../../i18n';
@@ -75,7 +75,7 @@ import {
 import { easeScrollY, stepTimeAtY, type LineScrollAnchor } from '../../engine/lineScroll';
 import { buildScrollTimeline, timelineYAtTime as stepYAtTime, timelineIndexAtTime as currentPhraseIndex, instrumentalCountdown } from '../../engine/scrollTimeline';
 import { CountInIndicator, PulseDisplay } from './BeatIndicators';
-import { beatScrollYAtTime, trustedBeats, countInAtTime, pulseAtTime } from '../../engine/scrollTimeline';
+import { trustedBeats, countInAtTime, pulseAtTime } from '../../engine/scrollTimeline';
 import { ScrollTimelineBar } from './ScrollTimelineBar';
 import { SyncedChordsPanel } from './SyncedChordsPanel';
 import { buildChordTimeline, chordStripAtTime, type TimedChord } from '../../engine/upcomingChords';
@@ -132,7 +132,9 @@ const USER_SCROLL_EPS = 2;
 // Silêncio do motor após o último gesto: deixa a inércia do toque/trackpad
 // terminar antes de retomar, senão o rolamento briga com o dedo do músico.
 const SETTLE_MS = 900;
-const LINE_TRANSITION_MS = 300;
+// No modo por linha a rolagem é nativa: a música só segue depois que a inércia para.
+const LINE_SETTLE_MS = 450;
+const LINE_TRANSITION_MS = 450;
 const LINE_REPEAT_MS = 1500;
 const LINE_HIGHLIGHT = 'cifra-line-playing';
 type ViewerLineAnchor = LineScrollAnchor & { lineIndex: number; endTime: number; instrumental: boolean; kind?: 'lyric' | 'instrumental' | 'hold'; highlight: HTMLElement[] };
@@ -342,14 +344,12 @@ export const CifraViewer: React.FC = () => {
     // Navegação privada pode negar persistência, mas nunca deve impedir o controle.
     try { localStorage.setItem('viola_synced_chords', String(next)); } catch { /* A preferência vale nesta sessão. */ }
   };
-  const [showMelody, setShowMelody] = useState(() => {
-    try { return localStorage.getItem('viola_synced_melody') === 'true'; } catch { return false; }
-  });
-  const toggleMelody = () => {
-    const next = !showMelody;
-    setShowMelody(next);
+  const [melodyView, setMelodyView] = useState(readMelodyView);
+  const toggleMelody = (part: keyof MelodyView) => {
+    const next = { ...melodyView, [part]: !melodyView[part] };
+    setMelodyView(next);
     // O bloqueio de armazenamento não deve impedir a visualização nesta sessão.
-    try { localStorage.setItem('viola_synced_melody', String(next)); } catch { /* A escolha continua em memória. */ }
+    try { localStorage.setItem(MELODY_VIEW_KEY, JSON.stringify(next)); } catch { /* A escolha continua em memória. */ }
   };
   const [scrollMult, setScrollMult] = useState(1);
   const [loopA, setLoopA] = useState<number | null>(null);
@@ -443,7 +443,7 @@ export const CifraViewer: React.FC = () => {
 
   // Refs
   const pageRef = useRef<HTMLDivElement>(null);
-  const navigationBusyRef = useRef(false);
+  const touchHeldRef = useRef(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const bestTimingRequestRef = useRef<Promise<TimingContribution | null> | null>(null);
   const scrollRequestRef = useRef<AbortController | null>(null);
@@ -483,6 +483,7 @@ export const CifraViewer: React.FC = () => {
   const railDragRef = useRef(false);
   // Espelhos para o laço do rAF, que vive entre renders e precisa ler o valor atual.
   const scrollMultRef = useLatest(scrollMult);
+  const autoScrollRef = useLatest(autoScroll);
   const loopARef = useLatest(loopA);
   const loopBRef = useLatest(loopB);
   const cifraForRaf = useLatest(cifra);
@@ -833,7 +834,8 @@ export const CifraViewer: React.FC = () => {
     if (lines.length) {
       lineMotionRef.current = null;
       elapsedRef.current = Math.max(0, Math.min(t, totalTimeRef.current));
-      window.scrollTo(0, Math.max(0, Math.min(stepYAtTime(lines, elapsedRef.current), maxSc)));
+      // Com a rolagem ligada o laço leva a tela até a linha; pausada, ela vai direto.
+      if (!autoScrollRef.current) window.scrollTo(0, Math.max(0, Math.min(stepYAtTime(lines, elapsedRef.current), maxSc)));
       driveYRef.current = appliedYRef.current = window.scrollY;
       lastGestureRef.current = -Infinity;
       setElapsedDisplay(elapsedRef.current);
@@ -847,7 +849,7 @@ export const CifraViewer: React.FC = () => {
     } else {
       seekToY(totalTimeRef.current > 0 ? (t / totalTimeRef.current) * maxSc : 0);
     }
-  }, [seekToY, seekVideo]);
+  }, [autoScrollRef, seekToY, seekVideo]);
 
   const handleRestart = useCallback(() => {
     if (lineMapRef.current.length) { seekToTime(0); return; }
@@ -984,7 +986,6 @@ export const CifraViewer: React.FC = () => {
       }
       const dt = Math.min(ts - prevTimeRef.current, 100);
       prevTimeRef.current = ts;
-      if (navigationBusyRef.current) return;
       const maxSc = document.documentElement.scrollHeight - window.innerHeight;
       const lines = lineMapRef.current;
       if (maxSc <= 0 && !lines.length) {
@@ -998,7 +999,7 @@ export const CifraViewer: React.FC = () => {
       // toque, barra de rolagem, teclas de página).
       const moved = Math.abs(actualY - appliedYRef.current) > (lines.length ? 0 : USER_SCROLL_EPS);
       if (moved) lastGestureRef.current = ts;
-      const settling = ts - lastGestureRef.current < SETTLE_MS;
+      const settling = touchHeldRef.current || ts - lastGestureRef.current < (lines.length ? LINE_SETTLE_MS : SETTLE_MS);
       if (seekingRef.current !== settling) { seekingRef.current = settling; setUserSeeking(settling); }
 
       if (lines.length) {
@@ -1044,9 +1045,8 @@ export const CifraViewer: React.FC = () => {
               seekVideo(start);
             }
           }
-          const gridBeats = trustedBeats(mappedTimingRef.current);
-          const pulseY = gridBeats.length && !semRampa ? beatScrollYAtTime(lines, elapsedRef.current, gridBeats) : stepYAtTime(lines, elapsedRef.current);
-          const target = Math.max(0, Math.min(pulseY, maxSc));
+          // Um alvo por linha: seguir cada batida fazia a tela andar e frear o tempo todo.
+          const target = Math.max(0, Math.min(stepYAtTime(lines, elapsedRef.current), maxSc));
           // O relógio escolhe a linha. O tempo real da animação mantém o salto curto em qualquer velocidade.
           let motion = lineMotionRef.current;
           if (motion?.to !== target) {
@@ -1063,7 +1063,7 @@ export const CifraViewer: React.FC = () => {
             motion = { from: actualY, to: target, start: ts };
             lineMotionRef.current = motion;
           }
-          const y = Math.round(easeScrollY(motion.from, motion.to, ts - motion.start, semRampa || gridBeats.length || motion.to < motion.from ? 0 : LINE_TRANSITION_MS));
+          const y = Math.round(easeScrollY(motion.from, motion.to, ts - motion.start, semRampa ? 0 : LINE_TRANSITION_MS));
           if (y !== actualY) window.scrollTo(0, y);
           appliedYRef.current = window.scrollY;
           if (internalTiming && elapsedRef.current >= duration && y === target) pauseScroll();
@@ -1159,7 +1159,16 @@ export const CifraViewer: React.FC = () => {
   // motor não disputar o primeiro pixel do arraste com o dedo do músico.
   useEffect(() => {
     if (!autoScroll) return;
-    const mark = () => {
+    const release = () => { touchHeldRef.current = false; };
+    const mark = (event: Event) => {
+      // Com o dedo na tela o motor espera: disputar o arraste era o que travava a rolagem.
+      const touched = event.target as HTMLElement | null;
+      if (event.type === 'touchstart' && touched && !touched.closest?.('button, input, a, svg, [role="dialog"], [role="slider"]')) {
+        touchHeldRef.current = true;
+        // Um nó retirado da tela no meio do toque recebe o touchend sem propagá-lo até a janela.
+        touched.addEventListener('touchend', release, { once: true });
+        touched.addEventListener('touchcancel', release, { once: true });
+      }
       // No modo por linha, só uma mudança de posição deve buscar outro tempo.
       if (!lineMapRef.current.length) lastGestureRef.current = performance.now();
     };
@@ -1167,7 +1176,12 @@ export const CifraViewer: React.FC = () => {
     window.addEventListener('wheel', mark, opts);
     window.addEventListener('touchstart', mark, opts);
     window.addEventListener('touchmove', mark, opts);
+    window.addEventListener('touchend', release, opts);
+    window.addEventListener('touchcancel', release, opts);
     return () => {
+      release();
+      window.removeEventListener('touchend', release);
+      window.removeEventListener('touchcancel', release);
       window.removeEventListener('wheel', mark);
       window.removeEventListener('touchstart', mark);
       window.removeEventListener('touchmove', mark);
@@ -1609,9 +1623,9 @@ export const CifraViewer: React.FC = () => {
     [scrollTimeline, syncedChordLines, timingMedia?.chordTimes]);
   const chordStrip = chordStripAtTime(chordTimeline, elapsedDisplay);
   const navigationActive = autoScroll && lineMode && !!timingMedia && !scrollChooser;
-  const navigation = useChordNavigation({ active: navigationActive, pageRef, contentRef,
+  const navigation = useChordNavigation({ active: navigationActive, pageRef,
     timeline: chordTimeline, timeRef: elapsedRef, seek: seekToTime,
-    audioStart: timingMedia?.audioStart ?? 0, busyRef: navigationBusyRef });
+    audioStart: timingMedia?.audioStart ?? 0 });
   useLayoutEffect(() => { chordTimelineRef.current = chordTimeline; }, [chordTimeline]);
   // O painel lê acordes já transpostos, então o grau é medido contra o tom que está na tela.
   const chordLabel = useNotationStore(s => s.chordLabel);
@@ -1751,7 +1765,7 @@ export const CifraViewer: React.FC = () => {
       cancelAnimationFrame(frame);
       window.removeEventListener('resize', measure);
     };
-  }, [timingMedia, scrollTimeline, lineMode, totalTime, cifraSegments, showTabs, geometryToken, autoScroll, syncPlayheadToScroll, bracketLanes, showMelody]);
+  }, [timingMedia, scrollTimeline, lineMode, totalTime, cifraSegments, showTabs, geometryToken, autoScroll, syncPlayheadToScroll, bracketLanes]);
 
   useLayoutEffect(() => {
     const content = contentRef.current;
@@ -1988,9 +2002,6 @@ export const CifraViewer: React.FC = () => {
     variations: variationIndices, locked: lockedVariations, custom: customVoicings,
   }), [currentChords, displayedVoicings, currentInst.id, currentTuning, songSlug,
     chordRankingsById, favoritesById, voicingOrderMode, variationIndices, lockedVariations, customVoicings]);
-  const previewVoicing = useMemo(() => navigation.preview
-    ? displayedChordVoicing(navigation.preview.name, chordVoicingContext).bestVoicing : null,
-  [navigation.preview, chordVoicingContext]);
   const syncedVoicings: Record<string, Voicing | null> = {};
   if (autoScroll && showSyncedChords) {
     for (const chord of [chordStrip.previous, chordStrip.current, chordStrip.next]) {
@@ -2099,12 +2110,28 @@ export const CifraViewer: React.FC = () => {
   // Mesma ordem usada pelo mapa de tempo; aqui só para exibir no painel.
   const effectiveDuration = cifra?.duration ?? videoDuration ?? null;
   const countIn = autoScroll ? countInAtTime(scrollTimeline, elapsedDisplay, timingMedia) : null;
+  const melodyParts: MelodyView = { vocal: !!timingMedia?.melody?.vocal.length,
+    guitar: !!timingMedia?.melody?.instrumental.some(section => section.notes.length > 0) };
+  const melodyDock = autoScroll && lineMode && timingMedia?.melody
+    && ((melodyView.vocal && melodyParts.vocal) || (melodyView.guitar && melodyParts.guitar)) ? (
+      <SyncedMelody timing={timingMedia} tuning={currentTuning} view={melodyView} frameRef={melodyFrameRef} time={elapsedDisplay} onSeek={seekToTime} />
+    ) : null;
+  const instrumentalIndicator = (wide: boolean) => activeInstrumental && (
+    <InstrumentalIndicator wide={wide} label={activeInstrumental.label ?? ''}
+      countdown={instrumentalCountdown(scrollTimeline, elapsedDisplay)}
+      progress={(elapsedDisplay - activeInstrumental.startTime) / (activeInstrumental.endTime - activeInstrumental.startTime)} />
+  );
   const pulseControls = <>
-    {lineMode && timingMedia?.melody && (timingMedia.melody.vocal.length > 0 || timingMedia.melody.instrumental.some(s => s.notes.length > 0)) && (
-      <button type="button" onClick={toggleMelody} aria-pressed={showMelody}
-        className={`bevel-out px-2 py-1 border border-gray-400 text-[10px] font-bold ${showMelody ? 'bg-[#316ac5] text-white' : 'bg-[#ece9d8] text-[#002fa7]'}`}>
+    {lineMode && (melodyParts.vocal || melodyParts.guitar) && (
+      <span role="group" aria-label={t('melody.group')} className="inline-flex items-center gap-1 text-[10px] font-bold text-[#002fa7]">
         {t('melody.toggle')}
-      </button>
+        {(['vocal', 'guitar'] as const).filter(part => melodyParts[part]).map(part => (
+          <button key={part} type="button" onClick={() => toggleMelody(part)} aria-pressed={melodyView[part]}
+            className={`bevel-out px-2 py-1.5 md:py-1 border border-gray-400 ${melodyView[part] ? 'bg-[#316ac5] text-white' : 'bg-[#ece9d8] text-[#002fa7]'}`}>
+            {t(part === 'vocal' ? 'melody.showVocal' : 'melody.showGuitar')}
+          </button>
+        ))}
+      </span>
     )}
     {/* Sem grade confiável o botão não teria efeito nenhum; só aparece quando há batidas usáveis. */}
     {beats.length > 0 && (
@@ -2270,10 +2297,6 @@ export const CifraViewer: React.FC = () => {
           {t('cifra.acordeNavegado', { acorde: navigation.announcement.name, tempo: fmtTime(navigation.announcement.startTime) })}
         </span>}
       </div>
-      {navigation.preview && <div className="fixed left-1/2 top-1/3 -translate-x-1/2 z-50 pointer-events-none bevel-out bg-[#ffffe1] border border-[#808080] p-3 text-center shadow-lg">
-        <div className="font-bold text-[#002fa7]">{navigation.preview.name}</div>
-        {previewVoicing && <MiniFretboard voicing={previewVoicing} tuning={currentTuning} width={72} />}
-      </div>}
 
       {/* Info Popup Overlay */}
       {infoPopupChord && (
@@ -3166,17 +3189,12 @@ export const CifraViewer: React.FC = () => {
 
         {/* Cifra Content - Notepad Style */}
         <div className="cifra-synced-layout flex-1 min-h-0 flex gap-2">
-          <div ref={contentRef} onPointerDown={handleLyricsPointerDown} onClick={handleLyricsChordClick} onMouseOver={handleLyricsMouseOver} onMouseLeave={schedulePopupClose} className="relative flex-1 min-w-0 min-h-0 bevel-in bg-white p-2 sm:p-4 retro-scrollbar font-mono text-sm leading-relaxed text-black overflow-x-hidden overflow-y-auto" style={{ paddingLeft: bracketPadding, touchAction: navigationActive ? 'pan-x pinch-zoom' : undefined }}>
-            {activeInstrumental && sectionMarker?.line === activeInstrumental.lineIndex && (
+          <div ref={contentRef} onPointerDown={handleLyricsPointerDown} onClick={handleLyricsChordClick} onMouseOver={handleLyricsMouseOver} onMouseLeave={schedulePopupClose} className="relative flex-1 min-w-0 min-h-0 bevel-in bg-white p-2 sm:p-4 retro-scrollbar font-mono text-sm leading-relaxed text-black overflow-x-hidden overflow-y-auto" style={{ paddingLeft: bracketPadding }}>
+            {/* No telefone o aviso vai para a barra: aqui ele cobria os acordes da primeira linha. */}
+            {!isMobile && activeInstrumental && sectionMarker?.line === activeInstrumental.lineIndex && (
               <div className="absolute right-2 z-10 pointer-events-none" style={{ top: sectionMarker.top }}>
-                <InstrumentalIndicator label={activeInstrumental.label ?? ''}
-                  countdown={instrumentalCountdown(scrollTimeline, elapsedDisplay)}
-                  progress={(elapsedDisplay - activeInstrumental.startTime) / (activeInstrumental.endTime - activeInstrumental.startTime)} />
+                {instrumentalIndicator(false)}
               </div>
-            )}
-            {autoScroll && lineMode && showMelody && timingMedia?.melody && (
-              <SyncedMelody timing={timingMedia} tuning={currentTuning} contentRef={contentRef}
-                frameRef={melodyFrameRef} time={elapsedDisplay} layoutKey={cifraSegments} showTabs={showTabs} />
             )}
             {repeatBrackets.map(({ range, lane, top, height }, index) => bracketLanes.has(range) && (
               <div
@@ -3257,6 +3275,7 @@ export const CifraViewer: React.FC = () => {
           audioStart={timingMedia?.audioStart}
           cuts={timingMedia?.cuts}
           autoPlay={trainingPlayback}
+          compact={isMobile && trainingPlayback}
           mediaType={videoTiming?.mediaType === 'audio' && videoTiming.mediaUrl?.trim() ? 'audio' : 'youtube'}
           videoUrl={sourceVideoUrl}
           title={cifra.title}
@@ -3330,7 +3349,8 @@ export const CifraViewer: React.FC = () => {
 
       {/* Transporte flutuante do desktop. No telefone quem manda é a MobileCifraBar. */}
       {!isMobile && (
-        <div className="fixed right-4 bottom-12 z-50 max-w-[calc(100vw-2rem)] bevel-out bg-[var(--color-winxp-panel)] border border-gray-500 shadow-xl text-xs select-none">
+        <div data-barra-fixa className="fixed right-4 bottom-12 z-50 max-w-[calc(100vw-2rem)] bevel-out bg-[var(--color-winxp-panel)] border border-gray-500 shadow-xl text-xs select-none">
+          {melodyDock}
           {autoScroll && lineMode && totalTime > 0 && (
             <ScrollTimelineBar beats={showPulse ? beats : []} downbeats={showPulse && beats.length ? timingMedia?.downbeats : undefined} timeline={scrollTimeline} total={totalTime} elapsed={elapsedDisplay} repeats={repeatRanges}
               label={activeSegment?.label ?? currentSection} onSeek={seekToTime} />
@@ -3423,9 +3443,12 @@ export const CifraViewer: React.FC = () => {
           aberto={folhaAberta}
           onAbrir={setFolhaAberta}
           rolando={autoScroll}
-          timeline={autoScroll && lineMode && totalTime > 0 ? (
+          timeline={autoScroll && lineMode && totalTime > 0 ? (<>
+            {instrumentalIndicator(true)}
+            {melodyDock}
             <ScrollTimelineBar beats={showPulse ? beats : []} downbeats={showPulse && beats.length ? timingMedia?.downbeats : undefined} timeline={scrollTimeline} total={totalTime} elapsed={elapsedDisplay} repeats={repeatRanges}
               label={activeSegment?.label ?? currentSection} onSeek={seekToTime} />
+          </>
           ) : null}
           transporte={<TransporteMobile
             pulseControls={pulseControls}
@@ -3568,8 +3591,10 @@ export const CifraViewer: React.FC = () => {
                   </GrupoAjustes>
 
                   <GrupoAjustes titulo={t('cifra.folhaAcoes')}>
-                    <BotaoFolha onClick={() => void handleTraining()}>{t('cifra.treinar')}</BotaoFolha>
                     <div className="grid grid-cols-2 gap-1.5 p-2">
+                      <div className="col-span-2 grid">
+                        <BotaoFolha onClick={() => void handleTraining()} ativo>{t('cifra.treinar')}</BotaoFolha>
+                      </div>
                       <BotaoFolha onClick={handleFavorite} disabled={isFavoriting} ativo={isFavorited} title={isFavorited ? t('cifra.removerFavorito') : t('cifra.favoritar')}>
                         <Heart size={13} className={isFavorited ? 'fill-current' : ''} />
                         {isFavorited ? t('cifra.favoritado') : t('cifra.favoritar')}

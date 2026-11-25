@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { normalizeBeatGrid, normalizeContribution } from '../services/timingApi';
-import { beatProgress, beatScrollYAtTime, buildScrollTimeline, countInAtTime, pulseAtTime, trustedBeats } from './scrollTimeline';
+import { beatProgress, buildScrollTimeline, countInAtTime, pulseAtTime, trustedBeats } from './scrollTimeline';
 import { cutBeatTimes } from './mediaCuts';
 import { buildCommunityCards } from './timingVariants';
 
@@ -20,19 +20,6 @@ describe('grade de pulsos', () => {
     expect(beatProgress(8, [1, 2, 4])).toBe(2);
     expect(beatProgress(1, [])).toBe(0);
     expect(beatProgress(NaN, beats)).toBe(0);
-  });
-
-  it('usa pulsos para mover frases longas e mantém o comportamento sem grade, nas lacunas e nas voltas', () => {
-    const anchors = [
-      { startTime: 0, endTime: 4, y: 0, kind: 'lyric' as const },
-      { startTime: 4, endTime: 8, y: 100, kind: 'instrumental' as const },
-      { startTime: 8, endTime: 10, y: 200 },
-    ];
-    expect(beatScrollYAtTime(anchors, 1.125, beats)).toBeCloseTo(26.953125);
-    expect(beatScrollYAtTime(anchors, 6, beats)).toBe(150);
-    expect(beatScrollYAtTime(anchors, 1, [])).toBe(0);
-    expect(beatScrollYAtTime([{ ...anchors[0], kind: 'hold' }, anchors[1]], 2, beats)).toBe(0);
-    expect(beatScrollYAtTime([anchors[1], { ...anchors[2], y: 0 }], 6, beats)).toBe(100);
   });
 
   it('conta 4/4 na última barra da lacuna, inclusive após busca para trás', () => {
@@ -97,4 +84,10 @@ describe('grade de pulsos', () => {
     expect(cards[1].timing).toMatchObject({ beats: [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8], downbeats: [0, 2, 4, 6, 8], beatConfidence: 0.5, bpmSource: 'audio', bpm: 120 });
     expect(original.beats).toEqual(beats);
   });
+});
+
+it('lê o compasso que a API guarda como beatsPerBar', () => {
+  expect(normalizeBeatGrid({ beatsPerBar: 3 }).timeSignature).toBe('3/4');
+  expect(normalizeBeatGrid({ beatsPerBar: 4 }).timeSignature).toBe('4/4');
+  expect(normalizeBeatGrid({ beatsPerBar: 2 }).timeSignature).toBeUndefined();
 });

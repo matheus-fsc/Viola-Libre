@@ -179,6 +179,8 @@ export function normalizeBeatGrid(raw: Record<string, unknown>): BeatGrid {
     }
   }
   if (raw.timeSignature === '4/4' || raw.timeSignature === '3/4') grid.timeSignature = raw.timeSignature;
+  // A API guarda o compasso como beatsPerBar; sem isto a contagem de um 3/4 saía em quatro.
+  else if (raw.beatsPerBar === 3 || raw.beatsPerBar === 4) grid.timeSignature = raw.beatsPerBar === 3 ? '3/4' : '4/4';
   if (typeof raw.beatConfidence === 'number' && Number.isFinite(raw.beatConfidence)
     && raw.beatConfidence >= 0 && raw.beatConfidence <= 1) grid.beatConfidence = raw.beatConfidence;
   if (raw.bpmSource === 'audio' || raw.bpmSource === 'cifra' || raw.bpmSource === 'default') grid.bpmSource = raw.bpmSource;
