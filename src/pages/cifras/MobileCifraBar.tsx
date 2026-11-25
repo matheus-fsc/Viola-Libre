@@ -80,7 +80,7 @@ export function MobileCifraBar({ destinos, aberto, onAbrir, rolando, transporte,
       {/* A barra some quando a folha está aberta: a folha já ocupa o alcance do polegar,
           e as duas juntas empilhariam dois níveis de controle no mesmo canto. */}
       {!folha && (
-        <div className="fixed inset-x-2 bottom-2 z-50 md:hidden bevel-out bg-[var(--color-winxp-panel)] border border-gray-500 shadow-xl mb-[env(safe-area-inset-bottom)]">
+        <div data-barra-fixa className="fixed inset-x-2 bottom-2 z-50 md:hidden bevel-out bg-[var(--color-winxp-panel)] border border-gray-500 shadow-xl mb-[env(safe-area-inset-bottom)]">
           {rolando && timeline}
           {rolando ? (
             transporte

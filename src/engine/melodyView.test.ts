@@ -19,6 +19,15 @@ describe('escolha da melodia', () => {
     expect(melodyRangeAt(ranges, 9)?.instrumental).toBe(false);
   });
 
+  it('mostra o vocalise, que não pertence a frase nenhuma', () => {
+    const wordless = { version: 1, vocal: [note(20, 21), note(21.2, 22), note(30, 31)],
+      instrumental: [{ label: 'Introdução', start: 0, end: 40, notes: [note(1, 2)] }] } as never;
+    const ranges = melodyRanges(wordless, phrases, { vocal: true, guitar: true }, 'Voz sem letra');
+    expect(ranges.filter(r => r.label === 'Voz sem letra').map(r => r.notes.length)).toEqual([2, 1]);
+    expect(melodyRangeAt(ranges, 20.5)?.instrumental).toBe(false);
+    expect(melodyRangeAt(ranges, 25)?.instrumental).toBe(true);
+  });
+
   it('aproveita a preferência antiga e ignora valor corrompido', () => {
     expect(parseMelodyView(null, 'true')).toEqual({ vocal: true, guitar: true });
     expect(parseMelodyView('{"vocal":true}', 'true')).toEqual({ vocal: true, guitar: false });

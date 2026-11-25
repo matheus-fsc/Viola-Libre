@@ -47,6 +47,7 @@ export const ptBR = {
   melody: {
     toggle: 'MELODIA',
     group: 'Melodia visível',
+    wordless: 'Voz sem letra',
     showVocal: 'Voz',
     showGuitar: 'Violão',
     empty: 'Sem melodia neste trecho',

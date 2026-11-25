@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import {
   MOLA_FOLHA,
+  mola,
   projetarParada,
   rubberBandClamp,
   maisProximo,
@@ -10,6 +11,7 @@ import {
   type Amostra,
   type EstadoMola,
 } from '../engine/motion';
+import { floatingMaxY } from '../engine/floatingLimits';
 import { animacoesDesligadas } from '../stores/useDesempenhoStore';
 
 /** Folga entre a janela e a borda da tela quando ela volta para dentro. */
@@ -29,6 +31,11 @@ const ASPECTO = 16 / 9;
  * deve deslizar um palmo, não atravessar a tela até a borda oposta.
  */
 const DESACELERACAO = 0.99;
+
+/** Barras fixas que a janela não pode cobrir; a da rolagem muda de altura com a melodia. */
+const SELETOR_BARRAS = '[data-barra-fixa]';
+/** Mola da expulsão: a exceção com quique, para a janela parecer empurrada pela barra. */
+const MOLA_ELASTICA = mola(260, 0.5);
 
 interface Geometria {
   x: number;
@@ -103,7 +110,7 @@ export function useFloatingWindow({ chave, inicial, baseOcupada = 0 }: Opcoes) {
   const altura = useCallback(() => janelaRef.current?.offsetHeight ?? 0, []);
 
   /** Limites válidos para a largura dada (a altura acompanha a largura). */
-  const limites = useCallback((w: number) => {
+  const limites = useCallback((w: number, x = geo.current.x) => {
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const wMax = Math.max(LARGURA_MIN, vw - 2 * MARGEM);
@@ -112,7 +119,8 @@ export function useFloatingWindow({ chave, inicial, baseOcupada = 0 }: Opcoes) {
       wMin: Math.min(LARGURA_MIN, wMax),
       wMax,
       xMax: Math.max(MARGEM, vw - w - MARGEM),
-      yMax: Math.max(MARGEM, vh - h - MARGEM - baseOcupada),
+      yMax: floatingMaxY(x, w, h, vh - baseOcupada,
+        [...document.querySelectorAll(SELETOR_BARRAS)].map(el => el.getBoundingClientRect()), MARGEM),
     };
   }, [altura, baseOcupada]);
 
@@ -122,7 +130,7 @@ export function useFloatingWindow({ chave, inicial, baseOcupada = 0 }: Opcoes) {
   }, []);
 
   /** Mola de onde a janela está até a posição válida mais próxima de `alvo`. */
-  const assentar = useCallback((alvo: Geometria) => {
+  const assentar = useCallback((alvo: Geometria, mola = MOLA_FOLHA) => {
     parar();
     const fim = () => {
       geo.current = { ...alvo };
@@ -138,7 +146,7 @@ export function useFloatingWindow({ chave, inicial, baseOcupada = 0 }: Opcoes) {
       const eixos = ['x', 'y', 'w'] as const;
       let parado = true;
       for (const k of eixos) {
-        const s: EstadoMola = stepSpring({ x: geo.current[k], v: vel.current[k] }, alvo[k], MOLA_FOLHA, dt);
+        const s: EstadoMola = stepSpring({ x: geo.current[k], v: vel.current[k] }, alvo[k], k === 'y' ? mola : MOLA_FOLHA, dt);
         geo.current[k] = s.x;
         vel.current[k] = s.v;
         if (!springAssentou(s, alvo[k])) parado = false;
@@ -154,10 +162,11 @@ export function useFloatingWindow({ chave, inicial, baseOcupada = 0 }: Opcoes) {
   const dentro = useCallback((g: Geometria): Geometria => {
     const l0 = limites(g.w);
     const w = Math.min(Math.max(g.w, l0.wMin), l0.wMax);
-    const l = limites(w);
+    const x = Math.min(Math.max(g.x, MARGEM), limites(w).xMax);
+    const l = limites(w, x);
     return {
       w,
-      x: Math.min(Math.max(g.x, MARGEM), l.xMax),
+      x,
       y: Math.min(Math.max(g.y, MARGEM), l.yMax),
     };
   }, [limites]);
@@ -181,6 +190,16 @@ export function useFloatingWindow({ chave, inicial, baseOcupada = 0 }: Opcoes) {
     const onResize = () => { if (!gesto.current) assentar(dentro(geo.current)); };
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
+  }, [assentar, dentro]);
+
+  // A barra cresce ao ligar a melodia e some ao parar: se ela alcançar a janela, empurra.
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (gesto.current || quadro.current !== null) return;
+      const alvo = dentro(geo.current);
+      if (Math.abs(alvo.y - geo.current.y) > 1) assentar(alvo, MOLA_ELASTICA);
+    }, 300);
+    return () => clearInterval(timer);
   }, [assentar, dentro]);
 
   useEffect(() => parar, [parar]);
@@ -210,7 +229,7 @@ export function useFloatingWindow({ chave, inicial, baseOcupada = 0 }: Opcoes) {
     const vh = window.innerHeight;
     if (g.tipo === 'mover') {
       g.bruto = { ...g.inicio, x: g.inicio.x + dx, y: g.inicio.y + dy };
-      const l = limites(g.inicio.w);
+      const l = limites(g.inicio.w, g.bruto.x);
       geo.current = {
         ...geo.current,
         x: rubberBandClamp(g.bruto.x, MARGEM, l.xMax, vw),
@@ -261,7 +280,8 @@ export function useFloatingWindow({ chave, inicial, baseOcupada = 0 }: Opcoes) {
       // direita empurra a janela para a esquerda (o `dentro` resolve), não a corta.
       if (projetado.x + projetado.w > window.innerWidth - MARGEM) projetado.x = window.innerWidth - MARGEM - projetado.w;
     }
-    assentar(dentro(projetado));
+    const alvo = dentro(projetado);
+    assentar(alvo, alvo.y < projetado.y - 1 ? MOLA_ELASTICA : MOLA_FOLHA);
   };
 
   const ponteiro = { onPointerMove, onPointerUp, onPointerCancel: onPointerUp };

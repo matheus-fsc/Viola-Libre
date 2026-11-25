@@ -50,6 +50,7 @@ export const en: Dicionario = {
   melody: {
     toggle: 'MELODY',
     group: 'Visible melody',
+    wordless: 'Wordless voice',
     showVocal: 'Voice',
     showGuitar: 'Guitar',
     empty: 'No melody in this part',

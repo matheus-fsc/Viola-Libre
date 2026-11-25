@@ -3349,7 +3349,7 @@ export const CifraViewer: React.FC = () => {
 
       {/* Transporte flutuante do desktop. No telefone quem manda é a MobileCifraBar. */}
       {!isMobile && (
-        <div className="fixed right-4 bottom-12 z-50 max-w-[calc(100vw-2rem)] bevel-out bg-[var(--color-winxp-panel)] border border-gray-500 shadow-xl text-xs select-none">
+        <div data-barra-fixa className="fixed right-4 bottom-12 z-50 max-w-[calc(100vw-2rem)] bevel-out bg-[var(--color-winxp-panel)] border border-gray-500 shadow-xl text-xs select-none">
           {melodyDock}
           {autoScroll && lineMode && totalTime > 0 && (
             <ScrollTimelineBar beats={showPulse ? beats : []} downbeats={showPulse && beats.length ? timingMedia?.downbeats : undefined} timeline={scrollTimeline} total={totalTime} elapsed={elapsedDisplay} repeats={repeatRanges}

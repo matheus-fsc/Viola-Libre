@@ -20,7 +20,8 @@ export function SyncedMelody({ timing, tuning, view, frameRef, time }: {
     frameRef.current = now => setFrameTime({ source: time, now });
     return () => { frameRef.current = null; };
   }, [frameRef, time]);
-  const ranges = useMemo(() => timing.melody ? melodyRanges(timing.melody, timing.phrases, view) : [], [timing, view]);
+  const wordless = t('melody.wordless');
+  const ranges = useMemo(() => timing.melody ? melodyRanges(timing.melody, timing.phrases, view, wordless) : [], [timing, view, wordless]);
   const range = melodyRangeAt(ranges, clock);
   // Altura fixa: a barra não pode pular a cada troca entre canto e pausa.
   return <div className="bevel-in bg-[#f5f8ff] border border-[#98acd0] px-1 py-0.5 text-[10px] text-[#002fa7] font-mono leading-tight w-full min-w-0 md:w-0 md:min-w-full h-[132px] overflow-hidden">
